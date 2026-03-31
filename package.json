@@ -1,0 +1,32 @@
+{
+  "name": "passlet",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "check-types": "turbo check-types",
+    "dev:web": "turbo -F web dev",
+    "check": "ultracite check",
+    "fix": "ultracite fix"
+  },
+  "dependencies": {
+    "@passlet/env": "workspace:*",
+    "dotenv": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.9",
+    "@passlet/config": "workspace:*",
+    "@types/node": "^20.19.37",
+    "lefthook": "latest",
+    "turbo": "^2.9.2",
+    "typescript": "^5.9.3",
+    "ultracite": "7.4.2"
+  },
+  "packageManager": "pnpm@10.8.0"
+}
