@@ -1,0 +1,41 @@
+{
+  "name": "passlet",
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Generate Apple Wallet and Google Wallet passes from a single API",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "check-types": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "jose": "^5.9.6",
+    "jszip": "^3.10.1",
+    "node-forge": "^1.3.1",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@passlet/config": "workspace:*",
+    "@types/node-forge": "^1.3.11",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0"
+  }
+}
