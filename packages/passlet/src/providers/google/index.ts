@@ -303,10 +303,10 @@ function buildObjectBody(
 	if (createConfig.validFrom || createConfig.expiresAt) {
 		body.validTimeInterval = {
 			...(createConfig.validFrom && {
-				start: { date: createConfig.validFrom.toISOString() },
+				start: { date: createConfig.validFrom },
 			}),
 			...(createConfig.expiresAt && {
-				end: { date: createConfig.expiresAt.toISOString() },
+				end: { date: createConfig.expiresAt },
 			}),
 		};
 	}

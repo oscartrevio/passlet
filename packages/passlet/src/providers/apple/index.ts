@@ -118,7 +118,7 @@ function buildPassJson(
 			labelColor: hexToRgb(pass.apple.labelColor),
 		}),
 		...(createConfig.expiresAt && {
-			expirationDate: createConfig.expiresAt.toISOString(),
+			expirationDate: createConfig.expiresAt,
 		}),
 		...(barcode && {
 			barcodes: [

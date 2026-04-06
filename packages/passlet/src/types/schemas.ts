@@ -250,8 +250,16 @@ export const createConfigSchema = z.object({
 	barcode: barcodeSchema.optional(),
 	// Apple: no equivalent — ignored
 	// Google: validTimeInterval.start
-	validFrom: z.date().optional(),
-	expiresAt: z.date().optional(),
+	validFrom: z.iso
+		.datetime({
+			message: 'must be an ISO datetime e.g. "2024-01-01T00:00:00Z"',
+		})
+		.optional(),
+	expiresAt: z.iso
+		.datetime({
+			message: 'must be an ISO datetime e.g. "2025-01-01T00:00:00Z"',
+		})
+		.optional(),
 	// Per-recipient field values. null hides the field for this recipient.
 	values: z.record(z.string(), z.string().nullable()).optional(),
 });
