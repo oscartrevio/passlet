@@ -99,110 +99,48 @@ type FlightPass = Extract<PassConfig, { type: "flight" }>;
 function buildEventAppleFields(pass: EventPass): Record<string, unknown> {
 	const a = pass.apple;
 	return {
-		...(a?.eventLogoText && { eventLogoText: a.eventLogoText }),
-		...(a?.footerBackgroundColor && {
-			footerBackgroundColor: hexToRgb(a.footerBackgroundColor),
-		}),
-		...(a?.suppressHeaderDarkening !== undefined && {
-			suppressHeaderDarkening: a.suppressHeaderDarkening,
-		}),
-		...(a?.useAutomaticColors !== undefined && {
-			useAutomaticColors: a.useAutomaticColors,
-		}),
-		...(a?.preferredStyleSchemes && {
-			preferredStyleSchemes: a.preferredStyleSchemes,
-		}),
-		...(a?.auxiliaryStoreIdentifiers && {
-			auxiliaryStoreIdentifiers: a.auxiliaryStoreIdentifiers,
-		}),
-		...(a?.accessibilityURL && { accessibilityURL: a.accessibilityURL }),
-		...(a?.addOnURL && { addOnURL: a.addOnURL }),
-		...(a?.bagPolicyURL && { bagPolicyURL: a.bagPolicyURL }),
-		...(a?.contactVenueEmail && { contactVenueEmail: a.contactVenueEmail }),
-		...(a?.contactVenuePhoneNumber && {
-			contactVenuePhoneNumber: a.contactVenuePhoneNumber,
-		}),
-		...(a?.contactVenueWebsite && {
-			contactVenueWebsite: a.contactVenueWebsite,
-		}),
-		...(a?.directionsInformationURL && {
-			directionsInformationURL: a.directionsInformationURL,
-		}),
-		...(a?.merchandiseURL && { merchandiseURL: a.merchandiseURL }),
-		...(a?.orderFoodURL && { orderFoodURL: a.orderFoodURL }),
-		...(a?.parkingInformationURL && {
-			parkingInformationURL: a.parkingInformationURL,
-		}),
-		...(a?.purchaseParkingURL && { purchaseParkingURL: a.purchaseParkingURL }),
-		...(a?.sellURL && { sellURL: a.sellURL }),
-		...(a?.transferURL && { transferURL: a.transferURL }),
-		...(a?.transitInformationURL && {
-			transitInformationURL: a.transitInformationURL,
-		}),
+		eventLogoText: a?.eventLogoText,
+		footerBackgroundColor: a?.footerBackgroundColor
+			? hexToRgb(a.footerBackgroundColor)
+			: undefined,
+		suppressHeaderDarkening: a?.suppressHeaderDarkening,
+		useAutomaticColors: a?.useAutomaticColors,
+		preferredStyleSchemes: a?.preferredStyleSchemes,
+		auxiliaryStoreIdentifiers: a?.auxiliaryStoreIdentifiers,
+		accessibilityURL: a?.accessibilityURL,
+		addOnURL: a?.addOnURL,
+		bagPolicyURL: a?.bagPolicyURL,
+		contactVenueEmail: a?.contactVenueEmail,
+		contactVenuePhoneNumber: a?.contactVenuePhoneNumber,
+		contactVenueWebsite: a?.contactVenueWebsite,
+		directionsInformationURL: a?.directionsInformationURL,
+		merchandiseURL: a?.merchandiseURL,
+		orderFoodURL: a?.orderFoodURL,
+		parkingInformationURL: a?.parkingInformationURL,
+		purchaseParkingURL: a?.purchaseParkingURL,
+		sellURL: a?.sellURL,
+		transferURL: a?.transferURL,
+		transitInformationURL: a?.transitInformationURL,
 	};
 }
 
 function buildFlightAppleFields(pass: FlightPass): Record<string, unknown> {
 	const a = pass.apple;
 	return {
-		...(a?.changeSeatURL && { changeSeatURL: a.changeSeatURL }),
-		...(a?.entertainmentURL && { entertainmentURL: a.entertainmentURL }),
-		...(a?.managementURL && { managementURL: a.managementURL }),
-		...(a?.purchaseAdditionalBaggageURL && {
-			purchaseAdditionalBaggageURL: a.purchaseAdditionalBaggageURL,
-		}),
-		...(a?.purchaseLoungeAccessURL && {
-			purchaseLoungeAccessURL: a.purchaseLoungeAccessURL,
-		}),
-		...(a?.purchaseWifiURL && { purchaseWifiURL: a.purchaseWifiURL }),
-		...(a?.registerServiceAnimalURL && {
-			registerServiceAnimalURL: a.registerServiceAnimalURL,
-		}),
-		...(a?.reportLostBagURL && { reportLostBagURL: a.reportLostBagURL }),
-		...(a?.requestWheelchairURL && {
-			requestWheelchairURL: a.requestWheelchairURL,
-		}),
-		...(a?.trackBagsURL && { trackBagsURL: a.trackBagsURL }),
-		...(a?.transitProviderEmail && {
-			transitProviderEmail: a.transitProviderEmail,
-		}),
-		...(a?.transitProviderPhoneNumber && {
-			transitProviderPhoneNumber: a.transitProviderPhoneNumber,
-		}),
-		...(a?.transitProviderWebsiteURL && {
-			transitProviderWebsiteURL: a.transitProviderWebsiteURL,
-		}),
-		...(a?.upgradeURL && { upgradeURL: a.upgradeURL }),
-	};
-}
-
-function buildMediaFields(
-	pass: PassConfig,
-	createConfig: CreateConfig
-): Record<string, unknown> {
-	const { barcode } = createConfig;
-	return {
-		...(barcode && {
-			barcodes: [
-				{
-					message: barcode.value,
-					format: toAppleBarcodeFormat(barcode.format),
-					messageEncoding: "iso-8859-1",
-					altText: barcode.altText ?? barcode.value,
-				},
-			],
-		}),
-		// Apple supports up to 10 locations. altitude and relevantText are Apple-only.
-		...(pass.locations && {
-			locations: pass.locations.map(
-				({ latitude, longitude, altitude, relevantText }) => ({
-					latitude,
-					longitude,
-					...(altitude !== undefined && { altitude }),
-					...(relevantText && { relevantText }),
-				})
-			),
-		}),
+		changeSeatURL: a?.changeSeatURL,
+		entertainmentURL: a?.entertainmentURL,
+		managementURL: a?.managementURL,
+		purchaseAdditionalBaggageURL: a?.purchaseAdditionalBaggageURL,
+		purchaseLoungeAccessURL: a?.purchaseLoungeAccessURL,
+		purchaseWifiURL: a?.purchaseWifiURL,
+		registerServiceAnimalURL: a?.registerServiceAnimalURL,
+		reportLostBagURL: a?.reportLostBagURL,
+		requestWheelchairURL: a?.requestWheelchairURL,
+		trackBagsURL: a?.trackBagsURL,
+		transitProviderEmail: a?.transitProviderEmail,
+		transitProviderPhoneNumber: a?.transitProviderPhoneNumber,
+		transitProviderWebsiteURL: a?.transitProviderWebsiteURL,
+		upgradeURL: a?.upgradeURL,
 	};
 }
 
@@ -212,39 +150,51 @@ function buildAppleCommonFields(
 ): Record<string, unknown> {
 	const a = pass.apple;
 	return {
-		...(pass.color && { backgroundColor: hexToRgb(pass.color) }),
-		...(a?.foregroundColor && { foregroundColor: hexToRgb(a.foregroundColor) }),
-		...(a?.labelColor && { labelColor: hexToRgb(a.labelColor) }),
-		...(createConfig.expiresAt && { expirationDate: createConfig.expiresAt }),
-		...(createConfig.apple?.voided && { voided: true }),
-		...(a?.beacons && { beacons: a.beacons }),
-		...(a?.relevantDate && { relevantDate: a.relevantDate }),
-		...(a?.relevantDates && { relevantDates: a.relevantDates }),
-		...(a?.groupingIdentifier && { groupingIdentifier: a.groupingIdentifier }),
-		...(a?.suppressStripShine !== undefined && {
-			suppressStripShine: a.suppressStripShine,
-		}),
-		...(a?.sharingProhibited !== undefined && {
-			sharingProhibited: a.sharingProhibited,
-		}),
-		...(a?.maxDistance !== undefined && { maxDistance: a.maxDistance }),
-		...(a?.nfc && {
-			nfc: {
-				message: a.nfc.message,
-				...(a.nfc.encryptionPublicKey && {
+		backgroundColor: pass.color ? hexToRgb(pass.color) : undefined,
+		foregroundColor: a?.foregroundColor
+			? hexToRgb(a.foregroundColor)
+			: undefined,
+		labelColor: a?.labelColor ? hexToRgb(a.labelColor) : undefined,
+		expirationDate: createConfig.expiresAt,
+		voided: createConfig.apple?.voided,
+		// Barcode — Apple supports up to 10 but we expose one per recipient
+		barcodes: createConfig.barcode
+			? [
+					{
+						message: createConfig.barcode.value,
+						format: toAppleBarcodeFormat(createConfig.barcode.format),
+						messageEncoding: "iso-8859-1",
+						altText: createConfig.barcode.altText ?? createConfig.barcode.value,
+					},
+				]
+			: undefined,
+		// Locations — altitude and relevantText are Apple-only
+		locations: pass.locations?.map(
+			({ latitude, longitude, altitude, relevantText }) => ({
+				latitude,
+				longitude,
+				altitude,
+				relevantText,
+			})
+		),
+		beacons: a?.beacons,
+		relevantDate: a?.relevantDate,
+		relevantDates: a?.relevantDates,
+		groupingIdentifier: a?.groupingIdentifier,
+		suppressStripShine: a?.suppressStripShine,
+		sharingProhibited: a?.sharingProhibited,
+		maxDistance: a?.maxDistance,
+		nfc: a?.nfc
+			? {
+					message: a.nfc.message,
 					encryptionPublicKey: a.nfc.encryptionPublicKey,
-				}),
-			},
-		}),
-		...(a?.appLaunchURL && { appLaunchURL: a.appLaunchURL }),
-		...(a?.associatedStoreIdentifiers && {
-			associatedStoreIdentifiers: a.associatedStoreIdentifiers,
-		}),
-		...(a?.webServiceURL && {
-			webServiceURL: a.webServiceURL,
-			authenticationToken: a.authenticationToken,
-		}),
-		...(a?.userInfo && { userInfo: a.userInfo }),
+				}
+			: undefined,
+		appLaunchURL: a?.appLaunchURL,
+		associatedStoreIdentifiers: a?.associatedStoreIdentifiers,
+		webServiceURL: a?.webServiceURL,
+		authenticationToken: a?.webServiceURL ? a.authenticationToken : undefined,
+		userInfo: a?.userInfo,
 	};
 }
 
@@ -266,7 +216,6 @@ function buildPassJson(
 		description: a?.description ?? pass.name,
 		logoText: a?.logoText ?? pass.name,
 		...buildAppleCommonFields(pass, createConfig),
-		...buildMediaFields(pass, createConfig),
 		...(pass.type === "event" && buildEventAppleFields(pass)),
 		...(pass.type === "flight" && buildFlightAppleFields(pass)),
 		[passTypeKey]: buildPassTypeContent(pass, slots),
