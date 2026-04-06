@@ -93,34 +93,95 @@ function buildPassTypeContent(
 	return content;
 }
 
-function buildPassJson(
-	pass: PassConfig,
-	createConfig: CreateConfig,
-	credentials: AppleCredentials
-): Record<string, unknown> {
-	const passTypeKey = PASS_TYPE_KEY[pass.type] ?? "generic";
-	const slots = buildSlots(pass.fields, createConfig.values ?? {});
-	const { barcode } = createConfig;
+type EventPass = Extract<PassConfig, { type: "event" }>;
+type FlightPass = Extract<PassConfig, { type: "flight" }>;
 
+function buildEventAppleFields(pass: EventPass): Record<string, unknown> {
+	const a = pass.apple;
 	return {
-		formatVersion: 1,
-		passTypeIdentifier: credentials.passTypeIdentifier,
-		serialNumber: createConfig.serialNumber,
-		teamIdentifier: credentials.teamId,
-		organizationName: pass.name,
-		description: pass.apple?.description ?? pass.name,
-		logoText: pass.apple?.logoText ?? pass.name,
-		...(pass.color && { backgroundColor: hexToRgb(pass.color) }),
-		...(pass.apple?.foregroundColor && {
-			foregroundColor: hexToRgb(pass.apple.foregroundColor),
+		...(a?.eventLogoText && { eventLogoText: a.eventLogoText }),
+		...(a?.footerBackgroundColor && {
+			footerBackgroundColor: hexToRgb(a.footerBackgroundColor),
 		}),
-		...(pass.apple?.labelColor && {
-			labelColor: hexToRgb(pass.apple.labelColor),
+		...(a?.suppressHeaderDarkening !== undefined && {
+			suppressHeaderDarkening: a.suppressHeaderDarkening,
 		}),
-		...(createConfig.expiresAt && {
-			expirationDate: createConfig.expiresAt,
+		...(a?.useAutomaticColors !== undefined && {
+			useAutomaticColors: a.useAutomaticColors,
 		}),
-		...(createConfig.apple?.voided && { voided: true }),
+		...(a?.preferredStyleSchemes && {
+			preferredStyleSchemes: a.preferredStyleSchemes,
+		}),
+		...(a?.auxiliaryStoreIdentifiers && {
+			auxiliaryStoreIdentifiers: a.auxiliaryStoreIdentifiers,
+		}),
+		...(a?.accessibilityURL && { accessibilityURL: a.accessibilityURL }),
+		...(a?.addOnURL && { addOnURL: a.addOnURL }),
+		...(a?.bagPolicyURL && { bagPolicyURL: a.bagPolicyURL }),
+		...(a?.contactVenueEmail && { contactVenueEmail: a.contactVenueEmail }),
+		...(a?.contactVenuePhoneNumber && {
+			contactVenuePhoneNumber: a.contactVenuePhoneNumber,
+		}),
+		...(a?.contactVenueWebsite && {
+			contactVenueWebsite: a.contactVenueWebsite,
+		}),
+		...(a?.directionsInformationURL && {
+			directionsInformationURL: a.directionsInformationURL,
+		}),
+		...(a?.merchandiseURL && { merchandiseURL: a.merchandiseURL }),
+		...(a?.orderFoodURL && { orderFoodURL: a.orderFoodURL }),
+		...(a?.parkingInformationURL && {
+			parkingInformationURL: a.parkingInformationURL,
+		}),
+		...(a?.purchaseParkingURL && { purchaseParkingURL: a.purchaseParkingURL }),
+		...(a?.sellURL && { sellURL: a.sellURL }),
+		...(a?.transferURL && { transferURL: a.transferURL }),
+		...(a?.transitInformationURL && {
+			transitInformationURL: a.transitInformationURL,
+		}),
+	};
+}
+
+function buildFlightAppleFields(pass: FlightPass): Record<string, unknown> {
+	const a = pass.apple;
+	return {
+		...(a?.changeSeatURL && { changeSeatURL: a.changeSeatURL }),
+		...(a?.entertainmentURL && { entertainmentURL: a.entertainmentURL }),
+		...(a?.managementURL && { managementURL: a.managementURL }),
+		...(a?.purchaseAdditionalBaggageURL && {
+			purchaseAdditionalBaggageURL: a.purchaseAdditionalBaggageURL,
+		}),
+		...(a?.purchaseLoungeAccessURL && {
+			purchaseLoungeAccessURL: a.purchaseLoungeAccessURL,
+		}),
+		...(a?.purchaseWifiURL && { purchaseWifiURL: a.purchaseWifiURL }),
+		...(a?.registerServiceAnimalURL && {
+			registerServiceAnimalURL: a.registerServiceAnimalURL,
+		}),
+		...(a?.reportLostBagURL && { reportLostBagURL: a.reportLostBagURL }),
+		...(a?.requestWheelchairURL && {
+			requestWheelchairURL: a.requestWheelchairURL,
+		}),
+		...(a?.trackBagsURL && { trackBagsURL: a.trackBagsURL }),
+		...(a?.transitProviderEmail && {
+			transitProviderEmail: a.transitProviderEmail,
+		}),
+		...(a?.transitProviderPhoneNumber && {
+			transitProviderPhoneNumber: a.transitProviderPhoneNumber,
+		}),
+		...(a?.transitProviderWebsiteURL && {
+			transitProviderWebsiteURL: a.transitProviderWebsiteURL,
+		}),
+		...(a?.upgradeURL && { upgradeURL: a.upgradeURL }),
+	};
+}
+
+function buildMediaFields(
+	pass: PassConfig,
+	createConfig: CreateConfig
+): Record<string, unknown> {
+	const { barcode } = createConfig;
+	return {
 		...(barcode && {
 			barcodes: [
 				{
@@ -142,25 +203,72 @@ function buildPassJson(
 				})
 			),
 		}),
-		...(pass.apple?.relevantDate && { relevantDate: pass.apple.relevantDate }),
-		...(pass.apple?.groupingIdentifier && {
-			groupingIdentifier: pass.apple.groupingIdentifier,
+	};
+}
+
+function buildAppleCommonFields(
+	pass: PassConfig,
+	createConfig: CreateConfig
+): Record<string, unknown> {
+	const a = pass.apple;
+	return {
+		...(pass.color && { backgroundColor: hexToRgb(pass.color) }),
+		...(a?.foregroundColor && { foregroundColor: hexToRgb(a.foregroundColor) }),
+		...(a?.labelColor && { labelColor: hexToRgb(a.labelColor) }),
+		...(createConfig.expiresAt && { expirationDate: createConfig.expiresAt }),
+		...(createConfig.apple?.voided && { voided: true }),
+		...(a?.beacons && { beacons: a.beacons }),
+		...(a?.relevantDate && { relevantDate: a.relevantDate }),
+		...(a?.relevantDates && { relevantDates: a.relevantDates }),
+		...(a?.groupingIdentifier && { groupingIdentifier: a.groupingIdentifier }),
+		...(a?.suppressStripShine !== undefined && {
+			suppressStripShine: a.suppressStripShine,
 		}),
-		...(pass.apple?.suppressStripShine !== undefined && {
-			suppressStripShine: pass.apple.suppressStripShine,
+		...(a?.sharingProhibited !== undefined && {
+			sharingProhibited: a.sharingProhibited,
 		}),
-		...(pass.apple?.nfc && {
+		...(a?.maxDistance !== undefined && { maxDistance: a.maxDistance }),
+		...(a?.nfc && {
 			nfc: {
-				message: pass.apple.nfc.message,
-				...(pass.apple.nfc.encryptionPublicKey && {
-					encryptionPublicKey: pass.apple.nfc.encryptionPublicKey,
+				message: a.nfc.message,
+				...(a.nfc.encryptionPublicKey && {
+					encryptionPublicKey: a.nfc.encryptionPublicKey,
 				}),
 			},
 		}),
-		...(pass.apple?.appLaunchURL && { appLaunchURL: pass.apple.appLaunchURL }),
-		...(pass.apple?.associatedStoreIdentifiers && {
-			associatedStoreIdentifiers: pass.apple.associatedStoreIdentifiers,
+		...(a?.appLaunchURL && { appLaunchURL: a.appLaunchURL }),
+		...(a?.associatedStoreIdentifiers && {
+			associatedStoreIdentifiers: a.associatedStoreIdentifiers,
 		}),
+		...(a?.webServiceURL && {
+			webServiceURL: a.webServiceURL,
+			authenticationToken: a.authenticationToken,
+		}),
+		...(a?.userInfo && { userInfo: a.userInfo }),
+	};
+}
+
+function buildPassJson(
+	pass: PassConfig,
+	createConfig: CreateConfig,
+	credentials: AppleCredentials
+): Record<string, unknown> {
+	const passTypeKey = PASS_TYPE_KEY[pass.type] ?? "generic";
+	const slots = buildSlots(pass.fields, createConfig.values ?? {});
+	const a = pass.apple;
+
+	return {
+		formatVersion: 1,
+		passTypeIdentifier: credentials.passTypeIdentifier,
+		serialNumber: createConfig.serialNumber,
+		teamIdentifier: credentials.teamId,
+		organizationName: pass.name,
+		description: a?.description ?? pass.name,
+		logoText: a?.logoText ?? pass.name,
+		...buildAppleCommonFields(pass, createConfig),
+		...buildMediaFields(pass, createConfig),
+		...(pass.type === "event" && buildEventAppleFields(pass)),
+		...(pass.type === "flight" && buildFlightAppleFields(pass)),
 		[passTypeKey]: buildPassTypeContent(pass, slots),
 	};
 }

@@ -77,6 +77,31 @@ export const barcodeSchema = z.object({
 
 // Apple-specific options — no cross-platform equivalent
 
+// Bluetooth Low Energy beacon — shows the pass on lock screen when nearby
+const beaconSchema = z.object({
+	// Required: device UUID of the Bluetooth Low Energy beacon
+	proximityUUID: z.uuid(),
+	// 16-bit major value to narrow the region of the beacon
+	major: z.number().int().min(0).max(65_535).optional(),
+	// 16-bit minor value to further narrow the region of the beacon
+	minor: z.number().int().min(0).max(65_535).optional(),
+	// Text shown on lock screen when the pass becomes relevant near this beacon
+	relevantText: z.string().optional(),
+});
+
+// Date interval for relevantDates (replaces the deprecated relevantDate)
+const relevantDateSchema = z.object({
+	startDate: z.iso.datetime({
+		message: 'must be an ISO datetime e.g. "2024-06-01T20:00:00Z"',
+	}),
+	endDate: z.iso
+		.datetime({
+			message: 'must be an ISO datetime e.g. "2024-06-01T23:00:00Z"',
+		})
+		.optional(),
+});
+
+// Base Apple options — applicable to all pass types
 const appleOptionsSchema = z.object({
 	// Required by Apple Wallet — validated at create() time
 	icon: imageSet,
@@ -86,18 +111,20 @@ const appleOptionsSchema = z.object({
 	footer: imageSet,
 	// Apple: description (shown in Wallet list view, defaults to pass name)
 	description: z.string().optional(),
-	// Apple: logoText (text shown next to the logo)
+	// Apple: logoText (text shown next to the logo, not for poster event tickets)
 	logoText: z.string().optional(),
 	// Apple: foregroundColor (text color), labelColor (label text color)
 	foregroundColor: hexColor,
 	labelColor: hexColor,
-	// ISO datetime hint — iOS shows the pass on the lock screen near this time
+	// Deprecated — use relevantDates instead
 	relevantDate: z.iso
 		.datetime({
 			message: 'must be an ISO datetime e.g. "2024-06-01T20:00:00Z"',
 		})
 		.optional(),
-	// Groups passes of the same type into a single stack in Wallet (e.g. multiple store cards)
+	// Date intervals during which the pass is relevant (replaces relevantDate)
+	relevantDates: z.array(relevantDateSchema).optional(),
+	// Groups passes of the same type into a single stack in Wallet
 	groupingIdentifier: z.string().optional(),
 	// Disables the glossy shine effect rendered over strip images
 	suppressStripShine: z.boolean().optional(),
@@ -113,6 +140,67 @@ const appleOptionsSchema = z.object({
 	appLaunchURL: z.url().optional(),
 	// App Store app IDs — adds an "Open" button that launches your app from Wallet
 	associatedStoreIdentifiers: z.array(z.number().int().positive()).optional(),
+	// Maximum distance in meters from a location at which the pass is shown
+	maxDistance: z.number().positive().optional(),
+	// Removes the Share button from the back of the pass
+	sharingProhibited: z.boolean().optional(),
+	// Arbitrary JSON passed to your companion app via NFC or URL — not shown to users
+	userInfo: z.record(z.string(), z.unknown()).optional(),
+	// URL for a web service that receives push update notifications for this pass
+	webServiceURL: z.url().optional(),
+	// Authentication token sent with web service requests (required with webServiceURL)
+	authenticationToken: z.string().min(16).optional(),
+	// Bluetooth LE beacons that trigger lock screen relevance
+	beacons: z.array(beaconSchema).optional(),
+});
+
+// Event-specific Apple options — includes poster event ticket fields
+const appleEventOptionsSchema = appleOptionsSchema.extend({
+	// Text next to the logo on poster event tickets (use logoText for standard event tickets)
+	eventLogoText: z.string().optional(),
+	// Background color for the footer bar on poster event tickets
+	footerBackgroundColor: hexColor,
+	// Disables the header darkening gradient on poster event tickets
+	suppressHeaderDarkening: z.boolean().optional(),
+	// Derives foreground and label colors from the background image (poster event tickets only)
+	useAutomaticColors: z.boolean().optional(),
+	// Schemes to validate the pass against (falls back to designed type if all fail)
+	preferredStyleSchemes: z.array(z.string()).optional(),
+	// Additional App Store app IDs shown in the event guide (poster event tickets only)
+	auxiliaryStoreIdentifiers: z.array(z.number().int().positive()).optional(),
+	// Poster event ticket action URLs
+	accessibilityURL: z.url().optional(),
+	addOnURL: z.url().optional(),
+	bagPolicyURL: z.url().optional(),
+	contactVenueEmail: z.email().optional(),
+	contactVenuePhoneNumber: z.string().optional(),
+	contactVenueWebsite: z.url().optional(),
+	directionsInformationURL: z.url().optional(),
+	merchandiseURL: z.url().optional(),
+	orderFoodURL: z.url().optional(),
+	parkingInformationURL: z.url().optional(),
+	purchaseParkingURL: z.url().optional(),
+	sellURL: z.url().optional(),
+	transferURL: z.url().optional(),
+	transitInformationURL: z.url().optional(),
+});
+
+// Flight-specific Apple options — boarding pass action URLs
+const appleFlightOptionsSchema = appleOptionsSchema.extend({
+	changeSeatURL: z.url().optional(),
+	entertainmentURL: z.url().optional(),
+	managementURL: z.url().optional(),
+	purchaseAdditionalBaggageURL: z.url().optional(),
+	purchaseLoungeAccessURL: z.url().optional(),
+	purchaseWifiURL: z.url().optional(),
+	registerServiceAnimalURL: z.url().optional(),
+	reportLostBagURL: z.url().optional(),
+	requestWheelchairURL: z.url().optional(),
+	trackBagsURL: z.url().optional(),
+	transitProviderEmail: z.email().optional(),
+	transitProviderPhoneNumber: z.string().optional(),
+	transitProviderWebsiteURL: z.url().optional(),
+	upgradeURL: z.url().optional(),
 });
 
 // Google-specific options — no cross-platform equivalent
@@ -182,58 +270,65 @@ export const loyaltyPassSchema = basePassSchema.extend({
 	// "points" → loyaltyPoints, "member" → accountName, "memberId" → accountId
 });
 
-export const eventPassSchema = basePassSchema.extend({
-	type: z.literal("event"),
-	// Apple: relevant date for lock screen suggestion
-	// Google: localScheduledStartDateTime (required for eventTicketClass)
-	startsAt: z.iso
-		.datetime({
-			message: 'must be an ISO datetime e.g. "2024-06-01T20:00:00Z"',
-		})
-		.optional(),
-	endsAt: z.iso
-		.datetime({
-			message: 'must be an ISO datetime e.g. "2024-06-01T23:00:00Z"',
-		})
-		.optional(),
-});
+export const eventPassSchema = basePassSchema
+	.extend({
+		type: z.literal("event"),
+		// Apple: relevant date for lock screen suggestion
+		// Google: localScheduledStartDateTime (required for eventTicketClass)
+		startsAt: z.iso
+			.datetime({
+				message: 'must be an ISO datetime e.g. "2024-06-01T20:00:00Z"',
+			})
+			.optional(),
+		endsAt: z.iso
+			.datetime({
+				message: 'must be an ISO datetime e.g. "2024-06-01T23:00:00Z"',
+			})
+			.optional(),
+	})
+	.extend({ apple: appleEventOptionsSchema.optional() });
 
 // Flight covers air, train, bus, and boat boarding passes.
-export const flightPassSchema = basePassSchema.extend({
-	type: z.literal("flight"),
-	// Apple: transitType (required for boardingPass layout, defaults to "air")
-	// Google: inferred from flightHeader
-	transitType: z.enum(["air", "train", "bus", "boat"]).optional(),
-	// Required by Google flightClass — IATA codes and datetimes
-	// Apple: shown as display fields; provider maps these to the correct slots
-	carrier: z
-		.string()
-		.regex(/^[A-Z0-9]{2}$/, 'must be a 2-character IATA carrier code e.g. "AA"')
-		.optional(),
-	flightNumber: z
-		.string()
-		.regex(/^\d{1,4}[A-Z]?$/, 'must be a flight number e.g. "100" or "1234A"')
-		.optional(),
-	origin: z
-		.string()
-		.regex(/^[A-Z]{3}$/, 'must be a 3-letter IATA airport code e.g. "JFK"')
-		.optional(),
-	destination: z
-		.string()
-		.regex(/^[A-Z]{3}$/, 'must be a 3-letter IATA airport code e.g. "LAX"')
-		.optional(),
-	departure: z.iso
-		.datetime({
-			message: 'must be an ISO datetime e.g. "2024-06-01T08:00:00Z"',
-		})
-		.optional(),
-	arrival: z.iso
-		.datetime({
-			message: 'must be an ISO datetime e.g. "2024-06-01T11:30:00Z"',
-		})
-		.optional(),
-	// passengerName is per-recipient — pass in values at create() time
-});
+export const flightPassSchema = basePassSchema
+	.extend({
+		type: z.literal("flight"),
+		// Apple: transitType (required for boardingPass layout, defaults to "air")
+		// Google: inferred from flightHeader
+		transitType: z.enum(["air", "train", "bus", "boat"]).optional(),
+		// Required by Google flightClass — IATA codes and datetimes
+		// Apple: shown as display fields; provider maps these to the correct slots
+		carrier: z
+			.string()
+			.regex(
+				/^[A-Z0-9]{2}$/,
+				'must be a 2-character IATA carrier code e.g. "AA"'
+			)
+			.optional(),
+		flightNumber: z
+			.string()
+			.regex(/^\d{1,4}[A-Z]?$/, 'must be a flight number e.g. "100" or "1234A"')
+			.optional(),
+		origin: z
+			.string()
+			.regex(/^[A-Z]{3}$/, 'must be a 3-letter IATA airport code e.g. "JFK"')
+			.optional(),
+		destination: z
+			.string()
+			.regex(/^[A-Z]{3}$/, 'must be a 3-letter IATA airport code e.g. "LAX"')
+			.optional(),
+		departure: z.iso
+			.datetime({
+				message: 'must be an ISO datetime e.g. "2024-06-01T08:00:00Z"',
+			})
+			.optional(),
+		arrival: z.iso
+			.datetime({
+				message: 'must be an ISO datetime e.g. "2024-06-01T11:30:00Z"',
+			})
+			.optional(),
+		// passengerName is per-recipient — pass in values at create() time
+	})
+	.extend({ apple: appleFlightOptionsSchema.optional() });
 
 export const couponPassSchema = basePassSchema.extend({
 	type: z.literal("coupon"),
