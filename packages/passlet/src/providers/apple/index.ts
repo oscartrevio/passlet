@@ -120,6 +120,7 @@ function buildPassJson(
 		...(createConfig.expiresAt && {
 			expirationDate: createConfig.expiresAt,
 		}),
+		...(createConfig.apple?.voided && { voided: true }),
 		...(barcode && {
 			barcodes: [
 				{

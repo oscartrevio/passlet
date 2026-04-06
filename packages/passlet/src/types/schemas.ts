@@ -262,6 +262,15 @@ export const createConfigSchema = z.object({
 		.optional(),
 	// Per-recipient field values. null hides the field for this recipient.
 	values: z.record(z.string(), z.string().nullable()).optional(),
+	// Apple-specific per-recipient options.
+	// Google has no equivalent for these — all are ignored by the Google provider.
+	apple: z
+		.object({
+			// Mark this issued pass as void. Displays a "Void" banner on the pass.
+			// For Google, use pass.expire() instead — it transitions state via the API.
+			voided: z.boolean().optional(),
+		})
+		.optional(),
 });
 
 // Inferred types
