@@ -304,9 +304,14 @@ function buildObjectBody(
 		};
 	}
 
-	if (createConfig.expiresAt) {
+	if (createConfig.validFrom || createConfig.expiresAt) {
 		body.validTimeInterval = {
-			end: { date: createConfig.expiresAt.toISOString() },
+			...(createConfig.validFrom && {
+				start: { date: createConfig.validFrom.toISOString() },
+			}),
+			...(createConfig.expiresAt && {
+				end: { date: createConfig.expiresAt.toISOString() },
+			}),
 		};
 	}
 

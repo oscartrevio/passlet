@@ -252,6 +252,9 @@ export const passConfigSchema = z.discriminatedUnion("type", [
 export const createConfigSchema = z.object({
 	serialNumber: z.string().min(1, "CreateConfig missing: serialNumber"),
 	barcode: barcodeSchema.optional(),
+	// Apple: no equivalent — ignored
+	// Google: validTimeInterval.start
+	validFrom: z.date().optional(),
 	expiresAt: z.date().optional(),
 	// Per-recipient field values. null hides the field for this recipient.
 	values: z.record(z.string(), z.string().nullable()).optional(),
