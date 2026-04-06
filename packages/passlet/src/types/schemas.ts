@@ -91,6 +91,28 @@ const appleOptionsSchema = z.object({
 	// Apple: foregroundColor (text color), labelColor (label text color)
 	foregroundColor: hexColor,
 	labelColor: hexColor,
+	// ISO datetime hint — iOS shows the pass on the lock screen near this time
+	relevantDate: z.iso
+		.datetime({
+			message: 'must be an ISO datetime e.g. "2024-06-01T20:00:00Z"',
+		})
+		.optional(),
+	// Groups passes of the same type into a single stack in Wallet (e.g. multiple store cards)
+	groupingIdentifier: z.string().optional(),
+	// Disables the glossy shine effect rendered over strip images
+	suppressStripShine: z.boolean().optional(),
+	// NFC payload — message is passed to the contactless reader on tap
+	nfc: z
+		.object({
+			message: z.string(),
+			// Public key used to encrypt the NFC payload (Base64-encoded X.509)
+			encryptionPublicKey: z.string().optional(),
+		})
+		.optional(),
+	// Deep link opened when the user taps "Open" on the pass (requires associatedStoreIdentifiers)
+	appLaunchURL: z.url().optional(),
+	// App Store app IDs — adds an "Open" button that launches your app from Wallet
+	associatedStoreIdentifiers: z.array(z.number().int().positive()).optional(),
 });
 
 // Google-specific options — no cross-platform equivalent

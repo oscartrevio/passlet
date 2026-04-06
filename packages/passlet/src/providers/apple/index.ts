@@ -142,6 +142,25 @@ function buildPassJson(
 				})
 			),
 		}),
+		...(pass.apple?.relevantDate && { relevantDate: pass.apple.relevantDate }),
+		...(pass.apple?.groupingIdentifier && {
+			groupingIdentifier: pass.apple.groupingIdentifier,
+		}),
+		...(pass.apple?.suppressStripShine !== undefined && {
+			suppressStripShine: pass.apple.suppressStripShine,
+		}),
+		...(pass.apple?.nfc && {
+			nfc: {
+				message: pass.apple.nfc.message,
+				...(pass.apple.nfc.encryptionPublicKey && {
+					encryptionPublicKey: pass.apple.nfc.encryptionPublicKey,
+				}),
+			},
+		}),
+		...(pass.apple?.appLaunchURL && { appLaunchURL: pass.apple.appLaunchURL }),
+		...(pass.apple?.associatedStoreIdentifiers && {
+			associatedStoreIdentifiers: pass.apple.associatedStoreIdentifiers,
+		}),
 		[passTypeKey]: buildPassTypeContent(pass, slots),
 	};
 }
