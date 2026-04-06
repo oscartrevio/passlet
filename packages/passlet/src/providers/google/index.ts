@@ -157,6 +157,14 @@ function buildClassBody(
 		body.issuerName = pass.google.issuerName;
 	}
 
+	// Google supports up to 20 locations. altitude and relevantText are Apple-only — ignored here.
+	if (pass.locations && pass.locations.length > 0) {
+		body.locations = pass.locations.map(({ latitude, longitude }) => ({
+			latitude,
+			longitude,
+		}));
+	}
+
 	if (pass.google?.extend) {
 		Object.assign(body, pass.google.extend);
 	}
