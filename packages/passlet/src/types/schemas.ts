@@ -106,6 +106,19 @@ const googleOptionsSchema = z.object({
 	extend: z.record(z.string(), z.unknown()).optional(),
 });
 
+// Location — geo-relevance for lock screen suggestions.
+// Apple: locations[] with longitude, latitude, altitude?, relevantText?
+// Google: locations[] with latitude, longitude (altitude and relevantText ignored)
+export const locationSchema = z.object({
+	latitude: z.number(),
+	longitude: z.number(),
+	// Apple: altitude in meters above sea level (optional)
+	altitude: z.number().optional(),
+	// Apple: text shown on lock screen when the pass becomes relevant near this location
+	// Google: no equivalent — ignored
+	relevantText: z.string().optional(),
+});
+
 // Base pass config — shared across all pass types
 
 const basePassSchema = z.object({
@@ -127,6 +140,11 @@ const basePassSchema = z.object({
 	// Apple: strip (shown behind the fields, top of pass)
 	// Google: hero (shown at the bottom of the pass)
 	banner: imageSet,
+
+	// Geo-relevance — show pass on lock screen when near these coordinates.
+	// Apple: locations[] — up to 10 entries
+	// Google: locations[] — up to 20 entries
+	locations: z.array(locationSchema).optional(),
 
 	// Display fields — use field.primary(), field.secondary(), etc.
 	// Apple: maps to headerFields / primaryFields / secondaryFields / auxiliaryFields / backFields
@@ -241,6 +259,7 @@ export const createConfigSchema = z.object({
 
 // Inferred types
 
+export type Location = z.infer<typeof locationSchema>;
 export type ImageSource = string | Uint8Array;
 export type ImageSet =
 	| ImageSource
