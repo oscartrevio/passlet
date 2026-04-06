@@ -165,10 +165,6 @@ function buildClassBody(
 		}));
 	}
 
-	if (pass.google?.extend) {
-		Object.assign(body, pass.google.extend);
-	}
-
 	return body;
 }
 

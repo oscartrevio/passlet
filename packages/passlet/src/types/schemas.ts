@@ -91,8 +91,6 @@ const appleOptionsSchema = z.object({
 	// Apple: foregroundColor (text color), labelColor (label text color)
 	foregroundColor: hexColor,
 	labelColor: hexColor,
-	// Escape hatch for arbitrary pass.json fields (semantics, nfc, groupingIdentifier, etc.)
-	extend: z.record(z.string(), z.unknown()).optional(),
 });
 
 // Google-specific options — no cross-platform equivalent
@@ -102,8 +100,6 @@ const googleOptionsSchema = z.object({
 	wideLogo: z.url().optional(),
 	// Google: issuerName — displayed as the pass issuer
 	issuerName: z.string().optional(),
-	// Escape hatch for Google Wallet class-level fields
-	extend: z.record(z.string(), z.unknown()).optional(),
 });
 
 // Location — geo-relevance for lock screen suggestions.

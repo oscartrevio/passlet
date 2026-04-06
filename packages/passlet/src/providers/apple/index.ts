@@ -141,9 +141,6 @@ function buildPassJson(
 				})
 			),
 		}),
-		// Escape hatch — merge arbitrary pass.json fields before the type block
-		// so per-type content cannot be accidentally overwritten by extend
-		...pass.apple?.extend,
 		[passTypeKey]: buildPassTypeContent(pass, slots),
 	};
 }
