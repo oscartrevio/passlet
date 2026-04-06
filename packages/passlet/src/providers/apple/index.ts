@@ -2,12 +2,7 @@ import { createHash } from "node:crypto";
 import JSZip from "jszip";
 import { WalletError } from "../../errors";
 import type { AppleCredentials } from "../../types/credentials";
-import type {
-	Barcode,
-	CreateConfig,
-	FieldDef,
-	PassConfig,
-} from "../../types/schemas";
+import type { CreateConfig, FieldDef, PassConfig } from "../../types/schemas";
 import { signManifest } from "./signer";
 import {
 	hexToRgb,
@@ -86,17 +81,28 @@ function buildSlots(
 	return slots;
 }
 
+function buildPassTypeContent(
+	pass: PassConfig,
+	slots: Record<string, unknown[]>
+): Record<string, unknown> {
+	const content: Record<string, unknown> = { ...slots };
+	if (pass.type === "flight") {
+		content.transitType =
+			TRANSIT_TYPE[pass.transitType ?? "air"] ?? "PKTransitTypeAir";
+	}
+	return content;
+}
+
 function buildPassJson(
 	pass: PassConfig,
 	createConfig: CreateConfig,
-	credentials: AppleCredentials,
-	barcode: Barcode | undefined
+	credentials: AppleCredentials
 ): Record<string, unknown> {
 	const passTypeKey = PASS_TYPE_KEY[pass.type] ?? "generic";
-	const values = createConfig.values ?? {};
-	const slots = buildSlots(pass.fields, values);
+	const slots = buildSlots(pass.fields, createConfig.values ?? {});
+	const { barcode } = createConfig;
 
-	const json: Record<string, unknown> = {
+	return {
 		formatVersion: 1,
 		passTypeIdentifier: credentials.passTypeIdentifier,
 		serialNumber: createConfig.serialNumber,
@@ -104,46 +110,42 @@ function buildPassJson(
 		organizationName: pass.name,
 		description: pass.apple?.description ?? pass.name,
 		logoText: pass.apple?.logoText ?? pass.name,
+		...(pass.color && { backgroundColor: hexToRgb(pass.color) }),
+		...(pass.apple?.foregroundColor && {
+			foregroundColor: hexToRgb(pass.apple.foregroundColor),
+		}),
+		...(pass.apple?.labelColor && {
+			labelColor: hexToRgb(pass.apple.labelColor),
+		}),
+		...(createConfig.expiresAt && {
+			expirationDate: createConfig.expiresAt.toISOString(),
+		}),
+		...(barcode && {
+			barcodes: [
+				{
+					message: barcode.value,
+					format: toAppleBarcodeFormat(barcode.format),
+					messageEncoding: "iso-8859-1",
+					altText: barcode.altText ?? barcode.value,
+				},
+			],
+		}),
+		// Apple supports up to 10 locations. altitude and relevantText are Apple-only.
+		...(pass.locations && {
+			locations: pass.locations.map(
+				({ latitude, longitude, altitude, relevantText }) => ({
+					latitude,
+					longitude,
+					...(altitude !== undefined && { altitude }),
+					...(relevantText && { relevantText }),
+				})
+			),
+		}),
+		// Escape hatch — merge arbitrary pass.json fields before the type block
+		// so per-type content cannot be accidentally overwritten by extend
+		...pass.apple?.extend,
+		[passTypeKey]: buildPassTypeContent(pass, slots),
 	};
-
-	if (pass.color) {
-		json.backgroundColor = hexToRgb(pass.color);
-	}
-	if (pass.apple?.foregroundColor) {
-		json.foregroundColor = hexToRgb(pass.apple.foregroundColor);
-	}
-	if (pass.apple?.labelColor) {
-		json.labelColor = hexToRgb(pass.apple.labelColor);
-	}
-	if (createConfig.expiresAt) {
-		json.expirationDate = createConfig.expiresAt.toISOString();
-	}
-
-	if (barcode) {
-		json.barcodes = [
-			{
-				message: barcode.value,
-				format: toAppleBarcodeFormat(barcode.format),
-				messageEncoding: "iso-8859-1",
-				altText: barcode.altText ?? barcode.value,
-			},
-		];
-	}
-
-	// Pass type content
-	const passContent: Record<string, unknown> = { ...slots };
-	if (pass.type === "flight") {
-		passContent.transitType =
-			TRANSIT_TYPE[pass.transitType ?? "air"] ?? "PKTransitTypeAir";
-	}
-
-	// Escape hatch — merge arbitrary pass.json fields
-	if (pass.apple?.extend) {
-		Object.assign(json, pass.apple.extend);
-	}
-
-	json[passTypeKey] = passContent;
-	return json;
 }
 
 async function collectImages(
@@ -180,7 +182,6 @@ export async function generateApplePass(
 	createConfig: CreateConfig,
 	credentials: AppleCredentials
 ): Promise<{ pass: Uint8Array; warnings: string[] }> {
-	const barcode = createConfig.barcode;
 	const warnings: string[] = [];
 
 	validateAppleRequirements(pass);
@@ -190,7 +191,7 @@ export async function generateApplePass(
 	const files: Record<string, Uint8Array> = {};
 
 	// pass.json
-	const passJson = buildPassJson(pass, createConfig, credentials, barcode);
+	const passJson = buildPassJson(pass, createConfig, credentials);
 	files["pass.json"] = encoder.encode(JSON.stringify(passJson));
 
 	// Images
