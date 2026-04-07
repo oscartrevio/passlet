@@ -2,7 +2,12 @@ import { WalletError } from "../../errors";
 import type { GoogleCredentials } from "../../types/credentials";
 import type { CreateConfig, FieldDef, PassConfig } from "../../types/schemas";
 import { ensureClass, importGoogleKey, patchObject } from "./api";
-import { imageUri, localized, toGoogleBarcodeType } from "./utils";
+import {
+	imageUri,
+	localized,
+	toGoogleBarcodeType,
+	translationsFor,
+} from "./utils";
 
 // Typed maps — pass.type is always one of these keys so access is always string (not string | undefined)
 type PassType = PassConfig["type"];
@@ -95,13 +100,17 @@ function buildInfoModuleData(
 }
 
 // Per-type class name fields
-function buildClassTypeFields(pass: PassConfig): Record<string, unknown> {
+function buildClassTypeFields(
+	pass: PassConfig,
+	locales: PassConfig["locales"]
+): Record<string, unknown> {
+	const nameTranslations = translationsFor("name", locales);
 	if (pass.type === "loyalty") {
 		return { programName: pass.name };
 	}
 	if (pass.type === "event") {
 		return {
-			eventName: localized(pass.name),
+			eventName: localized(pass.name, "en-US", nameTranslations),
 			localScheduledStartDateTime: pass.startsAt?.replace("Z", ""),
 			localScheduledEndDateTime: pass.endsAt?.replace("Z", ""),
 		};
@@ -116,7 +125,7 @@ function buildClassTypeFields(pass: PassConfig): Record<string, unknown> {
 		};
 	}
 	// giftCard + generic
-	return { cardTitle: localized(pass.name) };
+	return { cardTitle: localized(pass.name, "en-US", nameTranslations) };
 }
 
 // Build the class body — defines the pass template (shared across all recipients)
@@ -133,7 +142,7 @@ function buildClassBody(
 
 	return {
 		id: classId,
-		...buildClassTypeFields(pass),
+		...buildClassTypeFields(pass, pass.locales),
 		hexBackgroundColor: pass.color,
 		// loyalty uses programLogo; all other types use logo
 		programLogo: pass.type === "loyalty" ? logo : undefined,
@@ -226,7 +235,8 @@ function buildGiftCardObjectFields(
 // Display fields: primary → subheader+header, others → textModulesData, back → infoModuleData
 function buildDisplayFields(
 	fields: FieldDef[],
-	values: Record<string, string | null>
+	values: Record<string, string | null>,
+	locales: PassConfig["locales"]
 ): Record<string, unknown> {
 	const primaryField = fields.find((f) => f.slot === "primary");
 	const primaryValue =
@@ -240,11 +250,19 @@ function buildDisplayFields(
 	return {
 		subheader:
 			primaryField && primaryValue != null
-				? localized(primaryField.label)
+				? localized(
+						primaryField.label,
+						"en-US",
+						translationsFor(primaryField.key, locales)
+					)
 				: undefined,
 		header:
 			primaryField && primaryValue != null
-				? localized(primaryValue)
+				? localized(
+						primaryValue,
+						"en-US",
+						translationsFor(`${primaryField.key}_value`, locales)
+					)
 				: undefined,
 		textModulesData: textModules.length > 0 ? textModules : undefined,
 		infoModuleData: buildInfoModuleData(fields, values),
@@ -295,7 +313,7 @@ function buildObjectBody(
 			)),
 		...(pass.type === "giftCard" &&
 			buildGiftCardObjectFields(pass, fields, values)),
-		...buildDisplayFields(fields, values),
+		...buildDisplayFields(fields, values, pass.locales),
 	};
 }
 

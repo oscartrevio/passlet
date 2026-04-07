@@ -268,6 +268,21 @@ export async function generateApplePass(
 	const passJson = buildPassJson(pass, createConfig, credentials);
 	files["pass.json"] = encoder.encode(JSON.stringify(passJson));
 
+	// Locale files — {language}.lproj/pass.strings
+	// Each entry uses Apple's pass.strings format: "key" = "value";
+	// Use field keys to translate labels and "key_value" to translate static field values.
+	// The reserved key "name" translates the pass title (organizationName / description / logoText).
+	if (pass.locales) {
+		for (const [language, translations] of Object.entries(pass.locales)) {
+			const lines = Object.entries(translations).map(
+				([key, value]) => `"${key}" = "${value.replace(/"/g, '\\"')}";`
+			);
+			files[`${language}.lproj/pass.strings`] = encoder.encode(
+				lines.join("\n")
+			);
+		}
+	}
+
 	// Images
 	const images = await collectImages(pass, warnings);
 	for (const [name, bytes] of Object.entries(images)) {
