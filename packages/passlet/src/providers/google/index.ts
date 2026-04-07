@@ -373,6 +373,14 @@ function buildObjectBody(
 			)),
 		...(pass.type === "giftCard" &&
 			buildGiftCardObjectFields(pass, fields, values)),
+		// genericObject requires cardTitle in the object body (in addition to the class)
+		...(pass.type === "generic" && {
+			cardTitle: localized(
+				pass.name,
+				"en-US",
+				translationsFor("name", pass.locales)
+			),
+		}),
 		...buildDisplayFields(fields, values, pass.locales),
 	};
 }
