@@ -95,8 +95,8 @@ async function assertOk(response: Response): Promise<void> {
 	}
 }
 
-// Create or update a Google Wallet class.
-// POST first; if 409 (already exists), PATCH so template changes are propagated.
+// Ensure a Google Wallet class exists. Creates it if not found; no-ops if it already exists.
+// Class updates (template changes) are intentionally out of scope — use patchClass for that.
 export async function ensureClass(
 	classType: string,
 	classId: string,
@@ -104,26 +104,32 @@ export async function ensureClass(
 	credentials: GoogleCredentials,
 	privateKey: CryptoKey
 ): Promise<void> {
-	const response = await walletRequest(
-		"POST",
-		`/${classType}`,
+	const existing = await walletRequest(
+		"GET",
+		`/${classType}/${classId}`,
 		credentials,
-		privateKey,
-		{ id: classId, ...classBody }
+		privateKey
 	);
-	if (response.status === 409) {
-		// Class already exists — PATCH to propagate any template changes.
-		const patch = await walletRequest(
-			"PATCH",
-			`/${classType}/${classId}`,
-			credentials,
-			privateKey,
-			classBody
-		);
-		await assertOk(patch);
+
+	if (existing.ok) {
+		await existing.body?.cancel();
 		return;
 	}
-	await assertOk(response);
+
+	if (existing.status !== 404) {
+		const text = await existing.text();
+		throw new WalletError(
+			"GOOGLE_API_ERROR",
+			`Google Wallet API error (${existing.status}): ${text}`
+		);
+	}
+
+	await assertOk(
+		await walletRequest("POST", `/${classType}`, credentials, privateKey, {
+			id: classId,
+			...classBody,
+		})
+	);
 }
 
 export async function deleteObject(

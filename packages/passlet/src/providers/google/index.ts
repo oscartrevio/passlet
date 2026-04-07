@@ -179,50 +179,57 @@ function buildAppLinkData(d: {
 }
 
 // Build the class body — defines the pass template (shared across all recipients)
-function buildClassBody(
-	pass: PassConfig,
-	classId: string
-): Record<string, unknown> {
+function buildClassBody(pass: PassConfig): Record<string, unknown> {
 	const logo = imageUri(pass.logo);
 	const wideLogo = imageUri(pass.google?.wideLogo);
-	// banner → hero on Google (imageUri only accepts string URLs)
 	const hero = imageUri(
 		typeof pass.banner === "string" ? pass.banner : undefined
 	);
 
-	return {
-		id: classId,
+	const body: Record<string, unknown> = {
 		...buildClassTypeFields(pass, pass.locales),
 		hexBackgroundColor: pass.color,
-		// loyalty uses programLogo; all other types use logo
-		programLogo: pass.type === "loyalty" ? logo : undefined,
-		logo: pass.type === "loyalty" ? undefined : logo,
-		wideProgramBanner: wideLogo,
-		heroImage: hero,
-		// Fall back to pass.name — Google requires issuerName on most class types
 		issuerName: pass.google?.issuerName ?? pass.name,
-		// Required for loyalty, event, flight, coupon, giftCard classes. Ignored by genericClass.
-		reviewStatus:
-			pass.type === "generic"
-				? undefined
-				: (pass.google?.reviewStatus ?? "UNDER_REVIEW"),
-		// Smart Tap NFC — enable tap-to-redeem at supported terminals
-		enableSmartTap: pass.google?.enableSmartTap,
-		redemptionIssuers: pass.google?.redemptionIssuers,
-		// Class-level messages shown to all pass holders
-		messages: pass.google?.messages,
-		// App deep link shown on the pass
-		appLinkData: pass.google?.appLinkData
-			? buildAppLinkData(pass.google.appLinkData)
-			: undefined,
-		// Google supports up to 20 locations. altitude and relevantText are Apple-only — ignored here.
-		locations: pass.locations?.length
-			? pass.locations.map(({ latitude, longitude }) => ({
-					latitude,
-					longitude,
-				}))
-			: undefined,
 	};
+
+	// loyalty uses programLogo; all other types use logo
+	if (pass.type === "loyalty") {
+		if (logo) {
+			body.programLogo = logo;
+		}
+	} else if (logo) {
+		body.logo = logo;
+	}
+	if (wideLogo) {
+		body.wideProgramBanner = wideLogo;
+	}
+	if (hero) {
+		body.heroImage = hero;
+	}
+	// Required for loyalty, event, flight, coupon, giftCard classes. Ignored by genericClass.
+	if (pass.type !== "generic") {
+		body.reviewStatus = pass.google?.reviewStatus ?? "UNDER_REVIEW";
+	}
+	if (pass.google?.enableSmartTap) {
+		body.enableSmartTap = pass.google.enableSmartTap;
+	}
+	if (pass.google?.redemptionIssuers) {
+		body.redemptionIssuers = pass.google.redemptionIssuers;
+	}
+	if (pass.google?.messages) {
+		body.messages = pass.google.messages;
+	}
+	if (pass.google?.appLinkData) {
+		body.appLinkData = buildAppLinkData(pass.google.appLinkData);
+	}
+	if (pass.locations?.length) {
+		body.locations = pass.locations.map(({ latitude, longitude }) => ({
+			latitude,
+			longitude,
+		}));
+	}
+
+	return body;
 }
 
 // Loyalty: map well-known field keys to structured loyalty fields
@@ -386,7 +393,7 @@ export async function generateGooglePass(
 	const classId = `${credentials.issuerId}.${pass.id}`;
 	const objectId = `${credentials.issuerId}.${createConfig.serialNumber}`;
 
-	const classBody = buildClassBody(pass, classId);
+	const classBody = buildClassBody(pass);
 	await ensureClass(classType, classId, classBody, credentials, privateKey);
 
 	const objectBody = buildObjectBody(

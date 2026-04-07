@@ -24,16 +24,30 @@ afterEach(() => {
 function stubFetch() {
 	vi.stubGlobal(
 		"fetch",
-		vi.fn().mockImplementation((url: string) => {
+		vi.fn().mockImplementation((url: string, init?: RequestInit) => {
 			if (url.includes("oauth2.googleapis.com")) {
 				return Promise.resolve({
 					ok: true,
 					json: () => Promise.resolve({ access_token: "test-token" }),
 				});
 			}
+			// GET to walletobjects → 404 (class doesn't exist yet, so POST path is taken)
+			if (
+				url.includes("walletobjects.googleapis.com") &&
+				(!init?.method || init.method === "GET")
+			) {
+				return Promise.resolve({
+					ok: false,
+					status: 404,
+					body: null,
+					json: () => Promise.resolve({}),
+					text: () => Promise.resolve(""),
+				});
+			}
 			return Promise.resolve({
 				ok: true,
 				status: 201,
+				body: null,
 				text: () => Promise.resolve(""),
 			});
 		})
@@ -111,10 +125,13 @@ describe("Google locale translations", () => {
 			{ serialNumber: "s1" }
 		);
 
-		// cardTitle is class-level — verify by inspecting the fetch call body
+		// cardTitle is class-level — verify by inspecting the fetch call body (skip the GET)
 		const fetchMock = vi.mocked(globalThis.fetch);
 		const classCall = fetchMock.mock.calls.find(
-			([url]) => typeof url === "string" && url.includes("genericClass")
+			([url, init]) =>
+				typeof url === "string" &&
+				url.includes("genericClass") &&
+				init?.body !== undefined
 		);
 		expect(classCall).toBeDefined();
 		const classBody = JSON.parse(classCall?.[1]?.body as string) as Record<
