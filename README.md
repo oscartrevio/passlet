@@ -1,6 +1,6 @@
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/oscartrevio/passlet/main/.github/assets/header-dark.svg">
-  <img src="https://raw.githubusercontent.com/oscartrevio/passlet/main/.github/assets/header.svg" alt="Passlet" width="100%">
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/header-dark.svg">
+  <img src=".github/assets/header.svg" alt="Passlet" width="100%">
 </picture>
 
 **[Passlet](https://github.com/oscartrevio/passlet)** is a library for generating Apple Wallet and Google Wallet passes from a single TypeScript API.
