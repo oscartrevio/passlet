@@ -26,12 +26,19 @@
   "devDependencies": {
     "@biomejs/biome": "2.4.9",
     "@changesets/cli": "^2.30.0",
+    "@commitlint/cli": "^20.5.0",
+    "@commitlint/config-conventional": "^20.5.0",
     "@passlet/config": "workspace:*",
     "@types/node": "^20.19.37",
     "lefthook": "latest",
     "turbo": "^2.9.3",
     "typescript": "^5.9.3",
     "ultracite": "7.4.2"
+  },
+  "commitlint": {
+    "extends": [
+      "@commitlint/config-conventional"
+    ]
   },
   "packageManager": "pnpm@10.33.0"
 }
