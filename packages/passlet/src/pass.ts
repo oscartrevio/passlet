@@ -1,6 +1,7 @@
 import { WalletError } from "./errors";
 import { generateApplePass } from "./providers/apple/index";
 import {
+	deleteGooglePass,
 	expireGooglePass,
 	generateGooglePass,
 	updateGooglePass,
@@ -119,6 +120,18 @@ export class Pass {
 			await updateGooglePass(
 				this.config,
 				createConfig,
+				this.credentials.google
+			);
+		}
+	}
+
+	// Delete a pass. For Google: permanently removes the object via the Wallet REST API.
+	// Apple passes cannot be remotely deleted — use expire() to invalidate them instead.
+	async delete(serialNumber: string): Promise<void> {
+		if (this.credentials.google) {
+			await deleteGooglePass(
+				this.config,
+				serialNumber,
 				this.credentials.google
 			);
 		}

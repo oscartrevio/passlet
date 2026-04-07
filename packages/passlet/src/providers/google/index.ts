@@ -1,7 +1,7 @@
 import { WalletError } from "../../errors";
 import type { GoogleCredentials } from "../../types/credentials";
 import type { CreateConfig, FieldDef, PassConfig } from "../../types/schemas";
-import { ensureClass, importGoogleKey, patchObject } from "./api";
+import { deleteObject, ensureClass, importGoogleKey, patchObject } from "./api";
 import {
 	imageUri,
 	localized,
@@ -121,11 +121,43 @@ function buildClassTypeFields(
 	if (pass.type === "coupon") {
 		return {
 			title: pass.name,
-			redemptionChannel: pass.redemptionChannel?.toUpperCase(),
+			redemptionChannel: pass.redemptionChannel.toUpperCase(),
 		};
 	}
 	// giftCard + generic
 	return { cardTitle: localized(pass.name, "en-US", nameTranslations) };
+}
+
+// Build a Google Wallet AppLinkInfo sub-object from our simplified schema shape.
+function buildAppLinkInfo(info: {
+	uri: string;
+	title?: string;
+	description?: string;
+	logoUrl?: string;
+}): Record<string, unknown> {
+	return {
+		appLogoImage: imageUri(info.logoUrl),
+		title: info.title ? localized(info.title) : undefined,
+		description: info.description ? localized(info.description) : undefined,
+		appTarget: { targetUri: { uri: info.uri } },
+	};
+}
+
+function buildAppLinkData(d: {
+	android?: {
+		uri: string;
+		title?: string;
+		description?: string;
+		logoUrl?: string;
+	};
+	ios?: { uri: string; title?: string; description?: string; logoUrl?: string };
+	web?: { uri: string; title?: string; description?: string; logoUrl?: string };
+}): Record<string, unknown> {
+	return {
+		androidAppLinkInfo: d.android ? buildAppLinkInfo(d.android) : undefined,
+		iosAppLinkInfo: d.ios ? buildAppLinkInfo(d.ios) : undefined,
+		webAppLinkInfo: d.web ? buildAppLinkInfo(d.web) : undefined,
+	};
 }
 
 // Build the class body — defines the pass template (shared across all recipients)
@@ -150,6 +182,15 @@ function buildClassBody(
 		wideProgramBanner: wideLogo,
 		heroImage: hero,
 		issuerName: pass.google?.issuerName,
+		// Smart Tap NFC — enable tap-to-redeem at supported terminals
+		enableSmartTap: pass.google?.enableSmartTap,
+		redemptionIssuers: pass.google?.redemptionIssuers,
+		// Class-level messages shown to all pass holders
+		messages: pass.google?.messages,
+		// App deep link shown on the pass
+		appLinkData: pass.google?.appLinkData
+			? buildAppLinkData(pass.google.appLinkData)
+			: undefined,
 		// Google supports up to 20 locations. altitude and relevantText are Apple-only — ignored here.
 		locations: pass.locations?.length
 			? pass.locations.map(({ latitude, longitude }) => ({
@@ -303,6 +344,12 @@ function buildObjectBody(
 							: undefined,
 					}
 				: undefined,
+		// Smart Tap: per-recipient redemption value sent to NFC terminals
+		smartTapRedemptionValue: createConfig.google?.smartTapRedemptionValue,
+		// Rotating barcode replaces the static barcode when set
+		rotatingBarcode: createConfig.google?.rotatingBarcode,
+		// Per-recipient messages
+		messages: createConfig.google?.messages,
 		...(pass.type === "loyalty" && buildLoyaltyObjectFields(fields, values)),
 		...(pass.type === "flight" &&
 			buildFlightObjectFields(
@@ -379,6 +426,18 @@ export async function updateGooglePass(
 	const patch = buildObjectBody(pass, createConfig, classId, objectId, []);
 
 	await patchObject(objectType, objectId, patch, credentials, privateKey);
+}
+
+export async function deleteGooglePass(
+	pass: PassConfig,
+	serialNumber: string,
+	credentials: GoogleCredentials
+): Promise<void> {
+	const privateKey = await importGoogleKey(credentials);
+	const objectType = OBJECT_TYPE[pass.type];
+	const objectId = `${credentials.issuerId}.${serialNumber}`;
+
+	await deleteObject(objectType, objectId, credentials, privateKey);
 }
 
 export async function expireGooglePass(

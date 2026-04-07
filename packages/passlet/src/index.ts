@@ -8,6 +8,7 @@ export type {
 	WalletCredentials,
 } from "./types/credentials";
 export type {
+	AppLinkData,
 	Barcode,
 	BarcodeFormat,
 	CouponPassConfig,
@@ -18,6 +19,7 @@ export type {
 	FlightPassConfig,
 	GenericPassConfig,
 	GiftCardPassConfig,
+	GooglePassMessage,
 	ImageSet,
 	ImageSource,
 	LocaleCode,
@@ -26,6 +28,7 @@ export type {
 	LoyaltyPassConfig,
 	NumberStyle,
 	PassConfig,
+	RotatingBarcode,
 	TextAlignment,
 	TranslationMap,
 } from "./types/schemas";

@@ -112,6 +112,7 @@ export async function ensureClass(
 		{ id: classId, ...classBody }
 	);
 	if (response.status === 409) {
+		// Class already exists — PATCH to propagate any template changes.
 		const patch = await walletRequest(
 			"PATCH",
 			`/${classType}/${classId}`,
@@ -119,13 +120,31 @@ export async function ensureClass(
 			privateKey,
 			classBody
 		);
-		// Swallow PATCH errors — the class exists and passes can still be issued.
-		if (!patch.ok) {
-			await patch.body?.cancel();
-		}
+		await assertOk(patch);
 		return;
 	}
 	await assertOk(response);
+}
+
+export async function deleteObject(
+	objectType: string,
+	objectId: string,
+	credentials: GoogleCredentials,
+	privateKey: CryptoKey
+): Promise<void> {
+	const response = await walletRequest(
+		"DELETE",
+		`/${objectType}/${objectId}`,
+		credentials,
+		privateKey
+	);
+	// 404 = already deleted — treat as success (idempotent)
+	if (response.status === 404) {
+		await response.body?.cancel();
+		return;
+	}
+	await assertOk(response);
+	await response.body?.cancel();
 }
 
 export async function patchObject(

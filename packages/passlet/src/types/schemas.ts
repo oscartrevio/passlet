@@ -213,6 +213,62 @@ const appleFlightOptionsSchema = appleOptionsSchema.extend({
 	upgradeURL: z.url().optional(),
 });
 
+// Google-specific sub-schemas
+
+// Info message shown inside the pass view (e.g. alerts, promotions, expiry warnings).
+// Class-level messages appear for all holders; object-level messages are per-recipient.
+const googleMessageSchema = z.object({
+	header: z.string(),
+	body: z.string(),
+	id: z.string().optional(),
+	// TEXT (default), expireNotification, or TEXT_AND_NOTIFY (push + in-app)
+	messageType: z
+		.enum(["TEXT", "expireNotification", "TEXT_AND_NOTIFY"])
+		.default("TEXT"),
+	displayInterval: z
+		.object({
+			start: z.object({ date: z.iso.datetime() }).optional(),
+			end: z.object({ date: z.iso.datetime() }).optional(),
+		})
+		.optional(),
+});
+
+// TOTP-based rotating barcode — generates a new barcode value every periodMillis ms.
+// valuePattern uses {totp_value_hex} or {totp_value_decimal} as the rotating placeholder.
+const googleRotatingBarcodeSchema = z.object({
+	type: z.enum(["QR_CODE", "PDF_417", "AZTEC", "CODE_128"]).default("QR_CODE"),
+	// Pattern containing the TOTP placeholder, e.g. "https://example.com/redeem/{totp_value_hex}"
+	valuePattern: z
+		.string()
+		.min(1, "rotatingBarcode.valuePattern must not be empty"),
+	totpDetails: z.object({
+		periodMillis: z.string().default("30000"),
+		algorithm: z.literal("TOTP_SHA1").default("TOTP_SHA1"),
+		parameters: z.array(
+			z.object({
+				key: z.string(),
+				valueLength: z.number().int().min(1).max(8),
+			})
+		),
+	}),
+	renderEncoding: z.literal("UTF_8").optional(),
+});
+
+// App deep link shown on the pass — supports Android, iOS, and web targets.
+const googleAppLinkInfoSchema = z.object({
+	// Deep link URI (e.g. intent:// for Android, https:// scheme for iOS universal links)
+	uri: z.url(),
+	title: z.string().optional(),
+	description: z.string().optional(),
+	logoUrl: z.url().optional(),
+});
+
+const googleAppLinkDataSchema = z.object({
+	android: googleAppLinkInfoSchema.optional(),
+	ios: googleAppLinkInfoSchema.optional(),
+	web: googleAppLinkInfoSchema.optional(),
+});
+
 // Google-specific options — no cross-platform equivalent
 
 const googleOptionsSchema = z.object({
@@ -220,6 +276,14 @@ const googleOptionsSchema = z.object({
 	wideLogo: z.url().optional(),
 	// Google: issuerName — displayed as the pass issuer
 	issuerName: z.string().optional(),
+	// Smart Tap NFC — enable tap-to-redeem at supported terminals
+	enableSmartTap: z.boolean().optional(),
+	// Smart Tap issuer IDs allowed to redeem this pass (required when enableSmartTap is true)
+	redemptionIssuers: z.array(z.string()).optional(),
+	// Class-level info messages shown inside the pass view for all holders
+	messages: z.array(googleMessageSchema).optional(),
+	// App link shown on the pass to open a companion app
+	appLinkData: googleAppLinkDataSchema.optional(),
 });
 
 // Location — geo-relevance for lock screen suggestions.
@@ -353,14 +417,18 @@ export const couponPassSchema = basePassSchema.extend({
 	type: z.literal("coupon"),
 	// Google: redemptionChannel (required for offerClass)
 	// Apple: no equivalent — ignored
-	redemptionChannel: z.enum(["online", "instore", "both"]).optional(),
+	// Defaults to "both" — Google requires this field for offerClass
+	redemptionChannel: z.enum(["online", "instore", "both"]).default("both"),
 });
 
 export const giftCardPassSchema = basePassSchema.extend({
 	type: z.literal("giftCard"),
 	// Google: balance.currencyCode (needed to format the balance amount)
 	// Apple: use currencyCode on the balance field definition instead
-	currency: z.string().optional(), // ISO 4217 e.g. "USD"
+	currency: z
+		.string()
+		.regex(/^[A-Z]{3}$/, 'must be a 3-letter ISO 4217 currency code e.g. "USD"')
+		.optional(),
 });
 
 export const genericPassSchema = basePassSchema.extend({
@@ -399,12 +467,22 @@ export const createConfigSchema = z.object({
 	// Per-recipient field values. null hides the field for this recipient.
 	values: z.record(z.string(), z.string().nullable()).optional(),
 	// Apple-specific per-recipient options.
-	// Google has no equivalent for these — all are ignored by the Google provider.
 	apple: z
 		.object({
 			// Mark this issued pass as void. Displays a "Void" banner on the pass.
 			// For Google, use pass.expire() instead — it transitions state via the API.
 			voided: z.boolean().optional(),
+		})
+		.optional(),
+	// Google-specific per-recipient options.
+	google: z
+		.object({
+			// Smart Tap NFC value for this specific pass holder (required when enableSmartTap is true)
+			smartTapRedemptionValue: z.string().optional(),
+			// TOTP rotating barcode — replaces the static barcode for this pass holder
+			rotatingBarcode: googleRotatingBarcodeSchema.optional(),
+			// Per-recipient info messages shown inside the pass view
+			messages: z.array(googleMessageSchema).optional(),
 		})
 		.optional(),
 });
@@ -531,3 +609,6 @@ export type GiftCardPassConfig = Omit<
 export type GenericPassConfig = z.infer<typeof genericPassSchema>;
 export type PassConfig = z.infer<typeof passConfigSchema>;
 export type CreateConfig = z.infer<typeof createConfigSchema>;
+export type GooglePassMessage = z.infer<typeof googleMessageSchema>;
+export type RotatingBarcode = z.infer<typeof googleRotatingBarcodeSchema>;
+export type AppLinkData = z.infer<typeof googleAppLinkDataSchema>;
