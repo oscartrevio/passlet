@@ -14,39 +14,51 @@ import { createConfigSchema, passConfigSchema } from "./types/schemas";
 
 type FieldOptions = Omit<FieldDef, "slot" | "key" | "label">;
 
+// A string shorthand sets value directly; an object passes all options through.
+type FieldArg = string | FieldOptions;
+
+function resolveOptions(arg: FieldArg | undefined): FieldOptions | undefined {
+	if (arg === undefined) {
+		return undefined;
+	}
+	return typeof arg === "string" ? { value: arg } : arg;
+}
+
 export const field = {
 	/** Top-right of the pass. Compact — typically one field. */
-	header: (key: string, label: string, options?: FieldOptions): FieldDef => ({
+	header: (key: string, label: string, arg?: FieldArg): FieldDef => ({
 		slot: "header",
 		key,
 		label,
-		...options,
+		...resolveOptions(arg),
 	}),
 	/** Large, prominent area. Apple: primaryFields. Google: subheader (label) + header (value). */
-	primary: (key: string, label: string, options?: FieldOptions): FieldDef => ({
+	primary: (key: string, label: string, arg?: FieldArg): FieldDef => ({
 		slot: "primary",
 		key,
 		label,
-		...options,
+		...resolveOptions(arg),
 	}),
 	/** Below primary. Apple: secondaryFields. Google: textModulesData. */
-	secondary: (
-		key: string,
-		label: string,
-		options?: FieldOptions
-	): FieldDef => ({ slot: "secondary", key, label, ...options }),
+	secondary: (key: string, label: string, arg?: FieldArg): FieldDef => ({
+		slot: "secondary",
+		key,
+		label,
+		...resolveOptions(arg),
+	}),
 	/** Below secondary. Supports two rows via { row: 0 | 1 }. Apple: auxiliaryFields. Google: textModulesData. */
-	auxiliary: (
-		key: string,
-		label: string,
-		options?: FieldOptions
-	): FieldDef => ({ slot: "auxiliary", key, label, ...options }),
+	auxiliary: (key: string, label: string, arg?: FieldArg): FieldDef => ({
+		slot: "auxiliary",
+		key,
+		label,
+		...resolveOptions(arg),
+	}),
 	/** Back of the pass — hidden by default. Apple: backFields. Google: infoModuleData. */
-	back: (key: string, label: string, options?: FieldOptions): FieldDef => ({
+	back: (key: string, label: string, arg?: FieldArg): FieldDef => ({
 		slot: "back",
 		key,
 		label,
-		...options,
+		...resolveOptions(arg),
 	}),
 };
 
