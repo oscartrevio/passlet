@@ -1,54 +1,42 @@
-#!/usr/bin/env tsx
-/**
- * Smoke test — run with: pnpm smoke
- *
- * Creates one pass of each type using real credentials from .env.
- * Apple .pkpass files are written to scripts/out/ for manual inspection.
- * Google passes are verified by checking the returned JWT is non-empty.
- *
- * Skips a provider if its credentials are not set.
- */
+/** biome-ignore-all lint/style/noNonNullAssertion: env vars are validated by smoke test setup */
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import type { WalletCredentials } from "../src/index";
 import { field, Wallet } from "../src/index";
 
-// ─── Credentials ────────────────────────────────────────────────────────────
-
+// Credentials — omit a provider to skip it entirely
 const apple = process.env.APPLE_SIGNER_CERT
 	? {
-			passTypeIdentifier: process.env.APPLE_PASS_TYPE_IDENTIFIER ?? "",
-			teamId: process.env.APPLE_TEAM_ID ?? "",
+			passTypeIdentifier: process.env.APPLE_PASS_TYPE_IDENTIFIER!,
+			teamId: process.env.APPLE_TEAM_ID!,
 			signerCert: process.env.APPLE_SIGNER_CERT,
-			signerKey: process.env.APPLE_SIGNER_KEY ?? "",
-			wwdr: process.env.APPLE_WWDR ?? "",
+			signerKey: process.env.APPLE_SIGNER_KEY!,
+			wwdr: process.env.APPLE_WWDR!,
 		}
 	: undefined;
 
 const google = process.env.GOOGLE_ISSUER_ID
 	? {
 			issuerId: process.env.GOOGLE_ISSUER_ID,
-			clientEmail: process.env.GOOGLE_CLIENT_EMAIL ?? "",
-			// .env stores literal \n — unescape to real newlines
-			privateKey: (process.env.GOOGLE_PRIVATE_KEY ?? "").replace(/\\n/g, "\n"),
+			clientEmail: process.env.GOOGLE_CLIENT_EMAIL!,
+			privateKey: process.env.GOOGLE_PRIVATE_KEY!,
 		}
 	: undefined;
 
 if (!(apple || google)) {
-	console.error("No credentials found in .env — nothing to test.");
+	console.error(
+		"No credentials found in .env — set APPLE_SIGNER_CERT or GOOGLE_ISSUER_ID."
+	);
 	process.exit(1);
 }
 
-const credentials: WalletCredentials = { apple, google };
-const wallet = new Wallet(credentials);
+const wallet = new Wallet({ apple, google });
 
 console.log(
-	`\nCredentials: ${[apple && "Apple", google && "Google"].filter(Boolean).join(" + ")}\n`
+	`Credentials: ${[apple && "Apple", google && "Google"].filter(Boolean).join(" + ")}\n`
 );
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
+// Helpers
 // Minimal 1×1 white PNG — valid enough for pass generation without a real asset
 const STUB_ICON = new Uint8Array([
 	0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49,
@@ -114,14 +102,10 @@ async function run(
 
 console.log("Running smoke tests...\n");
 
-// Google loyaltyClass requires a public logo URL. If GOOGLE_LOGO_URL is not set,
-// the Google provider is excluded for this pass type to avoid a 400 error.
-const loyaltyCredentials =
-	google && !process.env.GOOGLE_LOGO_URL ? { apple } : credentials;
 await run(
 	"loyalty",
 	"loyalty",
-	new Wallet(loyaltyCredentials)
+	wallet
 		.loyalty({
 			id: "loyalty-v2",
 			name: "Rewards Card",
