@@ -343,7 +343,7 @@ describe("object body: loyalty fields", () => {
 // ─── Object body: flight fields ──────────────────────────────────────────────
 
 describe("object body: flight fields", () => {
-	it("builds flightHeader, origin, and destination", async () => {
+	it("puts passengerName and reservationInfo on the object", async () => {
 		const { payload } = await generate(
 			{
 				type: "flight",
@@ -367,17 +367,51 @@ describe("object body: flight fields", () => {
 		)[0];
 
 		expect(obj.passengerName).toBe("John Doe");
-		expect(obj.flightHeader).toMatchObject({
+		expect(obj.reservationInfo).toMatchObject({ confirmationCode: "s1" });
+		// flightHeader, origin, and destination are class-level — not on the object
+		expect(obj.flightHeader).toBeUndefined();
+	});
+
+	it("puts flightHeader, origin, and destination on the class", async () => {
+		await generate(
+			{
+				type: "flight",
+				id: "p1",
+				name: "Flight",
+				fields: [],
+				carrier: "AA",
+				flightNumber: "100",
+				origin: "JFK",
+				destination: "LAX",
+				departure: "2024-06-01T08:00:00Z",
+				arrival: "2024-06-01T11:30:00Z",
+			},
+			{ serialNumber: "s1", values: { passengerName: "John Doe" } }
+		);
+
+		const fetchMock = vi.mocked(globalThis.fetch);
+		const classCall = fetchMock.mock.calls.find(
+			([url]) => typeof url === "string" && url.includes("flightClass")
+		);
+		expect(classCall).toBeDefined();
+		const classBody = JSON.parse(classCall?.[1]?.body as string) as Record<
+			string,
+			unknown
+		>;
+
+		expect(classBody.flightHeader).toMatchObject({
 			carrier: { carrierIataCode: "AA" },
 			flightNumber: "100",
 		});
-		expect((obj.origin as Record<string, unknown>).airportIataCode).toBe("JFK");
+		expect((classBody.origin as Record<string, unknown>).airportIataCode).toBe(
+			"JFK"
+		);
+		expect(classBody.localScheduledDepartureDateTime as string).toBe(
+			"2024-06-01T08:00:00"
+		);
 		expect(
-			(obj.origin as Record<string, unknown>).localScheduledDepartureDateTime
-		).toBe("2024-06-01T08:00:00");
-		expect(
-			(obj.destination as Record<string, unknown>).localScheduledArrivalDateTime
-		).toBe("2024-06-01T11:30:00");
+			(classBody.destination as Record<string, unknown>).airportIataCode
+		).toBe("LAX");
 	});
 
 	it("adds a warning when passengerName is missing", async () => {

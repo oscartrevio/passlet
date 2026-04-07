@@ -276,6 +276,11 @@ const googleOptionsSchema = z.object({
 	wideLogo: z.url().optional(),
 	// Google: issuerName — displayed as the pass issuer
 	issuerName: z.string().optional(),
+	// Required by Google for loyalty, event, flight, coupon, and giftCard classes.
+	// "UNDER_REVIEW" is the default for new classes; set to "APPROVED" once approved in the console.
+	reviewStatus: z
+		.enum(["UNDER_REVIEW", "APPROVED", "REJECTED", "DRAFT"])
+		.default("UNDER_REVIEW"),
 	// Smart Tap NFC — enable tap-to-redeem at supported terminals
 	enableSmartTap: z.boolean().optional(),
 	// Smart Tap issuer IDs allowed to redeem this pass (required when enableSmartTap is true)

@@ -116,11 +116,29 @@ function buildClassTypeFields(
 		};
 	}
 	if (pass.type === "flight") {
-		return { localAirportIataCode: pass.origin };
+		return {
+			// flightClass represents a single flight — departure time is class-level
+			flightHeader: {
+				carrier: { carrierIataCode: pass.carrier },
+				flightNumber: pass.flightNumber,
+				operatingCarrier: { carrierIataCode: pass.carrier },
+				operatingFlightNumber: pass.flightNumber,
+			},
+			localScheduledDepartureDateTime: pass.departure?.replace("Z", ""),
+			origin: pass.origin ? { airportIataCode: pass.origin } : undefined,
+			destination: pass.destination
+				? {
+						airportIataCode: pass.destination,
+						localScheduledArrivalDateTime: pass.arrival?.replace("Z", ""),
+					}
+				: undefined,
+		};
 	}
 	if (pass.type === "coupon") {
 		return {
 			title: pass.name,
+			// provider is required by Google offerClass — defaults to the pass name
+			provider: pass.name,
 			redemptionChannel: pass.redemptionChannel.toUpperCase(),
 		};
 	}
@@ -181,7 +199,13 @@ function buildClassBody(
 		logo: pass.type === "loyalty" ? undefined : logo,
 		wideProgramBanner: wideLogo,
 		heroImage: hero,
-		issuerName: pass.google?.issuerName,
+		// Fall back to pass.name — Google requires issuerName on most class types
+		issuerName: pass.google?.issuerName ?? pass.name,
+		// Required for loyalty, event, flight, coupon, giftCard classes. Ignored by genericClass.
+		reviewStatus:
+			pass.type === "generic"
+				? undefined
+				: (pass.google?.reviewStatus ?? "UNDER_REVIEW"),
 		// Smart Tap NFC — enable tap-to-redeem at supported terminals
 		enableSmartTap: pass.google?.enableSmartTap,
 		redemptionIssuers: pass.google?.redemptionIssuers,
@@ -220,7 +244,7 @@ function buildLoyaltyObjectFields(
 
 // Flight: structured boarding data required by Google flightObject
 function buildFlightObjectFields(
-	pass: Extract<PassConfig, { type: "flight" }>,
+	_pass: Extract<PassConfig, { type: "flight" }>,
 	serialNumber: string,
 	values: Record<string, string | null>,
 	warnings: string[]
@@ -233,25 +257,7 @@ function buildFlightObjectFields(
 	}
 	return {
 		passengerName: passengerName ?? "",
-		flightHeader: {
-			carrier: { carrierIataCode: pass.carrier },
-			flightNumber: pass.flightNumber,
-			operatingCarrier: { carrierIataCode: pass.carrier },
-			operatingFlightNumber: pass.flightNumber,
-		},
 		reservationInfo: { confirmationCode: serialNumber },
-		origin: pass.origin
-			? {
-					airportIataCode: pass.origin,
-					localScheduledDepartureDateTime: pass.departure?.replace("Z", ""),
-				}
-			: undefined,
-		destination: pass.destination
-			? {
-					airportIataCode: pass.destination,
-					localScheduledArrivalDateTime: pass.arrival?.replace("Z", ""),
-				}
-			: undefined,
 	};
 }
 
