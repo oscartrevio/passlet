@@ -97,7 +97,7 @@ describe("pass.json type key", () => {
 				: { ...base, type: type as "loyalty" | "coupon" | "event" | "generic" };
 
 		const { pass } = await generateApplePass(
-			config,
+			config as Parameters<typeof generateApplePass>[0],
 			{ serialNumber: "s1" },
 			credentials
 		);

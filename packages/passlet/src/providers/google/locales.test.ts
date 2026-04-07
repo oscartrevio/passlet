@@ -9,6 +9,7 @@ beforeAll(() => {
 	const { privateKey } = generateKeyPairSync("rsa", {
 		modulusLength: 2048,
 		privateKeyEncoding: { type: "pkcs8", format: "pem" },
+		publicKeyEncoding: { type: "spki", format: "pem" },
 	});
 	credentials = {
 		issuerId: "3388000000022801234",
@@ -56,6 +57,9 @@ function stubFetch() {
 
 function decodePayload(jwt: string): Record<string, unknown> {
 	const [, payload] = jwt.split(".");
+	if (!payload) {
+		throw new Error("invalid JWT");
+	}
 	const padded = payload.replace(/-/g, "+").replace(/_/g, "/");
 	return JSON.parse(Buffer.from(padded, "base64").toString("utf-8"));
 }
@@ -77,12 +81,15 @@ async function generate(
 }
 
 function getObj(payload: Record<string, unknown>, key: string) {
-	return (
-		(payload.payload as Record<string, unknown>)[key] as Record<
-			string,
-			unknown
-		>[]
-	)[0];
+	const arr = (payload.payload as Record<string, unknown>)[key] as Record<
+		string,
+		unknown
+	>[];
+	const obj = arr[0];
+	if (!obj) {
+		throw new Error(`no object found for key ${key}`);
+	}
+	return obj;
 }
 
 describe("Google locale translations", () => {
@@ -101,8 +108,6 @@ describe("Google locale translations", () => {
 			{ serialNumber: "s1" }
 		);
 
-		const _eventName = (payload.payload as Record<string, unknown>)
-			.eventTicketObjects as Record<string, unknown>[];
 		// eventName is on the class, not the object — check class body via ensureClass call
 		// Instead verify via the class type fields returned in payload
 		const obj = getObj(payload, "eventTicketObjects");
@@ -111,7 +116,7 @@ describe("Google locale translations", () => {
 	});
 
 	it("adds translatedValues to cardTitle for generic passes", async () => {
-		const _payload = await generate(
+		await generate(
 			{
 				type: "generic",
 				id: "p1",

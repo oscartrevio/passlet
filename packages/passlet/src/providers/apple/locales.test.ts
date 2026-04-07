@@ -110,9 +110,14 @@ describe("Apple locale files", () => {
 		);
 
 		const zip = await JSZip.loadAsync(pass);
-		const manifest = JSON.parse(
-			await zip.file("manifest.json")?.async("string")
-		) as Record<string, string>;
+		const manifestFile = zip.file("manifest.json");
+		if (!manifestFile) {
+			throw new Error("manifest.json not found");
+		}
+		const manifest = JSON.parse(await manifestFile.async("string")) as Record<
+			string,
+			string
+		>;
 
 		expect(manifest["es.lproj/pass.strings"]).toMatch(SHA1_RE);
 	});

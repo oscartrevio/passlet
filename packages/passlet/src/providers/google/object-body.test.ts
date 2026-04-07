@@ -11,6 +11,7 @@ beforeAll(() => {
 	const { privateKey } = generateKeyPairSync("rsa", {
 		modulusLength: 2048,
 		privateKeyEncoding: { type: "pkcs8", format: "pem" },
+		publicKeyEncoding: { type: "spki", format: "pem" },
 	});
 	credentials = {
 		issuerId: "3388000000022801234",
@@ -92,6 +93,9 @@ function decodeObjectBody(
 	objectsKey: string
 ): Record<string, unknown> {
 	const [, segment] = jwt.split(".");
+	if (!segment) {
+		throw new Error("invalid JWT");
+	}
 	const padded = segment.replace(/-/g, "+").replace(/_/g, "/");
 	const outer = JSON.parse(
 		Buffer.from(padded, "base64").toString("utf-8")
@@ -99,7 +103,11 @@ function decodeObjectBody(
 	const inner = (outer.payload as Record<string, unknown>)[
 		objectsKey
 	] as Record<string, unknown>[];
-	return inner[0];
+	const obj = inner[0];
+	if (!obj) {
+		throw new Error(`no object found for key ${objectsKey}`);
+	}
+	return obj;
 }
 
 const ISSUER = "3388000000022801234";
@@ -171,9 +179,11 @@ describe("loyalty pass", () => {
 		expect((obj.header as Record<string, unknown>).defaultValue).toMatchObject({
 			value: "1500",
 		});
-		expect((obj.textModulesData as Record<string, unknown>[])[0].body).toBe(
-			"Platinum"
-		);
+		const firstModule = (obj.textModulesData as Record<string, unknown>[])[0];
+		if (!firstModule) {
+			throw new Error("no textModulesData");
+		}
+		expect(firstModule.body).toBe("Platinum");
 	});
 
 	it("omits fields whose value is null in createConfig.values", async () => {
