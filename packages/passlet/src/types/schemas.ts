@@ -257,6 +257,13 @@ const basePassSchema = z.object({
 	// Google: primary → subheader + header, all others → textModulesData
 	fields: z.array(fieldDefSchema).default([]),
 
+	// Translations for field labels and pass-level strings.
+	// Keys are field keys (matching field.key) or the reserved key "name" for the pass title.
+	// Use "fieldKey_value" to translate a field's static default value.
+	// Apple: generates {language}.lproj/pass.strings files in the .pkpass zip.
+	// Google: adds translatedValues to LocalizedString objects.
+	locales: z.record(z.string(), z.record(z.string(), z.string())).optional(),
+
 	apple: appleOptionsSchema.optional(),
 	google: googleOptionsSchema.optional(),
 });
@@ -392,6 +399,7 @@ export const createConfigSchema = z.object({
 
 // Inferred types
 
+export type Locales = Record<string, Record<string, string>>;
 export type Location = z.infer<typeof locationSchema>;
 export type ImageSource = string | Uint8Array;
 export type ImageSet =

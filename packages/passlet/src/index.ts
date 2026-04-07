@@ -20,6 +20,7 @@ export type {
 	GiftCardPassConfig,
 	ImageSet,
 	ImageSource,
+	Locales,
 	Location,
 	LoyaltyPassConfig,
 	NumberStyle,
