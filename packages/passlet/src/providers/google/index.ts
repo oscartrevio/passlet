@@ -46,7 +46,7 @@ function validateGoogleRequirements(pass: PassConfig): void {
 	}
 }
 
-// Build textModulesData from fields that are not in excluded slots
+// Build textModulesData from fields not in excluded slots
 function buildTextModules(
 	fields: FieldDef[],
 	values: Record<string, string | null>,
@@ -95,31 +95,28 @@ function buildInfoModuleData(
 }
 
 // Per-type class name fields
-function applyClassTypeName(
-	pass: PassConfig,
-	body: Record<string, unknown>
-): void {
+function buildClassTypeFields(pass: PassConfig): Record<string, unknown> {
 	if (pass.type === "loyalty") {
-		body.programName = pass.name;
-	} else if (pass.type === "event") {
-		body.eventName = localized(pass.name);
-		if (pass.startsAt) {
-			body.localScheduledStartDateTime = pass.startsAt.replace("Z", "");
-		}
-		if (pass.endsAt) {
-			body.localScheduledEndDateTime = pass.endsAt.replace("Z", "");
-		}
-	} else if (pass.type === "flight") {
-		body.localAirportIataCode = pass.origin;
-	} else if (pass.type === "coupon") {
-		body.title = pass.name;
-		if (pass.redemptionChannel) {
-			body.redemptionChannel = pass.redemptionChannel.toUpperCase();
-		}
-	} else {
-		// giftCard + generic
-		body.cardTitle = localized(pass.name);
+		return { programName: pass.name };
 	}
+	if (pass.type === "event") {
+		return {
+			eventName: localized(pass.name),
+			localScheduledStartDateTime: pass.startsAt?.replace("Z", ""),
+			localScheduledEndDateTime: pass.endsAt?.replace("Z", ""),
+		};
+	}
+	if (pass.type === "flight") {
+		return { localAirportIataCode: pass.origin };
+	}
+	if (pass.type === "coupon") {
+		return {
+			title: pass.name,
+			redemptionChannel: pass.redemptionChannel?.toUpperCase(),
+		};
+	}
+	// giftCard + generic
+	return { cardTitle: localized(pass.name) };
 }
 
 // Build the class body — defines the pass template (shared across all recipients)
@@ -127,152 +124,131 @@ function buildClassBody(
 	pass: PassConfig,
 	classId: string
 ): Record<string, unknown> {
-	const body: Record<string, unknown> = { id: classId };
-
-	applyClassTypeName(pass, body);
-
-	if (pass.color) {
-		body.hexBackgroundColor = pass.color;
-	}
-
 	const logo = imageUri(pass.logo);
-	if (logo) {
-		body[pass.type === "loyalty" ? "programLogo" : "logo"] = logo;
-	}
-
 	const wideLogo = imageUri(pass.google?.wideLogo);
-	if (wideLogo) {
-		body.wideProgramBanner = wideLogo;
-	}
-
 	// banner → hero on Google (imageUri only accepts string URLs)
 	const hero = imageUri(
 		typeof pass.banner === "string" ? pass.banner : undefined
 	);
-	if (hero) {
-		body.heroImage = hero;
-	}
 
-	if (pass.google?.issuerName) {
-		body.issuerName = pass.google.issuerName;
-	}
-
-	// Google supports up to 20 locations. altitude and relevantText are Apple-only — ignored here.
-	if (pass.locations && pass.locations.length > 0) {
-		body.locations = pass.locations.map(({ latitude, longitude }) => ({
-			latitude,
-			longitude,
-		}));
-	}
-
-	return body;
+	return {
+		id: classId,
+		...buildClassTypeFields(pass),
+		hexBackgroundColor: pass.color,
+		// loyalty uses programLogo; all other types use logo
+		programLogo: pass.type === "loyalty" ? logo : undefined,
+		logo: pass.type === "loyalty" ? undefined : logo,
+		wideProgramBanner: wideLogo,
+		heroImage: hero,
+		issuerName: pass.google?.issuerName,
+		// Google supports up to 20 locations. altitude and relevantText are Apple-only — ignored here.
+		locations: pass.locations?.length
+			? pass.locations.map(({ latitude, longitude }) => ({
+					latitude,
+					longitude,
+				}))
+			: undefined,
+	};
 }
 
 // Loyalty: map well-known field keys to structured loyalty fields
-function applyLoyaltyFields(
-	body: Record<string, unknown>,
+function buildLoyaltyObjectFields(
 	fields: FieldDef[],
 	values: Record<string, string | null>
-): void {
+): Record<string, unknown> {
 	const resolve = (key: string) =>
 		values[key] ?? fields.find((f) => f.key === key)?.value;
 	const points = resolve("points");
 	const member = resolve("member");
 	const memberId = resolve("memberId");
-	if (points != null) {
-		body.loyaltyPoints = { balance: { string: points } };
-	}
-	if (member != null) {
-		body.accountName = member;
-	}
-	if (memberId != null) {
-		body.accountId = memberId;
-	}
+	return {
+		loyaltyPoints: points == null ? undefined : { balance: { string: points } },
+		accountName: member ?? undefined,
+		accountId: memberId ?? undefined,
+	};
 }
 
 // Flight: structured boarding data required by Google flightObject
-function applyFlightFields(
-	body: Record<string, unknown>,
+function buildFlightObjectFields(
 	pass: Extract<PassConfig, { type: "flight" }>,
 	serialNumber: string,
 	values: Record<string, string | null>,
 	warnings: string[]
-): void {
+): Record<string, unknown> {
 	const passengerName = values.passengerName;
 	if (!passengerName) {
 		warnings.push(
 			"Google flight pass: passengerName not set in values — passenger name will be blank"
 		);
 	}
-	body.passengerName = passengerName ?? "";
-	body.flightHeader = {
-		carrier: { carrierIataCode: pass.carrier },
-		flightNumber: pass.flightNumber,
-		operatingCarrier: { carrierIataCode: pass.carrier },
-		operatingFlightNumber: pass.flightNumber,
+	return {
+		passengerName: passengerName ?? "",
+		flightHeader: {
+			carrier: { carrierIataCode: pass.carrier },
+			flightNumber: pass.flightNumber,
+			operatingCarrier: { carrierIataCode: pass.carrier },
+			operatingFlightNumber: pass.flightNumber,
+		},
+		reservationInfo: { confirmationCode: serialNumber },
+		origin: pass.origin
+			? {
+					airportIataCode: pass.origin,
+					localScheduledDepartureDateTime: pass.departure?.replace("Z", ""),
+				}
+			: undefined,
+		destination: pass.destination
+			? {
+					airportIataCode: pass.destination,
+					localScheduledArrivalDateTime: pass.arrival?.replace("Z", ""),
+				}
+			: undefined,
 	};
-	body.reservationInfo = { confirmationCode: serialNumber };
-	if (pass.origin) {
-		body.origin = {
-			airportIataCode: pass.origin,
-			...(pass.departure
-				? { localScheduledDepartureDateTime: pass.departure.replace("Z", "") }
-				: {}),
-		};
-	}
-	if (pass.destination) {
-		body.destination = {
-			airportIataCode: pass.destination,
-			...(pass.arrival
-				? { localScheduledArrivalDateTime: pass.arrival.replace("Z", "") }
-				: {}),
-		};
-	}
 }
 
 // GiftCard: balance amount with currency
-function applyGiftCardFields(
-	body: Record<string, unknown>,
+function buildGiftCardObjectFields(
 	pass: Extract<PassConfig, { type: "giftCard" }>,
 	fields: FieldDef[],
 	values: Record<string, string | null>
-): void {
+): Record<string, unknown> {
 	const raw = values.balance ?? fields.find((f) => f.key === "balance")?.value;
-	if (raw != null) {
-		body.balance = {
-			micros: String(Math.round(Number.parseFloat(raw) * 1_000_000)),
-			currencyCode: pass.currency ?? "USD",
-		};
-	}
+	return {
+		balance:
+			raw == null
+				? undefined
+				: {
+						micros: String(Math.round(Number.parseFloat(raw) * 1_000_000)),
+						currencyCode: pass.currency ?? "USD",
+					},
+	};
 }
 
-// Apply display fields: primary → subheader+header, others → textModulesData, back → infoModuleData
-function applyDisplayFields(
-	body: Record<string, unknown>,
+// Display fields: primary → subheader+header, others → textModulesData, back → infoModuleData
+function buildDisplayFields(
 	fields: FieldDef[],
 	values: Record<string, string | null>
-): void {
+): Record<string, unknown> {
 	const primaryField = fields.find((f) => f.slot === "primary");
-	if (primaryField) {
-		const primaryValue =
-			primaryField.key in values
-				? values[primaryField.key]
-				: primaryField.value;
-		if (primaryValue != null) {
-			body.subheader = localized(primaryField.label);
-			body.header = localized(primaryValue);
-		}
-	}
+	const primaryValue =
+		primaryField &&
+		(primaryField.key in values
+			? values[primaryField.key]
+			: primaryField.value);
 
 	const textModules = buildTextModules(fields, values, ["primary", "back"]);
-	if (textModules.length > 0) {
-		body.textModulesData = textModules;
-	}
 
-	const infoModule = buildInfoModuleData(fields, values);
-	if (infoModule) {
-		body.infoModuleData = infoModule;
-	}
+	return {
+		subheader:
+			primaryField && primaryValue != null
+				? localized(primaryField.label)
+				: undefined,
+		header:
+			primaryField && primaryValue != null
+				? localized(primaryValue)
+				: undefined,
+		textModulesData: textModules.length > 0 ? textModules : undefined,
+		infoModuleData: buildInfoModuleData(fields, values),
+	};
 }
 
 // Build the object body — per-recipient data
@@ -286,42 +262,41 @@ function buildObjectBody(
 	const values = createConfig.values ?? {};
 	const fields = pass.fields;
 
-	const body: Record<string, unknown> = {
+	return {
 		id: objectId,
 		classId,
 		state: "ACTIVE",
+		barcode: createConfig.barcode
+			? {
+					type: toGoogleBarcodeType(createConfig.barcode.format),
+					value: createConfig.barcode.value,
+					alternateText:
+						createConfig.barcode.altText ?? createConfig.barcode.value,
+				}
+			: undefined,
+		validTimeInterval:
+			createConfig.validFrom || createConfig.expiresAt
+				? {
+						start: createConfig.validFrom
+							? { date: createConfig.validFrom }
+							: undefined,
+						end: createConfig.expiresAt
+							? { date: createConfig.expiresAt }
+							: undefined,
+					}
+				: undefined,
+		...(pass.type === "loyalty" && buildLoyaltyObjectFields(fields, values)),
+		...(pass.type === "flight" &&
+			buildFlightObjectFields(
+				pass,
+				createConfig.serialNumber,
+				values,
+				warnings
+			)),
+		...(pass.type === "giftCard" &&
+			buildGiftCardObjectFields(pass, fields, values)),
+		...buildDisplayFields(fields, values),
 	};
-
-	if (createConfig.barcode) {
-		body.barcode = {
-			type: toGoogleBarcodeType(createConfig.barcode.format),
-			value: createConfig.barcode.value,
-			alternateText: createConfig.barcode.altText ?? createConfig.barcode.value,
-		};
-	}
-
-	if (createConfig.validFrom || createConfig.expiresAt) {
-		body.validTimeInterval = {
-			start: createConfig.validFrom
-				? { date: createConfig.validFrom }
-				: undefined,
-			end: createConfig.expiresAt
-				? { date: createConfig.expiresAt }
-				: undefined,
-		};
-	}
-
-	if (pass.type === "loyalty") {
-		applyLoyaltyFields(body, fields, values);
-	} else if (pass.type === "flight") {
-		applyFlightFields(body, pass, createConfig.serialNumber, values, warnings);
-	} else if (pass.type === "giftCard") {
-		applyGiftCardFields(body, pass, fields, values);
-	}
-
-	applyDisplayFields(body, fields, values);
-
-	return body;
 }
 
 export async function generateGooglePass(
@@ -352,7 +327,7 @@ export async function generateGooglePass(
 	);
 
 	// Pluralise the object type key for the JWT payload (e.g. "loyaltyObject" → "loyaltyObjects")
-	const objectsKey = `${objectType.replace("Object", "Objects")}`;
+	const objectsKey = objectType.replace("Object", "Objects");
 
 	const payload = {
 		iss: credentials.clientEmail,
