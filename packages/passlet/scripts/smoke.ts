@@ -11,8 +11,8 @@
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import type { WalletCredentials } from "../src/index.ts";
-import { field, Wallet } from "../src/index.ts";
+import type { WalletCredentials } from "../src/index";
+import { field, Wallet } from "../src/index";
 
 // ─── Credentials ────────────────────────────────────────────────────────────
 
@@ -62,7 +62,6 @@ const STUB_ICON = new Uint8Array([
 const OUT_DIR = resolve(import.meta.dirname, "out");
 mkdirSync(OUT_DIR, { recursive: true });
 
-const TS = Date.now();
 let passed = 0;
 let failed = 0;
 
@@ -91,7 +90,9 @@ async function run(
 		}
 
 		if (result.google) {
-			parts.push(`Google JWT ${result.google.length}B`);
+			const url = `https://pay.google.com/gp/v/save/${result.google}`;
+			const link = `\x1b]8;;${url}\x07Add to Google Wallet\x1b]8;;\x07`;
+			parts.push(link);
 		} else if (google) {
 			parts.push("Google skipped");
 		}
@@ -119,10 +120,10 @@ const loyaltyCredentials =
 	google && !process.env.GOOGLE_LOGO_URL ? { apple } : credentials;
 await run(
 	"loyalty",
-	`smoke-loyalty-${TS}`,
+	"loyalty",
 	new Wallet(loyaltyCredentials)
 		.loyalty({
-			id: `smoke-loyalty-${TS}`,
+			id: "loyalty-v2",
 			name: "Rewards Card",
 			color: "#1a1a2e",
 			fields: [
@@ -133,15 +134,15 @@ await run(
 			logo: process.env.GOOGLE_LOGO_URL,
 			apple: { icon: STUB_ICON },
 		})
-		.create({ serialNumber: `smoke-loyalty-${TS}` })
+		.create({ serialNumber: "loyalty" })
 );
 
 await run(
 	"event",
-	`smoke-event-${TS}`,
+	"event",
 	wallet
 		.event({
-			id: `smoke-event-${TS}`,
+			id: "event-v2",
 			name: "Summer Festival",
 			color: "#6a0572",
 			startsAt: "2026-07-15T20:00:00Z",
@@ -153,15 +154,15 @@ await run(
 			],
 			apple: { icon: STUB_ICON },
 		})
-		.create({ serialNumber: `smoke-event-${TS}` })
+		.create({ serialNumber: "event" })
 );
 
 await run(
 	"flight",
-	`smoke-flight-${TS}`,
+	"flight",
 	wallet
 		.flight({
-			id: `smoke-flight-${TS}`,
+			id: "flight-v2",
 			name: "AA 100",
 			carrier: "AA",
 			flightNumber: "100",
@@ -177,17 +178,17 @@ await run(
 			apple: { icon: STUB_ICON },
 		})
 		.create({
-			serialNumber: `smoke-flight-${TS}`,
+			serialNumber: "flight",
 			values: { passengerName: "Jane Doe" },
 		})
 );
 
 await run(
 	"coupon",
-	`smoke-coupon-${TS}`,
+	"coupon",
 	wallet
 		.coupon({
-			id: `smoke-coupon-${TS}`,
+			id: "coupon-v2",
 			name: "20% Off",
 			color: "#e63946",
 			redemptionChannel: "both",
@@ -198,15 +199,15 @@ await run(
 			],
 			apple: { icon: STUB_ICON },
 		})
-		.create({ serialNumber: `smoke-coupon-${TS}` })
+		.create({ serialNumber: "coupon" })
 );
 
 await run(
 	"giftCard",
-	`smoke-gift-${TS}`,
+	"gift",
 	wallet
 		.giftCard({
-			id: `smoke-giftcard-${TS}`,
+			id: "giftcard-v2",
 			name: "Store Gift Card",
 			color: "#2a9d8f",
 			currency: "USD",
@@ -216,15 +217,15 @@ await run(
 			],
 			apple: { icon: STUB_ICON },
 		})
-		.create({ serialNumber: `smoke-gift-${TS}` })
+		.create({ serialNumber: "gift" })
 );
 
 await run(
 	"generic",
-	`smoke-generic-${TS}`,
+	"generic",
 	wallet
 		.generic({
-			id: `smoke-generic-${TS}`,
+			id: "generic-v2",
 			name: "Member Card",
 			color: "#264653",
 			fields: [
@@ -234,7 +235,7 @@ await run(
 			],
 			apple: { icon: STUB_ICON },
 		})
-		.create({ serialNumber: `smoke-generic-${TS}` })
+		.create({ serialNumber: "generic" })
 );
 
 // ─── Summary ──────────────────────────────────────────────────────────────────
