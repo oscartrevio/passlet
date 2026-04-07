@@ -19,6 +19,9 @@
     "README.md",
     "LICENSE"
   ],
+  "publishConfig": {
+    "provenance": true
+  },
   "scripts": {
     "build": "tsup",
     "check-types": "tsc --noEmit",
