@@ -5,6 +5,11 @@
 
 **[Passlet](https://github.com/oscartrevio/passlet)** is a library for generating Apple Wallet and Google Wallet passes from a single TypeScript API.
 
+[![npm version](https://img.shields.io/npm/v/passlet)](https://www.npmjs.com/package/passlet)
+[![downloads](https://img.shields.io/npm/dm/passlet)](https://www.npmjs.com/package/passlet)
+[![license](https://img.shields.io/npm/l/passlet)](https://www.npmjs.com/package/passlet)
+[![GitHub stars](https://img.shields.io/github/stars/oscartrevio/passlet)](https://github.com/oscartrevio/passlet/stargazers)
+
 ## Install
 
 ```bash
