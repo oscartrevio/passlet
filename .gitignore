@@ -49,3 +49,6 @@ coverage
 .cache
 tmp
 temp
+
+# Smoke test output
+packages/passlet/scripts/out/
