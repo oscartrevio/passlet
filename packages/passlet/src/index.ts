@@ -20,10 +20,13 @@ export type {
 	GiftCardPassConfig,
 	ImageSet,
 	ImageSource,
+	LocaleCode,
+	Locales,
 	Location,
 	LoyaltyPassConfig,
 	NumberStyle,
 	PassConfig,
 	TextAlignment,
+	TranslationMap,
 } from "./types/schemas";
 export { Wallet } from "./wallet";

@@ -7,6 +7,16 @@ const hexColor = z
 	.regex(/^#[0-9a-fA-F]{6}$/, 'must be a 6-digit hex color like "#1a1a1a"')
 	.optional();
 
+// BCP 47 language tag: primary subtag (2-3 lowercase letters) followed by optional subtags.
+// Examples: "en", "en-US", "zh-Hans", "zh-Hans-CN", "es-419"
+const BCP47_RE = /^[a-z]{2,3}(-[A-Za-z0-9]+)*$/;
+const localeCodeSchema = z
+	.string()
+	.regex(
+		BCP47_RE,
+		'must be a BCP 47 language tag (e.g. "en-US", "es", "zh-Hans")'
+	);
+
 const imageValue = z.union([
 	z.url(),
 	z.custom<Uint8Array>((v) => v instanceof Uint8Array),
@@ -257,6 +267,15 @@ const basePassSchema = z.object({
 	// Google: primary → subheader + header, all others → textModulesData
 	fields: z.array(fieldDefSchema).default([]),
 
+	// Translations for field labels and pass-level strings.
+	// Keys are field keys (matching field.key) or the reserved key "name" for the pass title.
+	// Use "fieldKey_value" to translate a field's static default value.
+	// Apple: generates {language}.lproj/pass.strings files in the .pkpass zip.
+	// Google: adds translatedValues to LocalizedString objects.
+	locales: z
+		.record(localeCodeSchema, z.record(z.string(), z.string()))
+		.optional(),
+
 	apple: appleOptionsSchema.optional(),
 	google: googleOptionsSchema.optional(),
 });
@@ -392,6 +411,58 @@ export const createConfigSchema = z.object({
 
 // Inferred types
 
+// Common BCP 47 language tags — autocomplete hints while still accepting any valid string.
+type CommonLocaleCode =
+	| "en"
+	| "en-US"
+	| "en-GB"
+	| "en-CA"
+	| "en-AU"
+	| "es"
+	| "es-ES"
+	| "es-MX"
+	| "es-419"
+	| "fr"
+	| "fr-FR"
+	| "fr-CA"
+	| "de"
+	| "de-DE"
+	| "de-AT"
+	| "it"
+	| "it-IT"
+	| "pt"
+	| "pt-BR"
+	| "pt-PT"
+	| "ja"
+	| "ja-JP"
+	| "ko"
+	| "ko-KR"
+	| "zh"
+	| "zh-CN"
+	| "zh-TW"
+	| "zh-Hans"
+	| "zh-Hant"
+	| "ar"
+	| "nl"
+	| "ru"
+	| "sv"
+	| "da"
+	| "nb"
+	| "fi"
+	| "pl"
+	| "tr"
+	| "hi"
+	| "id"
+	| "th"
+	| (string & {});
+
+// A BCP 47 language tag. Common values are suggested by autocomplete; any valid tag is accepted.
+export type LocaleCode = CommonLocaleCode;
+
+// Keys are field keys, "name" for the pass title, or "fieldKey_value" for static field values.
+export type TranslationMap = Record<string, string>;
+
+export type Locales = Record<LocaleCode, TranslationMap>;
 export type Location = z.infer<typeof locationSchema>;
 export type ImageSource = string | Uint8Array;
 export type ImageSet =
