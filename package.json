@@ -15,7 +15,7 @@
     "fix": "ultracite fix",
     "changeset": "changeset",
     "version": "changeset version",
-    "release": "turbo build && changeset publish"
+    "release": "turbo build --filter=passlet && changeset publish"
   },
   "dependencies": {
     "@commitlint/types": "^20.5.0",
