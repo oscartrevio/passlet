@@ -1,0 +1,5 @@
+---
+"passlet": patch
+---
+
+bump deps
