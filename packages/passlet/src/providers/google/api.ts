@@ -55,7 +55,7 @@ async function getAccessToken(
 		const text = await response.text();
 		throw new WalletError(
 			"GOOGLE_API_ERROR",
-			`Failed to obtain access token (${response.status}): ${text}`
+			`Failed to obtain access token (${response.status}): ${extractGoogleDetail(text)}`
 		);
 	}
 
@@ -85,12 +85,25 @@ async function walletRequest(
 	});
 }
 
+function extractGoogleDetail(text: string): string {
+	try {
+		const body = JSON.parse(text) as { error?: { message?: string } };
+		if (body.error?.message) {
+			return body.error.message;
+		}
+	} catch {
+		// not JSON — fall through to raw text
+	}
+	return text;
+}
+
 async function assertOk(response: Response): Promise<void> {
 	if (!response.ok) {
 		const text = await response.text();
+		const detail = extractGoogleDetail(text);
 		throw new WalletError(
 			"GOOGLE_API_ERROR",
-			`Google Wallet API error (${response.status}): ${text}`
+			`Google Wallet API error (${response.status}): ${detail}`
 		);
 	}
 }
@@ -120,7 +133,7 @@ export async function ensureClass(
 		const text = await existing.text();
 		throw new WalletError(
 			"GOOGLE_API_ERROR",
-			`Google Wallet API error (${existing.status}): ${text}`
+			`Google Wallet API error (${existing.status}): ${extractGoogleDetail(text)}`
 		);
 	}
 
