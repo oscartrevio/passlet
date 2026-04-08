@@ -1,5 +1,11 @@
 # passlet
 
+## 0.2.2
+
+### Patch Changes
+
+- be02c8b: bump deps
+
 ## 0.2.1
 
 ### Patch Changes
