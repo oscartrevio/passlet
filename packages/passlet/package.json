@@ -4,6 +4,10 @@
   "type": "module",
   "description": "Generate Apple Wallet and Google Wallet passes from a single API",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/oscartrevio/passlet"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
