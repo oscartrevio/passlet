@@ -8,6 +8,8 @@
   <a href="https://img.shields.io/npm/l/passlet"><img src="https://img.shields.io/npm/l/passlet?style=flat-square" alt="license"></a>
 </p>
 
+---
+
 **[Passlet](https://github.com/oscartrevio/passlet)** is a library for generating Apple Wallet and Google Wallet passes from a single API.
 
 ## The problem
