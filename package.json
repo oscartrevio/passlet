@@ -29,9 +29,9 @@
     "@commitlint/cli": "^20.5.0",
     "@commitlint/config-conventional": "^20.5.0",
     "@passlet/config": "workspace:*",
-    "@types/node": "^20.19.37",
+    "@types/node": "^20.19.39",
     "lefthook": "latest",
-    "turbo": "^2.9.3",
+    "turbo": "^2.9.5",
     "typescript": "^5.9.3",
     "ultracite": "7.4.2"
   },
