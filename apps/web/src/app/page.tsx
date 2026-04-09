@@ -91,23 +91,21 @@ const STEPS = [
 	"Apple gets a signed .pkpass, Google gets a JWT.",
 ];
 
-const runde = "'Open Runde', system-ui, sans-serif";
-
 export default function Home() {
 	const [pm, setPm] = useState<PackageManager>("npm");
 	const [copied, setCopied] = useState(false);
 
 	const copy = () => {
+		if (copied) {
+			return;
+		}
 		navigator.clipboard.writeText(COMMANDS[pm]);
 		setCopied(true);
 		setTimeout(() => setCopied(false), 2000);
 	};
 
 	return (
-		<div
-			className="mx-auto flex min-h-svh max-w-lg flex-col gap-18 px-4 py-16"
-			style={{ fontFamily: runde }}
-		>
+		<div className="mx-auto flex min-h-svh max-w-lg flex-col gap-18 px-4 py-16">
 			{/* Title + subtitle */}
 			<div className="flex flex-col gap-3.5">
 				<h1 className="text-balance font-semibold text-2xl text-[#1E1E1E] tracking-tight">
