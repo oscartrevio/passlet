@@ -227,7 +227,14 @@ export default function Home() {
 			{/* Footer */}
 			<div className="mt-auto flex items-center justify-between pb-[env(safe-area-inset-bottom)]">
 				<span className="text-[#B8B8B8] text-xs">Created by Oscar Treviño</span>
-				<span className="text-[#B8B8B8] text-xs">v1.0.0 • GitHub</span>
+				<a
+					className="text-[#B8B8B8] text-xs transition-colors hover:text-[#707070]"
+					href="https://github.com/oscartrevio/passlet"
+					rel="noopener noreferrer"
+					target="_blank"
+				>
+					v1.0.0 • GitHub
+				</a>
 			</div>
 		</div>
 	);
