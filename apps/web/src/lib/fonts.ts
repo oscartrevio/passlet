@@ -14,7 +14,7 @@ const openRunde = localFont({
 			style: "normal",
 		},
 		{
-			path: "../public/fonts/OpenRunde-SemiBold.woff2",
+			path: "../public/fonts/OpenRunde-Semibold.woff2",
 			weight: "600",
 			style: "normal",
 		},

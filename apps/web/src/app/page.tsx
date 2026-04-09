@@ -101,11 +101,11 @@ export default function Home() {
 		}
 		navigator.clipboard.writeText(COMMANDS[pm]);
 		setCopied(true);
-		setTimeout(() => setCopied(false), 2000);
+		setTimeout(() => setCopied(false), 3000);
 	};
 
 	return (
-		<div className="mx-auto flex min-h-svh max-w-lg flex-col gap-18 px-4 py-16">
+		<div className="mx-auto flex min-h-svh max-w-lg flex-col gap-18 px-4 py-16 font-open-runde">
 			{/* Title + subtitle */}
 			<div className="flex flex-col gap-3.5">
 				<h1 className="text-balance font-semibold text-2xl text-[#1E1E1E] tracking-tight">
@@ -195,12 +195,8 @@ export default function Home() {
 				<div className="flex flex-col gap-1">
 					{STEPS.map((step, i) => (
 						<div className="flex items-center gap-2" key={step}>
-							<span className="shrink-0 text-[#B8B8B8] text-sm leading-5.75">
-								{i + 1}.
-							</span>
-							<span className="text-[#707070] text-sm leading-5.75">
-								{step}
-							</span>
+							<span className="shrink-0 text-[#B8B8B8] text-sm">{i + 1}.</span>
+							<span className="text-[#707070] text-sm">{step}</span>
 						</div>
 					))}
 				</div>
@@ -230,10 +226,8 @@ export default function Home() {
 
 			{/* Footer */}
 			<div className="mt-auto flex items-center justify-between pb-[env(safe-area-inset-bottom)]">
-				<span className="text-[#B8B8B8] text-[10px]">
-					Created by Oscar Treviño
-				</span>
-				<span className="text-[#B8B8B8] text-[10px]">v1.0.0 • GitHub</span>
+				<span className="text-[#B8B8B8] text-xs">Created by Oscar Treviño</span>
+				<span className="text-[#B8B8B8] text-xs">v1.0.0 • GitHub</span>
 			</div>
 		</div>
 	);
