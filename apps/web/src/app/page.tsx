@@ -110,7 +110,7 @@ export default function Home() {
 		>
 			{/* Title + subtitle */}
 			<div className="flex flex-col gap-3.5">
-				<h1 className="font-semibold text-2xl text-[#1E1E1E] tracking-tight">
+				<h1 className="text-balance font-semibold text-2xl text-[#1E1E1E] tracking-tight">
 					Passlet
 				</h1>
 				<p className="text-[#707070] text-sm">
@@ -122,14 +122,14 @@ export default function Home() {
 
 			{/* Install */}
 			<div className="flex flex-col gap-3.5">
-				<h2 className="font-semibold text-[#1E1E1E] text-sm">
+				<h2 className="text-balance font-semibold text-[#1E1E1E] text-sm">
 					Install to get started
 				</h2>
 				<div className="flex flex-col gap-1.5">
 					<div className="flex gap-3.5">
 						{(["npm", "pnpm", "yarn", "bun"] as PackageManager[]).map((p) => (
 							<button
-								className="font-medium text-xs transition-colors"
+								className="min-h-11 touch-manipulation font-medium text-xs transition-colors"
 								key={p}
 								onClick={() => setPm(p)}
 								style={{ color: pm === p ? "#1E1E1E" : "#B8B8B8" }}
@@ -152,7 +152,7 @@ export default function Home() {
 						</div>
 						<button
 							aria-label="Copy install command"
-							className="shrink-0 transition-colors"
+							className="min-h-11 min-w-11 shrink-0 touch-manipulation transition-colors active:scale-95"
 							onClick={copy}
 							style={{ color: copied ? "#30A34A" : "#B8B8B8" }}
 							type="button"
@@ -191,7 +191,9 @@ export default function Home() {
 
 			{/* How it works */}
 			<div className="flex flex-col gap-3.5">
-				<h2 className="font-semibold text-[#1E1E1E] text-sm">How it works</h2>
+				<h2 className="text-balance font-semibold text-[#1E1E1E] text-sm">
+					How it works
+				</h2>
 				<div className="flex flex-col gap-1">
 					{STEPS.map((step, i) => (
 						<div className="flex items-center gap-2" key={step}>
@@ -208,13 +210,15 @@ export default function Home() {
 
 			{/* What you get */}
 			<div className="flex flex-col gap-3.5">
-				<h2 className="font-semibold text-[#1E1E1E] text-sm">What you get</h2>
+				<h2 className="text-balance font-semibold text-[#1E1E1E] text-sm">
+					What you get
+				</h2>
 				<div className="flex flex-col gap-2.5">
 					{features.map(({ icon, label, description }) => (
 						<div className="flex items-center justify-between" key={label}>
 							<div className="flex items-center gap-1">
 								{icon}
-								<span className="font-semibold text-[#1E1E1E] text-sm">
+								<span className="text-balance font-semibold text-[#1E1E1E] text-sm">
 									{label}
 								</span>
 							</div>
@@ -227,7 +231,7 @@ export default function Home() {
 			</div>
 
 			{/* Footer */}
-			<div className="mt-auto flex items-center justify-between">
+			<div className="mt-auto flex items-center justify-between pb-[env(safe-area-inset-bottom)]">
 				<span className="text-[#B8B8B8] text-[10px]">
 					Created by Oscar Treviño
 				</span>
