@@ -1,14 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import { TextMorph } from "torph/react";
 
 type PackageManager = "npm" | "pnpm" | "yarn" | "bun";
 
 const COMMANDS: Record<PackageManager, string> = {
 	npm: "npm i passlet",
-	pnpm: "pnpm add passlet",
+	pnpm: "pnpm i passlet",
 	yarn: "yarn add passlet",
-	bun: "bun add passlet",
+	bun: "bun i passlet",
 };
 
 const s = (fill: string) =>
@@ -84,12 +85,7 @@ const features = [
 	},
 ];
 
-const STEPS = [
-	"Configure credentials once.",
-	"Define a pass.",
-	"Create your pass.",
-	"Apple gets a signed .pkpass, Google gets a JWT.",
-];
+const STEPS = ["Configure credentials.", "Define a pass.", "Create your pass."];
 
 export default function Home() {
 	const [pm, setPm] = useState<PackageManager>("npm");
@@ -107,7 +103,7 @@ export default function Home() {
 	return (
 		<div className="mx-auto flex min-h-svh max-w-lg flex-col gap-18 px-4 py-16 font-open-runde">
 			{/* Title + subtitle */}
-			<div className="flex flex-col gap-3.5">
+			<div className="flex flex-col gap-3">
 				<h1 className="text-balance font-semibold text-2xl text-[#1E1E1E] tracking-tight">
 					Passlet
 				</h1>
@@ -119,7 +115,7 @@ export default function Home() {
 			</div>
 
 			{/* Install */}
-			<div className="flex flex-col gap-3.5">
+			<div className="flex flex-col gap-3">
 				<h2 className="text-balance font-semibold text-[#1E1E1E] text-sm">
 					Install to get started
 				</h2>
@@ -146,7 +142,9 @@ export default function Home() {
 					>
 						<div className="flex min-w-0 items-center gap-1.5">
 							<span className="shrink-0 text-[#9A9A9A] text-sm">$</span>
-							<span className="text-[#1E1E1E] text-sm">{COMMANDS[pm]}</span>
+							<span className="text-[#1E1E1E] text-sm">
+								<TextMorph>{COMMANDS[pm]}</TextMorph>
+							</span>
 						</div>
 						<button
 							aria-label="Copy install command"
@@ -188,14 +186,16 @@ export default function Home() {
 			</div>
 
 			{/* How it works */}
-			<div className="flex flex-col gap-3.5">
+			<div className="flex flex-col gap-3">
 				<h2 className="text-balance font-semibold text-[#1E1E1E] text-sm">
 					How it works
 				</h2>
 				<div className="flex flex-col gap-1">
 					{STEPS.map((step, i) => (
 						<div className="flex items-center gap-2" key={step}>
-							<span className="shrink-0 text-[#B8B8B8] text-sm">{i + 1}.</span>
+							<span className="shrink-0 text-[#B8B8B8] text-sm tabular-nums">
+								{i + 1}.
+							</span>
 							<span className="text-[#707070] text-sm">{step}</span>
 						</div>
 					))}
@@ -203,7 +203,7 @@ export default function Home() {
 			</div>
 
 			{/* What you get */}
-			<div className="flex flex-col gap-3.5">
+			<div className="flex flex-col gap-3">
 				<h2 className="text-balance font-semibold text-[#1E1E1E] text-sm">
 					What you get
 				</h2>
@@ -216,7 +216,7 @@ export default function Home() {
 									{label}
 								</span>
 							</div>
-							<span className="text-right text-[#B8B8B8] text-sm">
+							<span className="text-right font-medium text-[#B8B8B8] text-sm">
 								{description}
 							</span>
 						</div>
