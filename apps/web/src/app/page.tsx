@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { TextMorph } from "torph/react";
+import { PassPlayground } from "@/components/pass-playground";
 
 type PackageManager = "npm" | "pnpm" | "yarn" | "bun";
 
@@ -113,6 +114,14 @@ export default function Home() {
 					<br />
 					Define a pass once and get .pkpass for Apple, JWT for Google.
 				</p>
+			</div>
+
+			{/* Playground */}
+			<div className="flex flex-col gap-3">
+				<h2 className="text-balance font-semibold text-[#1E1E1E] text-sm">
+					Build your pass
+				</h2>
+				<PassPlayground />
 			</div>
 
 			{/* Install */}
