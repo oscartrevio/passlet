@@ -129,7 +129,7 @@ export default function Home() {
 					<div className="flex gap-3.5">
 						{(["npm", "pnpm", "yarn", "bun"] as PackageManager[]).map((p) => (
 							<button
-								className="min-h-11 touch-manipulation font-medium text-xs transition-colors"
+								className="touch-manipulation font-medium text-xs transition-colors"
 								key={p}
 								onClick={() => setPm(p)}
 								style={{ color: pm === p ? "#1E1E1E" : "#B8B8B8" }}
@@ -152,7 +152,7 @@ export default function Home() {
 						</div>
 						<button
 							aria-label="Copy install command"
-							className="min-h-11 min-w-11 shrink-0 touch-manipulation transition-colors active:scale-95"
+							className="shrink-0 touch-manipulation transition-colors active:scale-95"
 							onClick={copy}
 							style={{ color: copied ? "#30A34A" : "#B8B8B8" }}
 							type="button"
