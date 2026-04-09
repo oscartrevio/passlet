@@ -23,7 +23,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Lint
-        run: pnpm check
+        run: pnpm biome check --no-errors-on-unmatched --files-ignore-unknown=true
 
       - name: Type check
         run: pnpm check-types
