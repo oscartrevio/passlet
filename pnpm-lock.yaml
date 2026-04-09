@@ -117,6 +117,9 @@ importers:
       sonner:
         specifier: 'catalog:'
         version: 2.0.7(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      torph:
+        specifier: ^0.0.9
+        version: 0.0.9(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       zod:
         specifier: 'catalog:'
         version: 4.3.6
@@ -3348,6 +3351,23 @@ packages:
     resolution: {integrity: sha512-o5sSPKEkg/DIQNmH43V0/uerLrpzVedkUh8tGNvaeXpfpuwjKenlSox/2O/BTlZUtEe+JG7s5YhEz608PlAHRA==}
     engines: {node: '>=0.6'}
 
+  torph@0.0.9:
+    resolution: {integrity: sha512-WrFMtJwqXCfIXbLNuTOwHWff0XVm/Ewctb+71bFis3HykPvCXl1CHXapU0r67pQhAI323fsA1L2pGPeqxXeRRA==}
+    peerDependencies:
+      react: '>=18'
+      react-dom: '>=18'
+      svelte: '>=5'
+      vue: '>=3'
+    peerDependenciesMeta:
+      react:
+        optional: true
+      react-dom:
+        optional: true
+      svelte:
+        optional: true
+      vue:
+        optional: true
+
   tough-cookie@6.0.1:
     resolution: {integrity: sha512-LktZQb3IeoUWB9lqR5EWTHgW/VTITCXg4D21M+lvybRVdylLrRMnqaIONLVb5mav8vM19m44HIcGq4qASeu2Qw==}
     engines: {node: '>=16'}
@@ -6546,6 +6566,11 @@ snapshots:
       is-number: 7.0.0
 
   toidentifier@1.0.1: {}
+
+  torph@0.0.9(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
+    optionalDependencies:
+      react: 19.2.4
+      react-dom: 19.2.4(react@19.2.4)
 
   tough-cookie@6.0.1:
     dependencies:
