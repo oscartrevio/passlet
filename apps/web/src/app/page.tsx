@@ -103,148 +103,152 @@ export default function Home() {
 	};
 
 	return (
-		<div className="mx-auto flex min-h-svh max-w-lg flex-col gap-18 px-4 py-16 font-open-runde">
-			{/* Title + subtitle */}
-			<div className="flex flex-col gap-3">
-				<h1 className="text-balance font-semibold text-2xl text-[#1E1E1E] tracking-tight">
-					Passlet
-				</h1>
-				<p className="text-[#707070] text-sm">
-					One API for Apple Wallet and Google Wallet passes.
-					<br />
-					Define a pass once and get .pkpass for Apple, JWT for Google.
-				</p>
+		<div className="flex min-h-svh flex-col font-open-runde">
+			{/* Playground hero — gray background, full width */}
+			<div className="w-full py-10" style={{ backgroundColor: "#F5F5F5" }}>
+				<div className="mx-auto max-w-lg px-4">
+					<PassPlayground />
+				</div>
 			</div>
 
-			{/* Playground */}
-			<div className="flex flex-col gap-3">
-				<h2 className="text-balance font-semibold text-[#1E1E1E] text-sm">
-					Build your pass
-				</h2>
-				<PassPlayground />
-			</div>
+			{/* Rest of content */}
+			<div className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-18 px-4 py-16">
+				{/* Title + subtitle */}
+				<div className="flex flex-col gap-3">
+					<h1 className="text-balance font-semibold text-2xl text-[#1E1E1E] tracking-tight">
+						Passlet
+					</h1>
+					<p className="text-[#707070] text-sm">
+						One API for Apple Wallet and Google Wallet passes.
+						<br />
+						Define a pass once and get .pkpass for Apple, JWT for Google.
+					</p>
+				</div>
 
-			{/* Install */}
-			<div className="flex flex-col gap-3">
-				<h2 className="text-balance font-semibold text-[#1E1E1E] text-sm">
-					Install to get started
-				</h2>
-				<div className="flex flex-col gap-1.5">
-					<div className="flex gap-3.5">
-						{(["npm", "pnpm", "yarn", "bun"] as PackageManager[]).map((p) => (
-							<button
-								className="cursor-pointer touch-manipulation font-medium text-xs transition-colors"
-								key={p}
-								onClick={() => setPm(p)}
-								style={{ color: pm === p ? "#1E1E1E" : "#B8B8B8" }}
-								type="button"
-							>
-								{p}
-							</button>
-						))}
-					</div>
-					<div
-						className="flex w-full items-center justify-between overflow-hidden rounded-xl bg-white px-3.5 py-3"
-						style={{
-							boxShadow:
-								"#0000000F 0px 0px 0px 1px, #0000000F 0px 1px 2px -1px, #0000000A 0px 2px 4px",
-						}}
-					>
-						<div className="flex min-w-0 items-center gap-1.5">
-							<span className="shrink-0 text-[#9A9A9A] text-sm">$</span>
-							<span className="text-[#1E1E1E] text-sm">
-								<TextMorph>{COMMANDS[pm]}</TextMorph>
-							</span>
+				{/* Install */}
+				<div className="flex flex-col gap-3">
+					<h2 className="text-balance font-semibold text-[#1E1E1E] text-sm">
+						Install to get started
+					</h2>
+					<div className="flex flex-col gap-1.5">
+						<div className="flex gap-3.5">
+							{(["npm", "pnpm", "yarn", "bun"] as PackageManager[]).map((p) => (
+								<button
+									className="cursor-pointer touch-manipulation font-medium text-xs transition-colors"
+									key={p}
+									onClick={() => setPm(p)}
+									style={{ color: pm === p ? "#1E1E1E" : "#B8B8B8" }}
+									type="button"
+								>
+									{p}
+								</button>
+							))}
 						</div>
-						<button
-							aria-label="Copy install command"
-							className="shrink-0 cursor-pointer touch-manipulation transition-colors active:scale-95"
-							onClick={copy}
-							style={{ color: copied ? "#30A34A" : "#B8B8B8" }}
-							type="button"
+						<div
+							className="flex w-full items-center justify-between overflow-hidden rounded-xl bg-white px-3.5 py-3"
+							style={{
+								boxShadow:
+									"#0000000F 0px 0px 0px 1px, #0000000F 0px 1px 2px -1px, #0000000A 0px 2px 4px",
+							}}
 						>
-							{copied ? (
-								<svg
-									aria-hidden="true"
-									fill="none"
-									height="18"
-									stroke="currentColor"
-									strokeLinecap="round"
-									strokeLinejoin="round"
-									strokeWidth="2"
-									viewBox="0 0 24 24"
-									width="18"
-									xmlns="http://www.w3.org/2000/svg"
-								>
-									<polyline points="20 6 9 17 4 12" />
-								</svg>
-							) : (
-								<svg
-									aria-hidden="true"
-									fill="currentColor"
-									height="18"
-									viewBox="0 0 640 640"
-									width="18"
-									xmlns="http://www.w3.org/2000/svg"
-								>
-									<path d="M352 528L128 528C119.2 528 112 520.8 112 512L112 288C112 279.2 119.2 272 128 272L176 272L176 224L128 224C92.7 224 64 252.7 64 288L64 512C64 547.3 92.7 576 128 576L352 576C387.3 576 416 547.3 416 512L416 464L368 464L368 512C368 520.8 360.8 528 352 528zM288 368C279.2 368 272 360.8 272 352L272 128C272 119.2 279.2 112 288 112L512 112C520.8 112 528 119.2 528 128L528 352C528 360.8 520.8 368 512 368L288 368zM224 352C224 387.3 252.7 416 288 416L512 416C547.3 416 576 387.3 576 352L576 128C576 92.7 547.3 64 512 64L288 64C252.7 64 224 92.7 224 128L224 352z" />
-								</svg>
-							)}
-						</button>
-					</div>
-				</div>
-			</div>
-
-			{/* How it works */}
-			<div className="flex flex-col gap-3">
-				<h2 className="text-balance font-semibold text-[#1E1E1E] text-sm">
-					How it works
-				</h2>
-				<div className="flex flex-col gap-1">
-					{STEPS.map((step, i) => (
-						<div className="flex items-center gap-2" key={step}>
-							<span className="shrink-0 text-[#B8B8B8] text-sm tabular-nums">
-								{i + 1}.
-							</span>
-							<span className="text-[#707070] text-sm">{step}</span>
-						</div>
-					))}
-				</div>
-			</div>
-
-			{/* What you get */}
-			<div className="flex flex-col gap-3">
-				<h2 className="text-balance font-semibold text-[#1E1E1E] text-sm">
-					What you get
-				</h2>
-				<div className="flex flex-col gap-2.5">
-					{features.map(({ icon, label, description }) => (
-						<div className="flex items-center justify-between" key={label}>
-							<div className="flex items-center gap-1">
-								{icon}
-								<span className="text-balance font-semibold text-[#1E1E1E] text-sm">
-									{label}
+							<div className="flex min-w-0 items-center gap-1.5">
+								<span className="shrink-0 text-[#9A9A9A] text-sm">$</span>
+								<span className="text-[#1E1E1E] text-sm">
+									<TextMorph>{COMMANDS[pm]}</TextMorph>
 								</span>
 							</div>
-							<span className="text-right font-medium text-[#B8B8B8] text-sm">
-								{description}
-							</span>
+							<button
+								aria-label="Copy install command"
+								className="shrink-0 cursor-pointer touch-manipulation transition-colors active:scale-95"
+								onClick={copy}
+								style={{ color: copied ? "#30A34A" : "#B8B8B8" }}
+								type="button"
+							>
+								{copied ? (
+									<svg
+										aria-hidden="true"
+										fill="none"
+										height="18"
+										stroke="currentColor"
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										strokeWidth="2"
+										viewBox="0 0 24 24"
+										width="18"
+										xmlns="http://www.w3.org/2000/svg"
+									>
+										<polyline points="20 6 9 17 4 12" />
+									</svg>
+								) : (
+									<svg
+										aria-hidden="true"
+										fill="currentColor"
+										height="18"
+										viewBox="0 0 640 640"
+										width="18"
+										xmlns="http://www.w3.org/2000/svg"
+									>
+										<path d="M352 528L128 528C119.2 528 112 520.8 112 512L112 288C112 279.2 119.2 272 128 272L176 272L176 224L128 224C92.7 224 64 252.7 64 288L64 512C64 547.3 92.7 576 128 576L352 576C387.3 576 416 547.3 416 512L416 464L368 464L368 512C368 520.8 360.8 528 352 528zM288 368C279.2 368 272 360.8 272 352L272 128C272 119.2 279.2 112 288 112L512 112C520.8 112 528 119.2 528 128L528 352C528 360.8 520.8 368 512 368L288 368zM224 352C224 387.3 252.7 416 288 416L512 416C547.3 416 576 387.3 576 352L576 128C576 92.7 547.3 64 512 64L288 64C252.7 64 224 92.7 224 128L224 352z" />
+									</svg>
+								)}
+							</button>
 						</div>
-					))}
+					</div>
 				</div>
-			</div>
 
-			{/* Footer */}
-			<div className="mt-auto flex items-center justify-between pb-[env(safe-area-inset-bottom)]">
-				<span className="text-[#B8B8B8] text-xs">Created by Oscar Treviño</span>
-				<Link
-					className="text-[#B8B8B8] text-xs transition-colors hover:text-[#707070]"
-					href="https://github.com/oscartrevio/passlet"
-					rel="noopener noreferrer"
-					target="_blank"
-				>
-					v1.0.0 • GitHub
-				</Link>
+				{/* How it works */}
+				<div className="flex flex-col gap-3">
+					<h2 className="text-balance font-semibold text-[#1E1E1E] text-sm">
+						How it works
+					</h2>
+					<div className="flex flex-col gap-1">
+						{STEPS.map((step, i) => (
+							<div className="flex items-center gap-2" key={step}>
+								<span className="shrink-0 text-[#B8B8B8] text-sm tabular-nums">
+									{i + 1}.
+								</span>
+								<span className="text-[#707070] text-sm">{step}</span>
+							</div>
+						))}
+					</div>
+				</div>
+
+				{/* What you get */}
+				<div className="flex flex-col gap-3">
+					<h2 className="text-balance font-semibold text-[#1E1E1E] text-sm">
+						What you get
+					</h2>
+					<div className="flex flex-col gap-2.5">
+						{features.map(({ icon, label, description }) => (
+							<div className="flex items-center justify-between" key={label}>
+								<div className="flex items-center gap-1">
+									{icon}
+									<span className="text-balance font-semibold text-[#1E1E1E] text-sm">
+										{label}
+									</span>
+								</div>
+								<span className="text-right font-medium text-[#B8B8B8] text-sm">
+									{description}
+								</span>
+							</div>
+						))}
+					</div>
+				</div>
+
+				{/* Footer */}
+				<div className="mt-auto flex items-center justify-between pb-[env(safe-area-inset-bottom)]">
+					<span className="text-[#B8B8B8] text-xs">
+						Created by Oscar Treviño
+					</span>
+					<Link
+						className="text-[#B8B8B8] text-xs transition-colors hover:text-[#707070]"
+						href="https://github.com/oscartrevio/passlet"
+						rel="noopener noreferrer"
+						target="_blank"
+					>
+						v1.0.0 • GitHub
+					</Link>
+				</div>
 			</div>
 		</div>
 	);
