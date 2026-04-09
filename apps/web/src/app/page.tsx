@@ -105,15 +105,15 @@ export default function Home() {
 
 	return (
 		<div
-			className="mx-auto flex max-w-lg flex-col gap-18.5 px-4 py-16"
+			className="mx-auto flex max-w-lg flex-col gap-18 px-4 py-16"
 			style={{ fontFamily: runde }}
 		>
 			{/* Title + subtitle */}
 			<div className="flex flex-col gap-3.5">
-				<h1 className="font-semibold text-2xl text-[#1E1E1E] tracking-[-0.02em]">
+				<h1 className="font-semibold text-2xl text-[#1E1E1E] tracking-tight">
 					Passlet
 				</h1>
-				<p className="text-[#707070] text-sm leading-[1.438]">
+				<p className="text-[#707070] text-sm">
 					One API for Apple Wallet and Google Wallet passes.
 					<br />
 					Define a pass once and get .pkpass for Apple, JWT for Google.
@@ -129,7 +129,7 @@ export default function Home() {
 					<div className="flex gap-3.5">
 						{(["npm", "pnpm", "yarn", "bun"] as PackageManager[]).map((p) => (
 							<button
-								className="font-medium text-xs leading-[1.438] transition-colors"
+								className="font-medium text-xs transition-colors"
 								key={p}
 								onClick={() => setPm(p)}
 								style={{ color: pm === p ? "#1E1E1E" : "#B8B8B8" }}
@@ -140,7 +140,7 @@ export default function Home() {
 						))}
 					</div>
 					<div
-						className="flex w-full items-center justify-between overflow-hidden rounded-[14px] bg-white px-3.5 py-3"
+						className="flex w-full items-center justify-between overflow-hidden rounded-3.5 bg-white px-3.5 py-3"
 						style={{
 							boxShadow:
 								"#0000000F 0px 0px 0px 1px, #0000000F 0px 1px 2px -1px, #0000000A 0px 2px 4px",
@@ -195,10 +195,10 @@ export default function Home() {
 				<div className="flex flex-col gap-1">
 					{STEPS.map((step, i) => (
 						<div className="flex items-center gap-2" key={step}>
-							<span className="shrink-0 text-[#B8B8B8] text-sm leading-[1.438]">
+							<span className="shrink-0 text-[#B8B8B8] text-sm leading-5.75">
 								{i + 1}.
 							</span>
-							<span className="text-[#707070] text-sm leading-[1.438]">
+							<span className="text-[#707070] text-sm leading-5.75">
 								{step}
 							</span>
 						</div>
