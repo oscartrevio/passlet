@@ -1,11 +1,11 @@
 @import "@passlet/ui/globals.css";
 
 @theme inline {
-  --font-open-runde: var(--font-family-open-runde);
+	--font-open-runde: var(--font-family-open-runde);
 }
 
 @layer base {
-  html {
-    scrollbar-gutter: stable;
-  }
+	html {
+		scrollbar-gutter: stable;
+	}
 }
