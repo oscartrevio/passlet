@@ -105,7 +105,7 @@ export default function Home() {
 
 	return (
 		<div
-			className="mx-auto flex max-w-lg flex-col gap-18 px-4 py-16"
+			className="mx-auto flex min-h-svh max-w-lg flex-col gap-18 px-4 py-16"
 			style={{ fontFamily: runde }}
 		>
 			{/* Title + subtitle */}
@@ -140,7 +140,7 @@ export default function Home() {
 						))}
 					</div>
 					<div
-						className="flex w-full items-center justify-between overflow-hidden rounded-3.5 bg-white px-3.5 py-3"
+						className="flex w-full items-center justify-between overflow-hidden rounded-xl bg-white px-3.5 py-3"
 						style={{
 							boxShadow:
 								"#0000000F 0px 0px 0px 1px, #0000000F 0px 1px 2px -1px, #0000000A 0px 2px 4px",
@@ -227,7 +227,7 @@ export default function Home() {
 			</div>
 
 			{/* Footer */}
-			<div className="flex items-center justify-between">
+			<div className="mt-auto flex items-center justify-between">
 				<span className="text-[#B8B8B8] text-[10px]">
 					Created by Oscar Treviño
 				</span>
