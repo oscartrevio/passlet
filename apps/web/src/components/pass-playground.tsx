@@ -131,11 +131,11 @@ function QRPlaceholder({ size = 76 }: { size?: number }) {
 /* ─── Pattern path generators ─────────────────────────────── */
 
 // Waves renders as stroke — returns centerline paths only
-const WAVE_STROKE = 8;
+const WAVE_STROKE = 10;
 
 function buildWaves(W: number, H: number): string {
 	const targetWl = 35;
-	const targetSp = 18;
+	const targetSp = 20;
 	const amp = 5;
 	// Snap wavelength and row spacing so tiles fit exactly
 	const segs = Math.round(W / targetWl);
@@ -224,10 +224,10 @@ function CardStrip({ pattern }: { pattern: PatternType }) {
 						result="hardAlpha"
 						values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0"
 					/>
-					<feOffset dy="0.5" />
+					<feOffset dy="1" />
 					<feGaussianBlur stdDeviation="0.5" />
 					<feComposite in2="hardAlpha" operator="out" />
-					<feColorMatrix values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.25 0" />
+					<feColorMatrix values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.2 0" />
 					<feBlend in2="BackgroundImageFix" result="shadow" />
 					<feBlend in="SourceGraphic" in2="shadow" result="shape" />
 					{/* Inner black shadow — #0000001A 0px 0.5px 1px inset */}
@@ -236,10 +236,10 @@ function CardStrip({ pattern }: { pattern: PatternType }) {
 						result="hardAlpha"
 						values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0"
 					/>
-					<feOffset dy="0.5" />
+					<feOffset dy="1" />
 					<feGaussianBlur stdDeviation="0.5" />
 					<feComposite in2="hardAlpha" k2="-1" k3="1" operator="arithmetic" />
-					<feColorMatrix values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.25 0" />
+					<feColorMatrix values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.2 0" />
 					<feBlend in2="shape" />
 				</filter>
 			</defs>
@@ -310,12 +310,40 @@ function PatternSwatch({
 function Field({ label, value }: { label: string; value: string }) {
 	return (
 		<div className="flex flex-col">
-			<span className="text-[8px] text-white/50 uppercase tracking-[0.09em]">
+			<span className="text-[8px] text-white/80 uppercase tracking-normal">
 				{label}
 			</span>
-			<span className="font-semibold text-white text-xs leading-tight">
+			<span className="font-semibold text-white text-xs leading-tighter">
 				{value}
 			</span>
+		</div>
+	);
+}
+
+function EditableField({
+	label,
+	value,
+	onChange,
+	placeholder,
+}: {
+	label: string;
+	value: string;
+	onChange: (v: string) => void;
+	placeholder?: string;
+}) {
+	return (
+		<div className="flex flex-col">
+			<span className="text-[8px] text-white/80 uppercase tracking-normal">
+				{label}
+			</span>
+			<input
+				className="w-24 bg-transparent font-semibold text-white text-xs leading-tighter caret-white outline-none placeholder:text-white/40"
+				maxLength={24}
+				onChange={(e) => onChange(e.target.value)}
+				placeholder={placeholder}
+				type="text"
+				value={value}
+			/>
 		</div>
 	);
 }
@@ -324,6 +352,7 @@ function Field({ label, value }: { label: string; value: string }) {
 export function PassPlayground() {
 	const memberNo = "123456";
 	const since = fmtDate(new Date());
+	const [name, setName] = useState("");
 	const [color, setColor] = useState<ColorValue>("blue");
 	const [pattern, setPattern] = useState<PatternType>("waves");
 
@@ -350,7 +379,7 @@ export function PassPlayground() {
 					<div className="flex items-start justify-between p-3">
 						<span className="font-semibold text-white">Passlet</span>
 						<div className="flex flex-col items-end">
-							<span className="text-[8px] text-white/50 uppercase tracking-widest">
+							<span className="text-[8px] text-white/50 uppercase tracking-tight">
 								No.
 							</span>
 							<span className="font-medium text-[11px] text-white tabular-nums leading-[1.2]">
@@ -363,7 +392,12 @@ export function PassPlayground() {
 
 					<div className="flex flex-col gap-1 p-3">
 						<div className="flex justify-between">
-							<Field label="Member" value="Your Name" />
+							<EditableField
+								label="Member"
+								onChange={setName}
+								placeholder="Your Name"
+								value={name}
+							/>
 							<Field label="Since" value={since} />
 						</div>
 					</div>
@@ -388,7 +422,7 @@ export function PassPlayground() {
 								<button
 									aria-label={`Select ${c.label} color`}
 									aria-pressed={isSelected}
-									className="relative size-5 cursor-pointer rounded-md transition-transform duration-150 after:absolute after:-inset-1.5 after:content-[''] focus:outline-none focus-visible:ring-2 focus-visible:ring-current focus-visible:ring-offset-2 active:scale-95"
+									className="relative size-5 cursor-pointer rounded-md transition-transform duration-150 ease-out after:absolute after:-inset-1.5 after:content-[''] focus:outline-none focus-visible:ring-2 focus-visible:ring-current focus-visible:ring-offset-2 active:scale-95"
 									key={c.value}
 									onClick={() => setColor(c.value)}
 									style={{
@@ -416,7 +450,7 @@ export function PassPlayground() {
 								<button
 									aria-label={`Select ${p.label} pattern`}
 									aria-pressed={isSelected}
-									className="relative cursor-pointer overflow-hidden rounded transition-transform duration-150 after:absolute after:-inset-1.5 after:content-[''] focus:outline-none active:scale-95"
+									className="relative cursor-pointer overflow-hidden rounded transition-transform duration-150 ease-out after:absolute after:-inset-1.5 after:content-[''] focus:outline-none active:scale-95"
 									key={p.value}
 									onClick={() => setPattern(p.value)}
 									style={{
@@ -424,7 +458,6 @@ export function PassPlayground() {
 											? "2px solid #1E1E1E"
 											: "2px solid transparent",
 										outlineOffset: 2,
-										transition: "outline-color 0.15s ease",
 									}}
 									title={p.label}
 									type="button"
