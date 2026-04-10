@@ -5,12 +5,14 @@ import { useState } from "react";
 
 /* ─── Colors ──────────────────────────────────────────────── */
 const COLORS = [
+	{ label: "Sand", value: "sand", color: "#E8E1D5" },
 	{ label: "Green", value: "green", color: "#22C55E" },
 	{ label: "Amber", value: "amber", color: "#F59E0B" },
 	{ label: "Orange", value: "orange", color: "#F97316" },
 	{ label: "Red", value: "red", color: "#EF4444" },
 	{ label: "Purple", value: "purple", color: "#A855F7" },
 	{ label: "Blue", value: "blue", color: "#3B82F6" },
+	{ label: "Midnight", value: "midnight", color: "#1C1C1E" },
 ] as const;
 
 type ColorValue = (typeof COLORS)[number]["value"];

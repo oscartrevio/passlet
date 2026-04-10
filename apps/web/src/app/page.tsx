@@ -113,13 +113,13 @@ export default function Home() {
 		<div className="flex min-h-svh flex-col font-open-runde">
 			{/* Playground hero — gray background, full width */}
 			<div className="w-full bg-[#FAFAFA] py-12">
-				<div className="mx-auto max-w-lg px-4">
+				<div className="mx-auto max-w-xl px-4">
 					<PassPlayground />
 				</div>
 			</div>
 
 			{/* Rest of content */}
-			<div className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-18 px-4 py-12">
+			<div className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-18 px-4 py-12">
 				{/* Title + subtitle */}
 				<div className="flex flex-col gap-3">
 					<h1 className="text-balance font-semibold text-2xl text-[#1E1E1E] tracking-tight">
