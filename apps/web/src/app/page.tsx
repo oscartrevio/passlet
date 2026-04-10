@@ -1,5 +1,7 @@
 "use client";
 
+import { cn } from "@passlet/ui/lib/utils";
+import { CheckIcon } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { TextMorph } from "torph/react";
@@ -164,38 +166,41 @@ export default function Home() {
 							</div>
 							<button
 								aria-label="Copy install command"
-								className="shrink-0 cursor-pointer touch-manipulation transition-colors active:scale-95"
+								className="relative shrink-0 cursor-pointer touch-manipulation"
 								onClick={copy}
-								style={{ color: copied ? "#30A34A" : "#B8B8B8" }}
 								type="button"
 							>
-								{copied ? (
-									<svg
-										aria-hidden="true"
-										fill="none"
-										height="18"
-										stroke="currentColor"
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth="2"
-										viewBox="0 0 24 24"
-										width="18"
-										xmlns="http://www.w3.org/2000/svg"
+								<div className="hit-area-3 relative size-4.5">
+									<div
+										className={cn(
+											"absolute inset-0 flex items-center justify-center text-[#30A34A] transition-[opacity,filter,scale] duration-300 ease-in-out will-change-[opacity,filter,scale]",
+											copied
+												? "scale-100 opacity-100 blur-0"
+												: "scale-[0.25] opacity-0 blur-sm"
+										)}
 									>
-										<polyline points="20 6 9 17 4 12" />
-									</svg>
-								) : (
-									<svg
-										aria-hidden="true"
-										fill="currentColor"
-										height="18"
-										viewBox="0 0 640 640"
-										width="18"
-										xmlns="http://www.w3.org/2000/svg"
+										<CheckIcon />
+									</div>
+									<div
+										className={cn(
+											"text-[#B8B8B8] transition-[opacity,filter,scale] duration-300 ease-in-out will-change-[opacity,filter,scale]",
+											copied
+												? "scale-[0.25] opacity-0 blur-sm"
+												: "scale-100 opacity-100 blur-0"
+										)}
 									>
-										<path d="M352 528L128 528C119.2 528 112 520.8 112 512L112 288C112 279.2 119.2 272 128 272L176 272L176 224L128 224C92.7 224 64 252.7 64 288L64 512C64 547.3 92.7 576 128 576L352 576C387.3 576 416 547.3 416 512L416 464L368 464L368 512C368 520.8 360.8 528 352 528zM288 368C279.2 368 272 360.8 272 352L272 128C272 119.2 279.2 112 288 112L512 112C520.8 112 528 119.2 528 128L528 352C528 360.8 520.8 368 512 368L288 368zM224 352C224 387.3 252.7 416 288 416L512 416C547.3 416 576 387.3 576 352L576 128C576 92.7 547.3 64 512 64L288 64C252.7 64 224 92.7 224 128L224 352z" />
-									</svg>
-								)}
+										<svg
+											aria-hidden="true"
+											fill="currentColor"
+											height="18"
+											viewBox="0 0 640 640"
+											width="18"
+											xmlns="http://www.w3.org/2000/svg"
+										>
+											<path d="M352 528L128 528C119.2 528 112 520.8 112 512L112 288C112 279.2 119.2 272 128 272L176 272L176 224L128 224C92.7 224 64 252.7 64 288L64 512C64 547.3 92.7 576 128 576L352 576C387.3 576 416 547.3 416 512L416 464L368 464L368 512C368 520.8 360.8 528 352 528zM288 368C279.2 368 272 360.8 272 352L272 128C272 119.2 279.2 112 288 112L512 112C520.8 112 528 119.2 528 128L528 352C528 360.8 520.8 368 512 368L288 368zM224 352C224 387.3 252.7 416 288 416L512 416C547.3 416 576 387.3 576 352L576 128C576 92.7 547.3 64 512 64L288 64C252.7 64 224 92.7 224 128L224 352z" />
+										</svg>
+									</div>
+								</div>
 							</button>
 						</div>
 					</div>
