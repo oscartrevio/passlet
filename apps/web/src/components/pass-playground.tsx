@@ -334,6 +334,16 @@ export function PassPlayground() {
 				className="relative aspect-181/251 w-[256px] shrink-0 select-none overflow-hidden rounded-lg transition-colors duration-300"
 				style={{ backgroundColor: activeColor }}
 			>
+				{/* Noise overlay */}
+				<div
+					aria-hidden="true"
+					className="pointer-events-none absolute inset-0 z-10 opacity-10 mix-blend-overlay"
+					style={{
+						backgroundImage:
+							"url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E\")",
+						backgroundSize: "200px 200px",
+					}}
+				/>
 				<div className="flex h-full flex-col">
 					<div className="flex items-start justify-between p-3">
 						<span className="font-semibold text-white">Passlet</span>
