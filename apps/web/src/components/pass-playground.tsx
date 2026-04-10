@@ -323,10 +323,10 @@ export function PassPlayground() {
 						<div className="rounded-sm bg-white p-2">
 							<QRCode
 								background="#ffffff"
-								className="size-[72px]"
+								className="size-18"
 								data="https://passlet.dev"
 								foreground="#111111"
-								robustness="M"
+								robustness="L"
 							/>
 						</div>
 					</div>
