@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { TextMorph } from "torph/react";
 import { PassPlayground } from "@/components/pass-playground";
+import { version } from "../../../../packages/passlet/package.json";
 
 type PackageManager = "npm" | "pnpm" | "yarn" | "bun";
 
@@ -258,7 +259,7 @@ export default function Home() {
 						rel="noopener noreferrer"
 						target="_blank"
 					>
-						v1.0.0 • GitHub
+						v{version} • GitHub
 					</Link>
 				</div>
 			</div>
