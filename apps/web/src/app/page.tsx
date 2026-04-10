@@ -87,7 +87,11 @@ const features = [
 	},
 ];
 
-const STEPS = ["Configure credentials.", "Define a pass.", "Create your pass."];
+const _STEPS = [
+	"Configure credentials.",
+	"Define a pass.",
+	"Create your pass.",
+];
 
 export default function Home() {
 	const [pm, setPm] = useState<PackageManager>("npm");
@@ -105,14 +109,14 @@ export default function Home() {
 	return (
 		<div className="flex min-h-svh flex-col font-open-runde">
 			{/* Playground hero — gray background, full width */}
-			<div className="w-full py-10" style={{ backgroundColor: "#F5F5F5" }}>
+			<div className="w-full bg-[#FAFAFA] py-12">
 				<div className="mx-auto max-w-lg px-4">
 					<PassPlayground />
 				</div>
 			</div>
 
 			{/* Rest of content */}
-			<div className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-18 px-4 py-16">
+			<div className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-18 px-4 py-12">
 				{/* Title + subtitle */}
 				<div className="flex flex-col gap-3">
 					<h1 className="text-balance font-semibold text-2xl text-[#1E1E1E] tracking-tight">
@@ -197,7 +201,7 @@ export default function Home() {
 				</div>
 
 				{/* How it works */}
-				<div className="flex flex-col gap-3">
+				{/* <div className="flex flex-col gap-3">
 					<h2 className="text-balance font-semibold text-[#1E1E1E] text-sm">
 						How it works
 					</h2>
@@ -211,7 +215,7 @@ export default function Home() {
 							</div>
 						))}
 					</div>
-				</div>
+				</div> */}
 
 				{/* What you get */}
 				<div className="flex flex-col gap-3">
