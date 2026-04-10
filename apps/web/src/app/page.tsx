@@ -141,10 +141,14 @@ export default function Home() {
 						<div className="flex gap-3.5">
 							{(["npm", "pnpm", "yarn", "bun"] as PackageManager[]).map((p) => (
 								<button
-									className="cursor-pointer touch-manipulation font-medium text-xs transition-colors"
+									className={cn(
+										"hit-area-2 cursor-pointer touch-manipulation font-medium text-xs transition-colors",
+										pm === p
+											? "text-[#1E1E1E]"
+											: "text-[#B8B8B8] hover:text-[#707070]"
+									)}
 									key={p}
 									onClick={() => setPm(p)}
-									style={{ color: pm === p ? "#1E1E1E" : "#B8B8B8" }}
 									type="button"
 								>
 									{p}
