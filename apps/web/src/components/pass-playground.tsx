@@ -1,7 +1,7 @@
 "use client";
 
-import { QRCode } from "@passlet/ui/components/qr-code";
 import { cn } from "@passlet/ui/lib/utils";
+import type { ReactNode } from "react";
 import { useState } from "react";
 
 /* ─── Colors ──────────────────────────────────────────────── */
@@ -266,7 +266,7 @@ function EditableField({
 }
 
 /* ─── Playground ──────────────────────────────────────────── */
-export function PassPlayground() {
+export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 	const memberNo = "123456";
 	const since = fmtDate(new Date());
 	const [name, setName] = useState("");
@@ -320,15 +320,7 @@ export function PassPlayground() {
 					</div>
 
 					<div className="mt-auto flex justify-center pb-3">
-						<div className="rounded-sm bg-white p-2">
-							<QRCode
-								background="#ffffff"
-								className="size-18"
-								data="https://passlet.dev"
-								foreground="#111111"
-								robustness="L"
-							/>
-						</div>
+						<div className="rounded-sm bg-white p-2">{qrSlot}</div>
 					</div>
 				</div>
 			</div>
