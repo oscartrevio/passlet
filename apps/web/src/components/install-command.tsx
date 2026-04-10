@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@passlet/ui/lib/utils";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { TextMorph } from "torph/react";
 
 type PackageManager = "npm" | "pnpm" | "yarn" | "bun";
@@ -16,6 +16,9 @@ const COMMANDS: Record<PackageManager, string> = {
 export function InstallCommand() {
 	const [pm, setPm] = useState<PackageManager>("npm");
 	const [copied, setCopied] = useState(false);
+	const [mounted, setMounted] = useState(false);
+
+	useEffect(() => setMounted(true), []);
 
 	const copy = () => {
 		if (copied) {
@@ -55,7 +58,7 @@ export function InstallCommand() {
 				<div className="flex min-w-0 items-center gap-1.5">
 					<span className="shrink-0 text-[#9A9A9A] text-sm">$</span>
 					<span className="text-[#1E1E1E] text-sm">
-						<TextMorph>{COMMANDS[pm]}</TextMorph>
+						{mounted ? <TextMorph>{COMMANDS[pm]}</TextMorph> : COMMANDS[pm]}
 					</span>
 				</div>
 				<button
