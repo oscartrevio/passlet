@@ -1,5 +1,6 @@
 "use client";
 
+import { QRCode } from "@passlet/ui/components/qr-code";
 import { cn } from "@passlet/ui/lib/utils";
 import { useState } from "react";
 
@@ -42,90 +43,6 @@ const MONTHS = [
 ];
 function fmtDate(d: Date) {
 	return `${MONTHS[d.getMonth()]}/${String(d.getDate()).padStart(2, "0")}/${d.getFullYear()}`;
-}
-
-/* ─── QR Code ─────────────────────────────────────────────── */
-function buildQRMatrix(): boolean[][] {
-	const N = 21;
-	const m: boolean[][] = Array.from({ length: N }, () =>
-		new Array(N).fill(false)
-	);
-	const fp = [
-		[1, 1, 1, 1, 1, 1, 1],
-		[1, 0, 0, 0, 0, 0, 1],
-		[1, 0, 1, 1, 1, 0, 1],
-		[1, 0, 1, 1, 1, 0, 1],
-		[1, 0, 1, 1, 1, 0, 1],
-		[1, 0, 0, 0, 0, 0, 1],
-		[1, 1, 1, 1, 1, 1, 1],
-	];
-	const place = (ro: number, co: number) => {
-		for (let r = 0; r < 7; r++) {
-			for (let c = 0; c < 7; c++) {
-				m[ro + r][co + c] = fp[r][c] === 1;
-			}
-		}
-	};
-	place(0, 0);
-	place(0, 14);
-	place(14, 0);
-	for (let i = 8; i <= 12; i++) {
-		m[6][i] = i % 2 === 0;
-		m[i][6] = i % 2 === 0;
-	}
-	const res = new Set<string>();
-	for (let r = 0; r <= 8; r++) {
-		for (let c = 0; c <= 8; c++) {
-			res.add(`${r},${c}`);
-		}
-	}
-	for (let r = 0; r <= 8; r++) {
-		for (let c = 13; c <= 20; c++) {
-			res.add(`${r},${c}`);
-		}
-	}
-	for (let r = 13; r <= 20; r++) {
-		for (let c = 0; c <= 8; c++) {
-			res.add(`${r},${c}`);
-		}
-	}
-	for (let i = 0; i < N; i++) {
-		res.add(`6,${i}`);
-		res.add(`${i},6`);
-	}
-	for (let r = 0; r < N; r++) {
-		for (let c = 0; c < N; c++) {
-			if (!res.has(`${r},${c}`)) {
-				m[r][c] = (r * 17 + c * 13 + r * c * 3) % 10 < 4;
-			}
-		}
-	}
-	return m;
-}
-const QR_MATRIX = buildQRMatrix();
-
-function QRPlaceholder({ size = 76 }: { size?: number }) {
-	const cell = size / 21;
-	return (
-		<svg height={size} viewBox={`0 0 ${size} ${size}`} width={size}>
-			<title>QR Code</title>
-			<rect fill="white" height={size} width={size} />
-			{QR_MATRIX.flatMap((row, r) =>
-				row.map((on, c) =>
-					on ? (
-						<rect
-							fill="#111"
-							height={cell}
-							key={`${r}-${c}`}
-							width={cell}
-							x={c * cell}
-							y={r * cell}
-						/>
-					) : null
-				)
-			)}
-		</svg>
-	);
 }
 
 /* ─── Pattern path generators ─────────────────────────────── */
@@ -404,7 +321,13 @@ export function PassPlayground() {
 
 					<div className="mt-auto flex justify-center pb-3">
 						<div className="rounded-sm bg-white p-2">
-							<QRPlaceholder size={72} />
+							<QRCode
+								background="#ffffff"
+								className="size-[72px]"
+								data="https://passlet.dev"
+								foreground="#111111"
+								robustness="M"
+							/>
 						</div>
 					</div>
 				</div>
