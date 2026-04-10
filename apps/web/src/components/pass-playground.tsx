@@ -225,7 +225,7 @@ function CardStrip({ pattern }: { pattern: PatternType }) {
 					<feOffset dy="0.5" />
 					<feGaussianBlur stdDeviation="0.5" />
 					<feComposite in2="hardAlpha" operator="out" />
-					<feColorMatrix values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.1 0" />
+					<feColorMatrix values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.25 0" />
 					<feBlend in2="BackgroundImageFix" result="shadow" />
 					<feBlend in="SourceGraphic" in2="shadow" result="shape" />
 					{/* Inner black shadow — #0000001A 0px 0.5px 1px inset */}
@@ -237,7 +237,7 @@ function CardStrip({ pattern }: { pattern: PatternType }) {
 					<feOffset dy="0.5" />
 					<feGaussianBlur stdDeviation="0.5" />
 					<feComposite in2="hardAlpha" k2="-1" k3="1" operator="arithmetic" />
-					<feColorMatrix values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.1 0" />
+					<feColorMatrix values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.25 0" />
 					<feBlend in2="shape" />
 				</filter>
 			</defs>
@@ -379,7 +379,7 @@ export function PassPlayground() {
 				{/* Color */}
 				<div className="flex flex-col gap-2">
 					<p className="font-medium text-[#707070] text-xs">Background Color</p>
-					<div className={cn("flex flex-wrap gap-2")}>
+					<div className={cn("flex flex-wrap gap-1.5")}>
 						{COLORS.map((c) => {
 							const isSelected = color === c.value;
 							return (
