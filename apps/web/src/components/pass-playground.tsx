@@ -81,29 +81,11 @@ const PATTERNS: { value: PatternType; label: string }[] = [
 	{ value: "dots", label: "Dots" },
 ];
 
-const MONTHS = [
-	"Jan",
-	"Feb",
-	"Mar",
-	"Apr",
-	"May",
-	"Jun",
-	"Jul",
-	"Aug",
-	"Sep",
-	"Oct",
-	"Nov",
-	"Dec",
-];
-function fmtDate(d: Date) {
-	return `${MONTHS[d.getMonth()]}/${String(d.getDate()).padStart(2, "0")}/${d.getFullYear()}`;
-}
+const _d = new Date();
+const TODAY = `${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][_d.getMonth()]}/${String(_d.getDate()).padStart(2, "0")}/${_d.getFullYear()}`;
 
-/* ─── Pattern path generators ─────────────────────────────── */
-
-const WAVE_STROKE = 10;
-const ZIGZAG_STROKE = 6;
-const DOT_R = 6;
+const STROKE_WIDTH = 10;
+const DOT_R = 8;
 
 // Which patterns render as stroke vs fill
 const STROKE_PATTERNS = new Set<PatternType>(["waves", "zigzag"]);
@@ -166,7 +148,7 @@ function buildDots(
 	H: number,
 	options?: { targetSp?: number }
 ): string {
-	const targetSp = options?.targetSp ?? 18;
+	const targetSp = options?.targetSp ?? 24;
 	const cols = Math.round(W / targetSp);
 	const rows = Math.round(H / targetSp);
 	const spX = W / cols;
@@ -191,8 +173,8 @@ function buildZigzag(
 	H: number,
 	options?: { targetWl?: number; targetSp?: number; amp?: number }
 ): string {
-	const targetWl = options?.targetWl ?? 20;
-	const targetSp = options?.targetSp ?? 18;
+	const targetWl = options?.targetWl ?? 24;
+	const targetSp = options?.targetSp ?? 20;
 	const amp = options?.amp ?? 6;
 	const segs = Math.round(W / targetWl);
 	const rows = Math.round(H / targetSp);
@@ -201,7 +183,7 @@ function buildZigzag(
 	const hw = wl / 2;
 	const parts: string[] = [];
 	for (let r = 0; r < rows; r++) {
-		const y = sp * (r + 0.5);
+		const y = sp * (r + 0.5) + amp;
 		let d = `M${-wl} ${y}`;
 		for (let i = -1; i <= segs; i++) {
 			const x = i * wl;
@@ -252,6 +234,14 @@ function CardStrip({ pattern }: { pattern: PatternType }) {
 			xmlns="http://www.w3.org/2000/svg"
 		>
 			<defs>
+				<clipPath id="strip-clip">
+					<rect
+						height={STRIP_H + STROKE_WIDTH}
+						width={STRIP_W}
+						x="0"
+						y={-STROKE_WIDTH / 2}
+					/>
+				</clipPath>
 				<filter
 					colorInterpolationFilters="sRGB"
 					filterUnits="userSpaceOnUse"
@@ -289,15 +279,17 @@ function CardStrip({ pattern }: { pattern: PatternType }) {
 			</defs>
 			{STROKE_PATTERNS.has(pattern) ? (
 				<path
+					clipPath="url(#strip-clip)"
 					d={STRIP_PATHS[pattern]}
 					fill="none"
 					filter="url(#strip-filter)"
 					stroke="white"
 					strokeOpacity={0.01}
-					strokeWidth={pattern === "zigzag" ? ZIGZAG_STROKE : WAVE_STROKE}
+					strokeWidth={pattern === "zigzag" ? STROKE_WIDTH : STROKE_WIDTH}
 				/>
 			) : (
 				<path
+					clipPath="url(#strip-clip)"
 					d={STRIP_PATHS[pattern]}
 					fill="white"
 					fillOpacity={0.01}
@@ -335,7 +327,7 @@ function PatternSwatch({
 					fill="none"
 					stroke="white"
 					strokeOpacity={selected ? 0.55 : 0.45}
-					strokeWidth={pattern === "zigzag" ? ZIGZAG_STROKE : WAVE_STROKE}
+					strokeWidth={pattern === "zigzag" ? STROKE_WIDTH : STROKE_WIDTH}
 				/>
 			) : (
 				<path
@@ -396,7 +388,7 @@ function EditableField({
 
 export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 	const memberNo = "123456";
-	const since = fmtDate(new Date());
+	const since = TODAY;
 	const [name, setName] = useState("");
 	const [color, setColor] = useState<ColorValue>("blue");
 	const [pattern, setPattern] = useState<PatternType>("waves");
@@ -477,7 +469,7 @@ export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 								<button
 									aria-label={`Select ${c.label} color`}
 									aria-pressed={isSelected}
-									className="relative size-5 cursor-pointer rounded-md transition-transform duration-150 ease-out after:absolute after:-inset-1.5 after:content-[''] focus:outline-none focus-visible:ring-2 focus-visible:ring-current focus-visible:ring-offset-2 active:scale-95"
+									className="relative size-5 cursor-pointer rounded-sm border-overlay transition-transform duration-150 ease-out after:absolute after:-inset-1.5 after:content-[''] focus:outline-none focus-visible:ring-2 focus-visible:ring-current focus-visible:ring-offset-2 active:scale-95"
 									key={c.value}
 									onClick={() => {
 										setColorTransition(true);
@@ -508,7 +500,7 @@ export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 								<button
 									aria-label={`Select ${p.label} pattern`}
 									aria-pressed={isSelected}
-									className="relative cursor-pointer overflow-hidden rounded transition-transform duration-150 ease-out after:absolute after:-inset-1.5 after:content-[''] focus:outline-none active:scale-95"
+									className="relative cursor-pointer overflow-hidden rounded border-overlay transition-transform duration-150 ease-out after:absolute after:-inset-1.5 after:content-[''] focus:outline-none active:scale-95"
 									key={p.value}
 									onClick={() => setPattern(p.value)}
 									style={{
