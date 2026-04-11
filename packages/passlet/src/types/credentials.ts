@@ -1,9 +1,10 @@
+/** Credentials for signing Apple Wallet `.pkpass` files. */
 export interface AppleCredentials {
-	/** @example "pass.com.yourcompany.yourapp" */
+	/** Pass type identifier registered in your Apple Developer account. @example "pass.com.yourcompany.app" */
 	passTypeIdentifier: string;
-	/** PEM-encoded pass signing certificate. */
+	/** PEM-encoded pass signing certificate from Apple Developer. */
 	signerCert: string;
-	/** PEM-encoded private key paired with the signing certificate. */
+	/** PEM-encoded private key paired with `signerCert`. */
 	signerKey: string;
 	/** Your 10-character Apple Team ID. @example "ABCD1234EF" */
 	teamId: string;
@@ -11,27 +12,30 @@ export interface AppleCredentials {
 	wwdr: string;
 }
 
+/** Credentials for signing Google Wallet JWTs and calling the Wallet REST API. */
 export interface GoogleCredentials {
-	/** client_email from your Google Cloud service account JSON key. */
+	/** `client_email` from your Google Cloud service account JSON key. */
 	clientEmail: string;
-	/** Your Google Wallet issuer ID from the Google Pay & Wallet Console. */
+	/** Issuer ID from the Google Pay & Wallet Console. */
 	issuerId: string;
-	/** private_key from your Google Cloud service account JSON key (PKCS#8 PEM). */
+	/** `private_key` from your Google Cloud service account JSON key (PKCS#8 PEM). */
 	privateKey: string;
 }
 
+/** Credentials passed to {@link Wallet}. Omit a provider to skip that platform. */
 export interface WalletCredentials {
-	/** Apple Wallet credentials. Omit to skip Apple pass generation. */
+	/** Apple Wallet credentials. Required to generate `.pkpass` files. */
 	apple?: AppleCredentials;
-	/** Google Wallet credentials. Omit to skip Google pass generation. */
+	/** Google Wallet credentials. Required to generate Google Wallet JWTs. */
 	google?: GoogleCredentials;
 }
 
+/** Result of {@link Pass.create}. */
 export interface IssuedPass {
-	/** The .pkpass file as Uint8Array, ready to serve. null when Apple credentials were not provided. */
+	/** Signed `.pkpass` archive ready to serve, or `null` if Apple credentials were omitted. */
 	apple: Uint8Array | null;
-	/** Signed Google Wallet JWT for the save link. null when Google credentials were not provided. */
+	/** Signed JWT for a Google Wallet save link (`pay.google.com/gp/v/save/<jwt>`), or `null` if Google credentials were omitted. */
 	google: string | null;
-	/** Non-fatal warnings (e.g. optional image fetch failures). */
+	/** Non-fatal notices — e.g. a missing optional image or an unset recommended field. */
 	warnings: string[];
 }
