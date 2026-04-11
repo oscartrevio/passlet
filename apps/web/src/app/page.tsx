@@ -87,7 +87,6 @@ export default function Home() {
 						qrSlot={
 							<QRCode
 								background="#ffffff"
-								className="size-full rounded-sm"
 								data="https://passlet.dev"
 								foreground="#111111"
 								robustness="L"

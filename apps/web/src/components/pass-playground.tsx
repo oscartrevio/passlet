@@ -1,26 +1,84 @@
 "use client";
 
 import { cn } from "@passlet/ui/lib/utils";
-import { type ReactNode, useState } from "react";
+import { type CSSProperties, type ReactNode, useState } from "react";
 
 const COLORS = [
-	{ label: "Green", value: "green", color: "#22C55E" },
-	{ label: "Amber", value: "amber", color: "#F59E0B" },
-	{ label: "Orange", value: "orange", color: "#F97316" },
-	{ label: "Red", value: "red", color: "#EF4444" },
-	{ label: "Purple", value: "purple", color: "#A855F7" },
-	{ label: "Blue", value: "blue", color: "#3B82F6" },
-	{ label: "Midnight", value: "midnight", color: "#1C1C1E" },
-	{ label: "Sand", value: "sand", color: "#E8E1D5" },
+	{
+		label: "Green",
+		value: "green",
+		color: "#22C55E",
+		text: "#F0FFF4",
+		muted: "rgba(240, 255, 244, 0.7)",
+		subtle: "rgba(240, 255, 244, 0.5)",
+	},
+	{
+		label: "Amber",
+		value: "amber",
+		color: "#F59E0B",
+		text: "#FFF7E6",
+		muted: "rgba(255, 247, 230, 0.72)",
+		subtle: "rgba(255, 247, 230, 0.5)",
+	},
+	{
+		label: "Orange",
+		value: "orange",
+		color: "#F97316",
+		text: "#FFF1E6",
+		muted: "rgba(255, 241, 230, 0.72)",
+		subtle: "rgba(255, 241, 230, 0.5)",
+	},
+	{
+		label: "Red",
+		value: "red",
+		color: "#EF4444",
+		text: "#FFEDED",
+		muted: "rgba(255, 237, 237, 0.72)",
+		subtle: "rgba(255, 237, 237, 0.5)",
+	},
+	{
+		label: "Purple",
+		value: "purple",
+		color: "#A855F7",
+		text: "#F4ECFF",
+		muted: "rgba(244, 236, 255, 0.72)",
+		subtle: "rgba(244, 236, 255, 0.5)",
+	},
+	{
+		label: "Blue",
+		value: "blue",
+		color: "#3B82F6",
+		text: "#EAF2FF",
+		muted: "rgba(234, 242, 255, 0.72)",
+		subtle: "rgba(234, 242, 255, 0.5)",
+	},
+	{
+		label: "Midnight",
+		value: "midnight",
+		color: "#1C1C1E",
+		text: "#E9E9F0",
+		muted: "rgba(233, 233, 240, 0.72)",
+		subtle: "rgba(233, 233, 240, 0.5)",
+	},
+	{
+		label: "Sand",
+		value: "sand",
+		color: "#E8E1D5",
+		text: "#4A3F2F",
+		muted: "rgba(74, 63, 47, 0.6)",
+		subtle: "rgba(74, 63, 47, 0.45)",
+	},
 ] as const;
 
 type ColorValue = (typeof COLORS)[number]["value"];
 
-type PatternType = "waves" | "chessboard";
+type PatternType = "waves" | "chessboard" | "dots" | "zigzag";
 
 const PATTERNS: { value: PatternType; label: string }[] = [
 	{ value: "waves", label: "Waves" },
+	{ value: "zigzag", label: "Zigzag" },
 	{ value: "chessboard", label: "Chess" },
+	{ value: "dots", label: "Dots" },
 ];
 
 const MONTHS = [
@@ -43,8 +101,12 @@ function fmtDate(d: Date) {
 
 /* ─── Pattern path generators ─────────────────────────────── */
 
-// Waves renders as stroke — returns centerline paths only
 const WAVE_STROKE = 10;
+const ZIGZAG_STROKE = 2;
+const DOT_R = 3;
+
+// Which patterns render as stroke vs fill
+const STROKE_PATTERNS = new Set<PatternType>(["waves", "zigzag"]);
 
 function buildWaves(W: number, H: number): string {
 	const targetWl = 35;
@@ -73,7 +135,6 @@ function buildWaves(W: number, H: number): string {
 
 function buildChessboard(W: number, H: number): string {
 	const targetSq = 20;
-	// Snap square size so tiles fit exactly in both dimensions
 	const cols = Math.round(W / targetSq);
 	const rowCount = Math.round(H / targetSq);
 	const sqW = W / cols;
@@ -92,13 +153,58 @@ function buildChessboard(W: number, H: number): string {
 	return parts.join(" ");
 }
 
+function buildDots(W: number, H: number): string {
+	const targetSp = 18;
+	const cols = Math.round(W / targetSp);
+	const rows = Math.round(H / targetSp);
+	const spX = W / cols;
+	const spY = H / rows;
+	const parts: string[] = [];
+	for (let row = 0; row < rows; row++) {
+		const offsetX = row % 2 === 0 ? 0 : spX / 2;
+		const cy = spY * (row + 0.5);
+		// One extra col to fill flush on offset rows
+		for (let col = 0; col < cols + 1; col++) {
+			const cx = spX * col + offsetX;
+			parts.push(
+				`M${cx - DOT_R} ${cy} a${DOT_R},${DOT_R} 0 1,0 ${DOT_R * 2},0 a${DOT_R},${DOT_R} 0 1,0 ${-DOT_R * 2},0`
+			);
+		}
+	}
+	return parts.join(" ");
+}
+
+function buildZigzag(W: number, H: number): string {
+	const targetWl = 20;
+	const targetSp = 18;
+	const amp = 6;
+	const segs = Math.round(W / targetWl);
+	const rows = Math.round(H / targetSp);
+	const wl = W / segs;
+	const sp = H / rows;
+	const hw = wl / 2;
+	const parts: string[] = [];
+	for (let r = 0; r < rows; r++) {
+		const y = sp * (r + 0.5);
+		let d = `M${-wl} ${y}`;
+		for (let i = -1; i <= segs; i++) {
+			const x = i * wl;
+			d += ` L${x + hw} ${y - amp} L${x + wl} ${y}`;
+		}
+		parts.push(d);
+	}
+	return parts.join(" ");
+}
+
 /* ─── Precomputed paths ───────────────────────────────────── */
 const STRIP_W = 256;
 const STRIP_H = 104;
 
 const STRIP_PATHS: Record<PatternType, string> = {
 	waves: buildWaves(STRIP_W, STRIP_H),
+	zigzag: buildZigzag(STRIP_W, STRIP_H),
 	chessboard: buildChessboard(STRIP_W, STRIP_H),
+	dots: buildDots(STRIP_W, STRIP_H),
 };
 
 const SWATCH_W = 30;
@@ -106,7 +212,9 @@ const SWATCH_H = 22;
 
 const SWATCH_PATHS: Record<PatternType, string> = {
 	waves: buildWaves(SWATCH_W, SWATCH_H),
+	zigzag: buildZigzag(SWATCH_W, SWATCH_H),
 	chessboard: buildChessboard(SWATCH_W, SWATCH_H),
+	dots: buildDots(SWATCH_W, SWATCH_H),
 };
 
 function CardStrip({ pattern }: { pattern: PatternType }) {
@@ -155,14 +263,14 @@ function CardStrip({ pattern }: { pattern: PatternType }) {
 					<feBlend in2="shape" />
 				</filter>
 			</defs>
-			{pattern === "waves" ? (
+			{STROKE_PATTERNS.has(pattern) ? (
 				<path
 					d={STRIP_PATHS[pattern]}
 					fill="none"
 					filter="url(#strip-filter)"
 					stroke="white"
 					strokeOpacity={0.01}
-					strokeWidth={WAVE_STROKE}
+					strokeWidth={pattern === "zigzag" ? ZIGZAG_STROKE : WAVE_STROKE}
 				/>
 			) : (
 				<path
@@ -197,13 +305,13 @@ function PatternSwatch({
 				rx={4}
 				width={SWATCH_W}
 			/>
-			{pattern === "waves" ? (
+			{STROKE_PATTERNS.has(pattern) ? (
 				<path
 					d={SWATCH_PATHS[pattern]}
 					fill="none"
 					stroke="white"
 					strokeOpacity={selected ? 0.55 : 0.45}
-					strokeWidth={WAVE_STROKE}
+					strokeWidth={pattern === "zigzag" ? ZIGZAG_STROKE : WAVE_STROKE}
 				/>
 			) : (
 				<path
@@ -220,10 +328,10 @@ function PatternSwatch({
 function Field({ label, value }: { label: string; value: string }) {
 	return (
 		<div className="flex flex-col">
-			<span className="text-[8px] text-white/80 uppercase tracking-normal">
+			<span className="text-(--pass-text-muted) text-[8px] uppercase tracking-normal">
 				{label}
 			</span>
-			<span className="font-semibold text-white text-xs leading-tighter">
+			<span className="font-semibold text-(--pass-text) text-xs leading-tighter">
 				{value}
 			</span>
 		</div>
@@ -243,11 +351,11 @@ function EditableField({
 }) {
 	return (
 		<div className="flex flex-col">
-			<span className="text-[8px] text-white/80 uppercase tracking-normal">
+			<span className="text-(--pass-text-muted) text-[8px] uppercase tracking-normal">
 				{label}
 			</span>
 			<input
-				className="w-24 bg-transparent font-semibold text-white text-xs leading-tighter caret-white outline-none placeholder:text-white/40"
+				className="w-24 bg-transparent font-semibold text-(--pass-text) text-xs leading-tighter caret-(--pass-text) outline-none placeholder:text-(--pass-text-subtle)"
 				maxLength={24}
 				onChange={(e) => onChange(e.target.value)}
 				placeholder={placeholder}
@@ -265,18 +373,24 @@ export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 	const [color, setColor] = useState<ColorValue>("blue");
 	const [pattern, setPattern] = useState<PatternType>("waves");
 
-	const activeColor = COLORS.find((c) => c.value === color)?.color ?? "#3B82F6";
+	const activeColor = COLORS.find((c) => c.value === color) ?? COLORS[5];
 	const [colorTransition, setColorTransition] = useState(false);
+	const cardStyle = {
+		backgroundColor: activeColor.color,
+		"--pass-text": activeColor.text,
+		"--pass-text-muted": activeColor.muted,
+		"--pass-text-subtle": activeColor.subtle,
+	} as CSSProperties;
 
 	return (
 		<div className="flex items-start gap-6">
 			{/* Card */}
 			<div
 				className={cn(
-					"relative aspect-181/251 w-[256px] shrink-0 select-none overflow-hidden rounded-lg",
+					"relative aspect-181/251 w-[256px] shrink-0 select-none overflow-hidden rounded-lg text-(--pass-text)",
 					colorTransition && "transition-colors duration-300"
 				)}
-				style={{ backgroundColor: activeColor }}
+				style={cardStyle}
 			>
 				{/* Noise overlay */}
 				<div
@@ -290,12 +404,12 @@ export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 				/>
 				<div className="flex h-full flex-col">
 					<div className="flex items-start justify-between p-3">
-						<span className="font-semibold text-white">Passlet</span>
+						<span className="font-semibold">Passlet</span>
 						<div className="flex flex-col items-end">
-							<span className="text-[8px] text-white/50 uppercase tracking-tight">
+							<span className="text-(--pass-text-subtle) text-[8px] uppercase tracking-tight">
 								No.
 							</span>
-							<span className="font-medium text-[11px] text-white tabular-nums leading-[1.2]">
+							<span className="font-medium text-[11px] tabular-nums leading-[1.2]">
 								{memberNo}
 							</span>
 						</div>
