@@ -102,8 +102,8 @@ function fmtDate(d: Date) {
 /* ─── Pattern path generators ─────────────────────────────── */
 
 const WAVE_STROKE = 10;
-const ZIGZAG_STROKE = 2;
-const DOT_R = 3;
+const ZIGZAG_STROKE = 6;
+const DOT_R = 6;
 
 // Which patterns render as stroke vs fill
 const STROKE_PATTERNS = new Set<PatternType>(["waves", "zigzag"]);
