@@ -387,7 +387,7 @@ export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 			{/* Card */}
 			<div
 				className={cn(
-					"relative aspect-181/251 w-[256px] shrink-0 select-none overflow-hidden rounded-lg text-(--pass-text)",
+					"relative aspect-181/251 w-[256px] shrink-0 select-none overflow-hidden rounded-lg border-overlay text-(--pass-text)",
 					colorTransition && "transition-colors duration-300"
 				)}
 				style={cardStyle}
