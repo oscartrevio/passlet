@@ -21,7 +21,8 @@ beforeAll(() => {
 });
 
 afterEach(() => {
-	vi.unstubAllGlobals();
+	vi.unstubAllGlobals?.();
+	vi.restoreAllMocks();
 });
 
 // Stub fetch: OAuth token → fake token; GET class → 404 so the POST path is taken.
@@ -129,6 +130,7 @@ describe("loyalty pass", () => {
 				id: "test-loyalty",
 				name: "Rewards Card",
 				color: "#1a1a2e",
+				logo: "https://example.com/logo.png",
 				fields: [
 					{ slot: "primary", key: "points", label: "Points", value: "1250" },
 					{ slot: "secondary", key: "tier", label: "Tier", value: "Gold" },
@@ -143,6 +145,11 @@ describe("loyalty pass", () => {
 			programName: "Rewards Card",
 			hexBackgroundColor: "#1a1a2e",
 			issuerName: "Rewards Card",
+			programLogo: {
+				sourceUri: {
+					uri: "https://example.com/logo.png",
+				},
+			},
 			reviewStatus: "UNDER_REVIEW",
 		});
 
@@ -167,6 +174,7 @@ describe("loyalty pass", () => {
 				type: "loyalty",
 				id: "p1",
 				name: "Rewards",
+				logo: "https://example.com/logo.png",
 				fields: [
 					{ slot: "primary", key: "points", label: "Points", value: "0" },
 					{ slot: "secondary", key: "tier", label: "Tier", value: "Bronze" },
@@ -192,6 +200,7 @@ describe("loyalty pass", () => {
 				type: "loyalty",
 				id: "p1",
 				name: "Rewards",
+				logo: "https://example.com/logo.png",
 				fields: [
 					{ slot: "secondary", key: "tier", label: "Tier", value: "Gold" },
 				],
