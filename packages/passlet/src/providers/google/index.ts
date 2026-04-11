@@ -40,6 +40,13 @@ function validateGoogleRequirements(pass: PassConfig): void {
 			"Google Wallet logo must be a URL string, not bytes"
 		);
 	}
+	// Google loyalty classes require a programLogo URL — the API returns 400 without it
+	if (pass.type === "loyalty" && !pass.logo) {
+		throw new WalletError(
+			"GOOGLE_MISSING_LOGO",
+			"Google Wallet loyalty passes require a logo URL (programLogo)"
+		);
+	}
 	if (pass.type === "flight") {
 		const { carrier, flightNumber, origin, destination } = pass;
 		if (!(carrier && flightNumber && origin && destination)) {
