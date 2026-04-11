@@ -43,7 +43,7 @@ export function AddToGoogleWalletButton({
 					fill="#4285F4"
 				/>
 			</svg>
-			<span className="whitespace-nowrap font-medium text-sm text-white leading-[18px] tracking-[-0.14px]">
+			<span className="whitespace-nowrap font-medium text-sm text-white leading-4.5 tracking-[-0.14px]">
 				Add to Google Wallet
 			</span>
 		</>
