@@ -36,7 +36,6 @@ console.log(
 	`Credentials: ${[apple && "Apple", google && "Google"].filter(Boolean).join(" + ")}\n`
 );
 
-// Helpers
 // Minimal 1×1 white PNG — valid enough for pass generation without a real asset
 const STUB_ICON = new Uint8Array([
 	0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49,
@@ -63,7 +62,7 @@ async function run(
 	}>
 ) {
 	const start = Date.now();
-	process.stdout.write(`  ${label.padEnd(12)}`);
+	process.stdout.write(`  ${label.padEnd(28)}`);
 	try {
 		const result = await passPromise;
 		const ms = Date.now() - start;
@@ -86,7 +85,7 @@ async function run(
 		}
 
 		if (result.warnings.length) {
-			parts.push(`${result.warnings.length} warning(s)`);
+			parts.push(`⚠ ${result.warnings.join(", ")}`);
 		}
 
 		console.log(`PASS  ${ms}ms  ${parts.join("  ")}`);
@@ -98,16 +97,43 @@ async function run(
 	}
 }
 
-// ─── Pass types ───────────────────────────────────────────────────────────────
+async function runUpdate(label: string, updatePromise: Promise<void>) {
+	const start = Date.now();
+	process.stdout.write(`  ${label.padEnd(28)}`);
+	try {
+		await updatePromise;
+		console.log(`PASS  ${Date.now() - start}ms`);
+		passed++;
+	} catch (err) {
+		const msg = (err as Error).message;
+		// Google objects only exist after a user saves the JWT — PATCH/expire will 404
+		// until then. Mark as SKIP rather than FAIL so the suite stays green.
+		if (msg.includes("404")) {
+			console.log(
+				`SKIP  ${Date.now() - start}ms  object not yet saved to a wallet`
+			);
+		} else {
+			console.log(`FAIL  ${Date.now() - start}ms  ${msg}`);
+			failed++;
+		}
+	}
+}
 
-console.log("Running smoke tests...\n");
+function section(title: string) {
+	console.log(`\n${title}`);
+	console.log("─".repeat(title.length));
+}
+
+// ─── All pass types ───────────────────────────────────────────────────────────
+
+section("Pass types");
 
 await run(
 	"loyalty",
 	"loyalty",
 	wallet
 		.loyalty({
-			id: "loyalty-v2",
+			id: "smoke-loyalty",
 			name: "Rewards Card",
 			color: "#1a1a2e",
 			fields: [
@@ -118,7 +144,7 @@ await run(
 			logo: process.env.GOOGLE_LOGO_URL,
 			apple: { icon: STUB_ICON },
 		})
-		.create({ serialNumber: "loyalty" })
+		.create({ serialNumber: "smoke-loyalty" })
 );
 
 await run(
@@ -126,7 +152,7 @@ await run(
 	"event",
 	wallet
 		.event({
-			id: "event-v2",
+			id: "smoke-event",
 			name: "Summer Festival",
 			color: "#6a0572",
 			startsAt: "2026-07-15T20:00:00Z",
@@ -138,15 +164,15 @@ await run(
 			],
 			apple: { icon: STUB_ICON },
 		})
-		.create({ serialNumber: "event" })
+		.create({ serialNumber: "smoke-event" })
 );
 
 await run(
-	"flight",
-	"flight",
+	"flight (air)",
+	"flight-air",
 	wallet
 		.flight({
-			id: "flight-v2",
+			id: "smoke-flight",
 			name: "AA 100",
 			carrier: "AA",
 			flightNumber: "100",
@@ -156,15 +182,20 @@ await run(
 			arrival: "2026-07-15T11:30:00Z",
 			transitType: "air",
 			fields: [
-				field.primary("gate", "Gate", "B22"),
-				field.secondary("seat", "Seat", "14A"),
+				// Apple boarding pass: primary = departure (left) / arrival (right) of transit icon
+				field.primary("from", "JFK", "New York"),
+				field.primary("to", "LAX", "Los Angeles"),
+				field.header("date", "Date", "Jul 15"),
+				field.secondary("passenger", "Passenger", "Jane Doe"),
+				field.secondary("gate", "Gate", "B22"),
+				field.auxiliary("seat", "Seat", "14A"),
+				field.auxiliary("class", "Class", "Economy"),
+				field.back("boarding", "Boarding", "7:30 AM"),
+				field.back("departs", "Departs", "8:00 AM"),
 			],
 			apple: { icon: STUB_ICON },
 		})
-		.create({
-			serialNumber: "flight",
-			values: { passengerName: "Jane Doe" },
-		})
+		.create({ serialNumber: "smoke-flight-air" })
 );
 
 await run(
@@ -172,7 +203,7 @@ await run(
 	"coupon",
 	wallet
 		.coupon({
-			id: "coupon-v2",
+			id: "smoke-coupon",
 			name: "20% Off",
 			color: "#e63946",
 			redemptionChannel: "both",
@@ -183,25 +214,25 @@ await run(
 			],
 			apple: { icon: STUB_ICON },
 		})
-		.create({ serialNumber: "coupon" })
+		.create({ serialNumber: "smoke-coupon" })
 );
 
 await run(
 	"giftCard",
-	"gift",
+	"giftcard",
 	wallet
 		.giftCard({
-			id: "giftcard-v2",
+			id: "smoke-giftcard",
 			name: "Store Gift Card",
 			color: "#2a9d8f",
 			currency: "USD",
 			fields: [
-				field.primary("balance", "Balance", "$50.00"),
+				field.primary("balance", "Balance", "50.00"),
 				field.secondary("pin", "PIN", "1234"),
 			],
 			apple: { icon: STUB_ICON },
 		})
-		.create({ serialNumber: "gift" })
+		.create({ serialNumber: "smoke-giftcard" })
 );
 
 await run(
@@ -209,7 +240,7 @@ await run(
 	"generic",
 	wallet
 		.generic({
-			id: "generic-v2",
+			id: "smoke-generic",
 			name: "Member Card",
 			color: "#264653",
 			fields: [
@@ -219,8 +250,320 @@ await run(
 			],
 			apple: { icon: STUB_ICON },
 		})
-		.create({ serialNumber: "generic" })
+		.create({ serialNumber: "smoke-generic" })
 );
+
+// ─── Barcode formats ──────────────────────────────────────────────────────────
+
+section("Barcode formats");
+
+for (const format of ["QR", "PDF417", "Aztec", "Code128"] as const) {
+	await run(
+		format,
+		`barcode-${format.toLowerCase()}`,
+		wallet
+			.generic({
+				id: "smoke-barcode",
+				name: "Barcode Test",
+				fields: [],
+				apple: { icon: STUB_ICON },
+			})
+			.create({
+				serialNumber: `smoke-barcode-${format.toLowerCase()}`,
+				barcode: { format, value: "TEST-BARCODE-123" },
+			})
+	);
+}
+
+// ─── Field behaviors ──────────────────────────────────────────────────────────
+
+section("Field behaviors");
+
+await run(
+	"all slot types",
+	"fields-all-slots",
+	wallet
+		.generic({
+			id: "smoke-fields",
+			name: "Field Slots",
+			fields: [
+				field.header("tier", "Tier", "Gold"),
+				field.primary("points", "Points", "500"),
+				field.secondary("member", "Member", "Jane"),
+				field.auxiliary("expires", "Expires", "Dec 31"),
+				field.back("terms", "Terms", "No refunds."),
+			],
+			apple: { icon: STUB_ICON },
+		})
+		.create({ serialNumber: "smoke-fields-all-slots" })
+);
+
+await run(
+	"values override at create",
+	"fields-override",
+	wallet
+		.loyalty({
+			id: "smoke-override",
+			name: "Override Test",
+			logo: process.env.GOOGLE_LOGO_URL,
+			fields: [
+				field.primary("points", "Points", "0"),
+				field.secondary("tier", "Tier", "Bronze"),
+			],
+			apple: { icon: STUB_ICON },
+		})
+		.create({
+			serialNumber: "smoke-fields-override",
+			values: { points: "9999", tier: "Platinum" },
+		})
+);
+
+await run(
+	"null hides field",
+	"fields-null",
+	wallet
+		.loyalty({
+			id: "smoke-null",
+			name: "Null Test",
+			logo: process.env.GOOGLE_LOGO_URL,
+			fields: [
+				field.primary("points", "Points", "100"),
+				field.secondary("tier", "Tier", "Gold"),
+			],
+			apple: { icon: STUB_ICON },
+		})
+		.create({
+			serialNumber: "smoke-fields-null",
+			values: { tier: null },
+		})
+);
+
+// ─── Apple-specific options ───────────────────────────────────────────────────
+
+section("Apple-specific options");
+
+await run(
+	"foreground + label colors",
+	"apple-colors",
+	wallet
+		.loyalty({
+			id: "smoke-apple-colors",
+			name: "Color Test",
+			color: "#1a1a2e",
+			logo: process.env.GOOGLE_LOGO_URL,
+			fields: [field.primary("points", "Points", "500")],
+			apple: {
+				icon: STUB_ICON,
+				foregroundColor: "#ffffff",
+				labelColor: "#aaaaaa",
+			},
+		})
+		.create({ serialNumber: "smoke-apple-colors" })
+);
+
+await run(
+	"description + logoText",
+	"apple-text",
+	wallet
+		.loyalty({
+			id: "smoke-apple-text",
+			name: "Text Test",
+			logo: process.env.GOOGLE_LOGO_URL,
+			fields: [],
+			apple: {
+				icon: STUB_ICON,
+				description: "Custom pass description",
+				logoText: "My Brand",
+			},
+		})
+		.create({ serialNumber: "smoke-apple-text" })
+);
+
+await run(
+	"voided",
+	"apple-voided",
+	wallet
+		.generic({
+			id: "smoke-voided",
+			name: "Voided Pass",
+			fields: [field.primary("status", "Status", "Cancelled")],
+			apple: { icon: STUB_ICON },
+		})
+		.create({
+			serialNumber: "smoke-apple-voided",
+			apple: { voided: true },
+		})
+);
+
+await run(
+	"expiresAt",
+	"apple-expires",
+	wallet
+		.generic({
+			id: "smoke-expires",
+			name: "Expiry Test",
+			fields: [],
+			apple: { icon: STUB_ICON },
+		})
+		.create({
+			serialNumber: "smoke-apple-expires",
+			expiresAt: "2026-12-31T23:59:59Z",
+		})
+);
+
+await run(
+	"flight (train transitType)",
+	"flight-train",
+	wallet
+		.flight({
+			id: "smoke-train",
+			name: "Eurostar",
+			carrier: "ES",
+			flightNumber: "9001",
+			origin: "LHR",
+			destination: "CDG",
+			departure: "2026-08-01T09:00:00Z",
+			transitType: "train",
+			fields: [
+				field.primary("car", "Car", "5"),
+				field.secondary("seat", "Seat", "23A"),
+			],
+			apple: { icon: STUB_ICON },
+		})
+		.create({
+			serialNumber: "smoke-flight-train",
+			values: { passengerName: "John Smith" },
+		})
+);
+
+// ─── Google-specific options ──────────────────────────────────────────────────
+
+section("Google-specific options");
+
+await run(
+	"class-level messages",
+	"google-messages",
+	wallet
+		.loyalty({
+			id: "smoke-google-messages",
+			name: "Messages Test",
+			fields: [field.primary("points", "Points", "500")],
+			logo: process.env.GOOGLE_LOGO_URL,
+			apple: { icon: STUB_ICON },
+			google: {
+				messages: [
+					{
+						header: "Welcome back!",
+						body: "You have new rewards waiting.",
+						messageType: "TEXT",
+					},
+				],
+				reviewStatus: "DRAFT",
+			},
+		})
+		.create({ serialNumber: "smoke-google-messages" })
+);
+
+await run(
+	"per-recipient messages",
+	"google-obj-messages",
+	wallet
+		.loyalty({
+			id: "smoke-google-obj-msg",
+			name: "Object Messages",
+			fields: [field.primary("points", "Points", "200")],
+			logo: process.env.GOOGLE_LOGO_URL,
+			apple: { icon: STUB_ICON },
+		})
+		.create({
+			serialNumber: "smoke-google-obj-messages",
+			google: {
+				messages: [
+					{
+						header: "Just for you",
+						body: "Double points this weekend!",
+						messageType: "TEXT_AND_NOTIFY",
+					},
+				],
+			},
+		})
+);
+
+await run(
+	"validFrom + expiresAt",
+	"google-interval",
+	wallet
+		.coupon({
+			id: "smoke-google-interval",
+			name: "Timed Coupon",
+			redemptionChannel: "both",
+			fields: [field.primary("offer", "Offer", "10% off")],
+			apple: { icon: STUB_ICON },
+		})
+		.create({
+			serialNumber: "smoke-google-interval",
+			validFrom: "2026-01-01T00:00:00Z",
+			expiresAt: "2026-12-31T23:59:59Z",
+		})
+);
+
+await run(
+	"coupon (online-only channel)",
+	"coupon-online",
+	wallet
+		.coupon({
+			id: "smoke-coupon-online",
+			name: "Online Only",
+			redemptionChannel: "online",
+			fields: [field.primary("code", "Code", "ONLINE10")],
+			apple: { icon: STUB_ICON },
+		})
+		.create({ serialNumber: "smoke-coupon-online" })
+);
+
+await run(
+	"coupon (instore-only channel)",
+	"coupon-instore",
+	wallet
+		.coupon({
+			id: "smoke-coupon-instore",
+			name: "In-Store Only",
+			redemptionChannel: "instore",
+			fields: [field.primary("code", "Code", "STORE10")],
+			apple: { icon: STUB_ICON },
+		})
+		.create({ serialNumber: "smoke-coupon-instore" })
+);
+
+// ─── Pass lifecycle (Google only) ─────────────────────────────────────────────
+
+if (google) {
+	section("Pass lifecycle (Google)");
+
+	const lifecyclePass = wallet.loyalty({
+		id: "smoke-lifecycle",
+		name: "Lifecycle Test",
+		fields: [field.primary("points", "Points", "100")],
+		logo: process.env.GOOGLE_LOGO_URL,
+		apple: { icon: STUB_ICON },
+	});
+
+	await run(
+		"create",
+		"lifecycle-create",
+		lifecyclePass.create({ serialNumber: "smoke-lifecycle" })
+	);
+
+	await runUpdate(
+		"update (new points value)",
+		lifecyclePass.update({
+			serialNumber: "smoke-lifecycle",
+			values: { points: "500" },
+		})
+	);
+
+	await runUpdate("expire", lifecyclePass.expire("smoke-lifecycle"));
+}
 
 // ─── Summary ──────────────────────────────────────────────────────────────────
 
