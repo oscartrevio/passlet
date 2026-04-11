@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/style/noNonNullAssertion: <> */
 "use client";
 
 import { cn } from "@passlet/ui/lib/utils";
@@ -22,9 +23,9 @@ const getOklch = (color: string, fallback: [number, number, number]) => {
 	}
 
 	return {
-		l: Number.parseFloat(oklchMatch[1]),
-		c: Number.parseFloat(oklchMatch[2]),
-		h: Number.parseFloat(oklchMatch[3]),
+		l: Number.parseFloat(oklchMatch[1]!),
+		c: Number.parseFloat(oklchMatch[2]!),
+		h: Number.parseFloat(oklchMatch[3]!),
 	};
 };
 
