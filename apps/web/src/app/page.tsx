@@ -125,14 +125,17 @@ export default function Home() {
 					</h2>
 					<div className="flex flex-col gap-2.5">
 						{features.map(({ icon, label, description }) => (
-							<div className="flex items-center justify-between" key={label}>
+							<div
+								className="group flex items-center justify-between"
+								key={label}
+							>
 								<div className="flex items-center gap-1">
 									{icon}
 									<span className="text-balance font-semibold text-[#1E1E1E] text-sm">
 										{label}
 									</span>
 								</div>
-								<span className="text-right font-medium text-[#B8B8B8] text-sm">
+								<span className="text-right font-medium text-[#B8B8B8] text-sm transition-colors duration-150 group-hover:text-[#8A8A8A]">
 									{description}
 								</span>
 							</div>
