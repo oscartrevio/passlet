@@ -19,7 +19,8 @@ beforeAll(() => {
 });
 
 afterEach(() => {
-	vi.unstubAllGlobals();
+	vi.unstubAllGlobals?.();
+	vi.restoreAllMocks();
 });
 
 function stubFetch() {
