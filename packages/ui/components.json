@@ -11,14 +11,16 @@
     "prefix": ""
   },
   "iconLibrary": "lucide",
+  "menuColor": "default",
+  "menuAccent": "subtle",
   "aliases": {
     "components": "@passlet/ui/components",
     "utils": "@passlet/ui/lib/utils",
-    "hooks": "@passlet/ui/hooks",
+    "ui": "@passlet/ui/components",
     "lib": "@passlet/ui/lib",
-    "ui": "@passlet/ui/components"
+    "hooks": "@passlet/ui/hooks"
   },
-  "menuColor": "default",
-  "menuAccent": "subtle",
-  "registries": {}
+  "registries": {
+    "@kibo-ui": "https://www.kibo-ui.com/r/{name}.json"
+  }
 }

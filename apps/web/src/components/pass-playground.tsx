@@ -1,545 +1,521 @@
 "use client";
 
-import type { CSSProperties } from "react";
-import { useEffect, useState } from "react";
+import { cn } from "@passlet/ui/lib/utils";
+import { type CSSProperties, type ReactNode, useState } from "react";
 
-/* ─── Types ───────────────────────────────────────────────── */
-type Pattern = "none" | "dots" | "lines" | "grid";
-
-/* ─── Config ──────────────────────────────────────────────── */
 const COLORS = [
-	{ label: "Green", hex: "#22C55E" },
-	{ label: "Amber", hex: "#F59E0B" },
-	{ label: "Orange", hex: "#F97316" },
-	{ label: "Red", hex: "#EF4444" },
-	{ label: "Purple", hex: "#A855F7" },
-	{ label: "Blue", hex: "#3B82F6" },
+	{
+		label: "Green",
+		value: "green",
+		color: "#22C55E",
+		text: "#F0FFF4",
+		muted: "rgba(240, 255, 244, 0.7)",
+		subtle: "rgba(240, 255, 244, 0.5)",
+	},
+	{
+		label: "Amber",
+		value: "amber",
+		color: "#F59E0B",
+		text: "#FFF7E6",
+		muted: "rgba(255, 247, 230, 0.72)",
+		subtle: "rgba(255, 247, 230, 0.5)",
+	},
+	{
+		label: "Orange",
+		value: "orange",
+		color: "#F97316",
+		text: "#FFF1E6",
+		muted: "rgba(255, 241, 230, 0.72)",
+		subtle: "rgba(255, 241, 230, 0.5)",
+	},
+	{
+		label: "Red",
+		value: "red",
+		color: "#EF4444",
+		text: "#FFEDED",
+		muted: "rgba(255, 237, 237, 0.72)",
+		subtle: "rgba(255, 237, 237, 0.5)",
+	},
+	{
+		label: "Purple",
+		value: "purple",
+		color: "#A855F7",
+		text: "#F4ECFF",
+		muted: "rgba(244, 236, 255, 0.72)",
+		subtle: "rgba(244, 236, 255, 0.5)",
+	},
+	{
+		label: "Blue",
+		value: "blue",
+		color: "#3B82F6",
+		text: "#EAF2FF",
+		muted: "rgba(234, 242, 255, 0.72)",
+		subtle: "rgba(234, 242, 255, 0.5)",
+	},
+	{
+		label: "Midnight",
+		value: "midnight",
+		color: "#1C1C1E",
+		text: "#E9E9F0",
+		muted: "rgba(233, 233, 240, 0.72)",
+		subtle: "rgba(233, 233, 240, 0.5)",
+	},
+	{
+		label: "Sand",
+		value: "sand",
+		color: "#E8E1D5",
+		text: "#4A3F2F",
+		muted: "rgba(74, 63, 47, 0.6)",
+		subtle: "rgba(74, 63, 47, 0.45)",
+	},
 ] as const;
 
-const PATTERNS: Pattern[] = ["none", "dots", "lines", "grid"];
+type ColorValue = (typeof COLORS)[number]["value"];
 
-const PLACEHOLDERS = [
-	"Michael Scott",
-	"Walter White",
-	"Tony Soprano",
-	"Saul Goodman",
-	"Don Draper",
-	"Leslie Knope",
+type PatternType = "waves" | "chessboard" | "dots" | "zigzag";
+
+const PATTERNS: { value: PatternType; label: string }[] = [
+	{ value: "waves", label: "Waves" },
+	{ value: "zigzag", label: "Zigzag" },
+	{ value: "chessboard", label: "Chess" },
+	{ value: "dots", label: "Dots" },
 ];
 
-const MONTHS = [
-	"Jan",
-	"Feb",
-	"Mar",
-	"Apr",
-	"May",
-	"Jun",
-	"Jul",
-	"Aug",
-	"Sep",
-	"Oct",
-	"Nov",
-	"Dec",
-];
+const _d = new Date();
+const TODAY = `${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][_d.getMonth()]}/${String(_d.getDate()).padStart(2, "0")}/${_d.getFullYear()}`;
 
-/* ─── Helpers ─────────────────────────────────────────────── */
-function fmtDate(d: Date) {
-	return `${MONTHS[d.getMonth()]}/${String(d.getDate()).padStart(2, "0")}/${d.getFullYear()}`;
-}
+const STROKE_WIDTH = 10;
+const DOT_R = 8;
 
-function getCookie(name: string): string | null {
-	if (typeof document === "undefined") {
-		return null;
-	}
-	const m = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
-	return m ? decodeURIComponent(m[1]) : null;
-}
+// Which patterns render as stroke vs fill
+const STROKE_PATTERNS = new Set<PatternType>(["waves", "zigzag"]);
 
-function saveCookie(name: string, value: string) {
-	const exp = new Date();
-	exp.setFullYear(exp.getFullYear() + 1);
-	// biome-ignore lint/suspicious/noDocumentCookie: direct cookie assignment is intentional here
-	document.cookie = `${name}=${encodeURIComponent(value)};expires=${exp.toUTCString()};path=/;SameSite=Lax`;
-}
-
-function randNo(): string {
-	return String(Math.floor(100_000 + Math.random() * 900_000));
-}
-
-/* ─── QR Code (visual placeholder) ───────────────────────── */
-function buildQRMatrix(): boolean[][] {
-	const N = 21;
-	const m: boolean[][] = Array.from({ length: N }, () =>
-		new Array(N).fill(false)
-	);
-	const fp = [
-		[1, 1, 1, 1, 1, 1, 1],
-		[1, 0, 0, 0, 0, 0, 1],
-		[1, 0, 1, 1, 1, 0, 1],
-		[1, 0, 1, 1, 1, 0, 1],
-		[1, 0, 1, 1, 1, 0, 1],
-		[1, 0, 0, 0, 0, 0, 1],
-		[1, 1, 1, 1, 1, 1, 1],
-	];
-	const place = (ro: number, co: number) => {
-		for (let r = 0; r < 7; r++) {
-			for (let c = 0; c < 7; c++) {
-				m[ro + r][co + c] = fp[r][c] === 1;
-			}
+function buildWaves(
+	W: number,
+	H: number,
+	options?: { targetWl?: number; targetSp?: number; amp?: number }
+): string {
+	const targetWl = options?.targetWl ?? 35;
+	const targetSp = options?.targetSp ?? 20;
+	const amp = options?.amp ?? 5;
+	// Snap wavelength and row spacing so tiles fit exactly
+	const segs = Math.round(W / targetWl);
+	const rows = Math.round(H / targetSp);
+	const wl = W / segs;
+	const sp = H / rows;
+	const hw = wl / 2;
+	const parts: string[] = [];
+	for (let r = 0; r < rows; r++) {
+		const y = sp * (r + 0.5);
+		// Start one segment before x=0 so stroke fills flush at left edge
+		let d = `M${-wl} ${y}`;
+		for (let i = -1; i <= segs; i++) {
+			const x = i * wl;
+			d += ` C${x + hw / 3} ${y - amp} ${x + (2 * hw) / 3} ${y - amp} ${x + hw} ${y}`;
+			d += ` C${x + hw + hw / 3} ${y + amp} ${x + hw + (2 * hw) / 3} ${y + amp} ${x + wl} ${y}`;
 		}
-	};
-	place(0, 0);
-	place(0, 14);
-	place(14, 0);
-	for (let i = 8; i <= 12; i++) {
-		m[6][i] = i % 2 === 0;
-		m[i][6] = i % 2 === 0;
+		parts.push(d);
 	}
-	const res = new Set<string>();
-	for (let r = 0; r <= 8; r++) {
-		for (let c = 0; c <= 8; c++) {
-			res.add(`${r},${c}`);
+	return parts.join(" ");
+}
+
+function buildChessboard(
+	W: number,
+	H: number,
+	options?: { targetSq?: number }
+): string {
+	const targetSq = options?.targetSq ?? 20;
+	const cols = Math.round(W / targetSq);
+	const rowCount = Math.round(H / targetSq);
+	const sqW = W / cols;
+	const sqH = H / rowCount;
+	const parts: string[] = [];
+	for (let row = 0; row < rowCount; row++) {
+		const startCol = row % 2 === 0 ? 0 : 1;
+		for (let col = startCol; col < cols; col += 2) {
+			const x = col * sqW;
+			const y = row * sqH;
+			parts.push(
+				`M${x} ${y} L${x + sqW} ${y} L${x + sqW} ${y + sqH} L${x} ${y + sqH} Z`
+			);
 		}
 	}
-	for (let r = 0; r <= 8; r++) {
-		for (let c = 13; c <= 20; c++) {
-			res.add(`${r},${c}`);
-		}
-	}
-	for (let r = 13; r <= 20; r++) {
-		for (let c = 0; c <= 8; c++) {
-			res.add(`${r},${c}`);
-		}
-	}
-	for (let i = 0; i < N; i++) {
-		res.add(`6,${i}`);
-		res.add(`${i},6`);
-	}
-	for (let r = 0; r < N; r++) {
-		for (let c = 0; c < N; c++) {
-			if (!res.has(`${r},${c}`)) {
-				m[r][c] = (r * 17 + c * 13 + r * c * 3) % 10 < 4;
-			}
-		}
-	}
-	return m;
+	return parts.join(" ");
 }
 
-const QR_MATRIX = buildQRMatrix();
-
-function QRPlaceholder({ size = 76 }: { size?: number }) {
-	const cell = size / 21;
-	return (
-		<svg height={size} viewBox={`0 0 ${size} ${size}`} width={size}>
-			<title>QR Code</title>
-			<rect fill="white" height={size} width={size} />
-			{QR_MATRIX.flatMap((row, r) =>
-				row.map((on, c) =>
-					on ? (
-						<rect
-							fill="#111"
-							height={cell}
-							key={`${r}-${c}`}
-							width={cell}
-							x={c * cell}
-							y={r * cell}
-						/>
-					) : null
-				)
-			)}
-		</svg>
-	);
-}
-
-/* ─── Pattern overlay ─────────────────────────────────────── */
-function getPatternStyle(pattern: Pattern): CSSProperties {
-	switch (pattern) {
-		case "dots":
-			return {
-				backgroundImage:
-					"radial-gradient(circle, rgba(255,255,255,0.22) 1.2px, transparent 1.2px)",
-				backgroundSize: "10px 10px",
-			};
-		case "lines":
-			return {
-				backgroundImage:
-					"repeating-linear-gradient(-45deg, rgba(255,255,255,0.12), rgba(255,255,255,0.12) 1px, transparent 1px, transparent 9px)",
-			};
-		case "grid":
-			return {
-				backgroundImage:
-					"linear-gradient(rgba(255,255,255,0.12) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.12) 1px, transparent 1px)",
-				backgroundSize: "14px 14px",
-			};
-		default:
-			return {};
+function buildDots(
+	W: number,
+	H: number,
+	options?: { targetSp?: number }
+): string {
+	const targetSp = options?.targetSp ?? 24;
+	const cols = Math.round(W / targetSp);
+	const rows = Math.round(H / targetSp);
+	const spX = W / cols;
+	const spY = H / rows;
+	const parts: string[] = [];
+	for (let row = 0; row < rows; row++) {
+		const offsetX = row % 2 === 0 ? 0 : spX / 2;
+		const cy = spY * (row + 0.5);
+		// One extra col to fill flush on offset rows
+		for (let col = 0; col < cols + 1; col++) {
+			const cx = spX * col + offsetX;
+			parts.push(
+				`M${cx - DOT_R} ${cy} a${DOT_R},${DOT_R} 0 1,0 ${DOT_R * 2},0 a${DOT_R},${DOT_R} 0 1,0 ${-DOT_R * 2},0`
+			);
+		}
 	}
+	return parts.join(" ");
 }
 
-/* ─── Pattern swatch icons ────────────────────────────────── */
-function PatternSwatch({
-	type,
-	selected,
-}: {
-	type: Pattern;
-	selected: boolean;
-}) {
-	const fill = selected ? "#444" : "#C0C0C0";
+function buildZigzag(
+	W: number,
+	H: number,
+	options?: { targetWl?: number; targetSp?: number; amp?: number }
+): string {
+	const targetWl = options?.targetWl ?? 24;
+	const targetSp = options?.targetSp ?? 20;
+	const amp = options?.amp ?? 6;
+	const segs = Math.round(W / targetWl);
+	const rows = Math.round(H / targetSp);
+	const wl = W / segs;
+	const sp = H / rows;
+	const hw = wl / 2;
+	const parts: string[] = [];
+	for (let r = 0; r < rows; r++) {
+		const y = sp * (r + 0.5) + amp;
+		let d = `M${-wl} ${y}`;
+		for (let i = -1; i <= segs; i++) {
+			const x = i * wl;
+			d += ` L${x + hw} ${y - amp} L${x + wl} ${y}`;
+		}
+		parts.push(d);
+	}
+	return parts.join(" ");
+}
+
+/* ─── Precomputed paths ───────────────────────────────────── */
+const STRIP_W = 256;
+const STRIP_H = 104;
+
+const STRIP_PATHS: Record<PatternType, string> = {
+	waves: buildWaves(STRIP_W, STRIP_H),
+	zigzag: buildZigzag(STRIP_W, STRIP_H),
+	chessboard: buildChessboard(STRIP_W, STRIP_H),
+	dots: buildDots(STRIP_W, STRIP_H),
+};
+
+const SWATCH_W = 30;
+const SWATCH_H = 22;
+
+const SWATCH_PATHS: Record<PatternType, string> = {
+	waves: buildWaves(SWATCH_W, SWATCH_H, {
+		targetWl: 26,
+		targetSp: 18,
+		amp: 4,
+	}),
+	zigzag: buildZigzag(SWATCH_W, SWATCH_H, {
+		targetWl: 14,
+		targetSp: 16,
+		amp: 6,
+	}),
+	chessboard: buildChessboard(SWATCH_W, SWATCH_H, { targetSq: 10 }),
+	dots: buildDots(SWATCH_W, SWATCH_H, { targetSp: 18 }),
+};
+
+function CardStrip({ pattern }: { pattern: PatternType }) {
 	return (
 		<svg
 			aria-hidden="true"
-			height={26}
-			style={{ display: "block" }}
-			viewBox="0 0 26 26"
-			width={26}
+			className="pointer-events-none w-full overflow-visible"
+			fill="none"
+			overflow="visible"
+			viewBox={`0 0 ${STRIP_W} ${STRIP_H}`}
+			xmlns="http://www.w3.org/2000/svg"
 		>
-			<rect fill={fill} height={26} rx={5} width={26} />
-			{type === "dots" &&
-				[5, 13, 21].flatMap((x) =>
-					[5, 13, 21].map((y) => (
-						<circle
-							cx={x}
-							cy={y}
-							fill="white"
-							key={`${x}-${y}`}
-							opacity={0.7}
-							r={2}
-						/>
-					))
-				)}
-			{type === "lines" &&
-				[-2, 7, 16, 25].map((offset) => (
-					<line
-						key={offset}
-						stroke="white"
-						strokeOpacity={0.55}
-						strokeWidth={1.5}
-						x1={offset - 8}
-						x2={offset + 8}
-						y1={-4}
-						y2={30}
+			<defs>
+				<clipPath id="strip-clip">
+					<rect
+						height={STRIP_H + STROKE_WIDTH}
+						width={STRIP_W}
+						x="0"
+						y={-STROKE_WIDTH / 2}
 					/>
-				))}
-			{type === "grid" && (
-				<>
-					{[9, 17].map((x) => (
-						<line
-							key={`v${x}`}
-							stroke="white"
-							strokeOpacity={0.5}
-							strokeWidth={1}
-							x1={x}
-							x2={x}
-							y1={2}
-							y2={24}
-						/>
-					))}
-					{[9, 17].map((y) => (
-						<line
-							key={`h${y}`}
-							stroke="white"
-							strokeOpacity={0.5}
-							strokeWidth={1}
-							x1={2}
-							x2={24}
-							y1={y}
-							y2={y}
-						/>
-					))}
-				</>
+				</clipPath>
+				<filter
+					colorInterpolationFilters="sRGB"
+					filterUnits="userSpaceOnUse"
+					height={STRIP_H + 2}
+					id="strip-filter"
+					width={STRIP_W}
+					x="0"
+					y="0"
+				>
+					{/* Outer white drop shadow — #FFFFFF1A 0px 0.5px 1px */}
+					<feFlood floodOpacity="0" result="BackgroundImageFix" />
+					<feColorMatrix
+						in="SourceAlpha"
+						result="hardAlpha"
+						values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0"
+					/>
+					<feOffset dy="1" />
+					<feGaussianBlur stdDeviation="0.5" />
+					<feComposite in2="hardAlpha" operator="out" />
+					<feColorMatrix values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.2 0" />
+					<feBlend in2="BackgroundImageFix" result="shadow" />
+					<feBlend in="SourceGraphic" in2="shadow" result="shape" />
+					{/* Inner black shadow — #0000001A 0px 0.5px 1px inset */}
+					<feColorMatrix
+						in="SourceAlpha"
+						result="hardAlpha"
+						values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0"
+					/>
+					<feOffset dy="1" />
+					<feGaussianBlur stdDeviation="0.5" />
+					<feComposite in2="hardAlpha" k2="-1" k3="1" operator="arithmetic" />
+					<feColorMatrix values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.2 0" />
+					<feBlend in2="shape" />
+				</filter>
+			</defs>
+			{STROKE_PATTERNS.has(pattern) ? (
+				<path
+					clipPath="url(#strip-clip)"
+					d={STRIP_PATHS[pattern]}
+					fill="none"
+					filter="url(#strip-filter)"
+					stroke="white"
+					strokeOpacity={0.01}
+					strokeWidth={pattern === "zigzag" ? STROKE_WIDTH : STROKE_WIDTH}
+				/>
+			) : (
+				<path
+					clipPath="url(#strip-clip)"
+					d={STRIP_PATHS[pattern]}
+					fill="white"
+					fillOpacity={0.01}
+					filter="url(#strip-filter)"
+					shapeRendering="crispEdges"
+				/>
 			)}
 		</svg>
 	);
 }
 
-/* ─── Card field ──────────────────────────────────────────── */
-function Field({
-	label,
-	value,
-	dim,
+function PatternSwatch({
+	pattern,
+	selected,
 }: {
-	label: string;
-	value: string;
-	dim?: boolean;
+	pattern: PatternType;
+	selected: boolean;
 }) {
 	return (
-		<div className="flex flex-col gap-0.5">
-			<span
-				style={{
-					fontSize: 8,
-					letterSpacing: "0.09em",
-					color: "rgba(255,255,255,0.5)",
-					textTransform: "uppercase",
-				}}
-			>
+		<svg
+			aria-hidden="true"
+			height={SWATCH_H}
+			viewBox={`0 0 ${SWATCH_W} ${SWATCH_H}`}
+			width={SWATCH_W}
+		>
+			<rect
+				fill={selected ? "#555" : "#C0C0C0"}
+				height={SWATCH_H}
+				rx={4}
+				width={SWATCH_W}
+			/>
+			{STROKE_PATTERNS.has(pattern) ? (
+				<path
+					d={SWATCH_PATHS[pattern]}
+					fill="none"
+					stroke="white"
+					strokeOpacity={selected ? 0.55 : 0.45}
+					strokeWidth={pattern === "zigzag" ? STROKE_WIDTH : STROKE_WIDTH}
+				/>
+			) : (
+				<path
+					d={SWATCH_PATHS[pattern]}
+					fill="white"
+					fillOpacity={selected ? 0.55 : 0.45}
+					shapeRendering="crispEdges"
+				/>
+			)}
+		</svg>
+	);
+}
+
+function Field({ label, value }: { label: string; value: string }) {
+	return (
+		<div className="flex flex-col">
+			<span className="text-(--pass-text-muted) text-[8px] uppercase tracking-normal">
 				{label}
 			</span>
-			<span
-				style={{
-					fontSize: 13,
-					fontWeight: 600,
-					color: dim ? "rgba(255,255,255,0.4)" : "white",
-					lineHeight: 1.25,
-					transition: "color 0.2s ease",
-				}}
-			>
+			<span className="font-semibold text-(--pass-text) text-xs leading-tighter">
 				{value}
 			</span>
 		</div>
 	);
 }
 
-/* ─── Wallet Card ─────────────────────────────────────────── */
-interface CardProps {
-	color: string;
-	memberNo: string;
-	name: string;
-	pattern: Pattern;
-	placeholder: string;
-	since: string;
-}
-
-function WalletCard({
-	name,
+function EditableField({
+	label,
+	value,
+	onChange,
 	placeholder,
-	color,
-	pattern,
-	memberNo,
-	since,
-}: CardProps) {
-	const displayName = name || placeholder;
-	const isDim = !name;
-
+}: {
+	label: string;
+	value: string;
+	onChange: (v: string) => void;
+	placeholder?: string;
+}) {
+	const isEmpty = value.trim().length === 0;
 	return (
-		<div
-			className="relative flex-shrink-0 select-none overflow-hidden"
-			style={{
-				width: 210,
-				height: 328,
-				borderRadius: 22,
-				backgroundColor: color,
-				boxShadow:
-					"0 8px 32px rgba(0,0,0,0.16), 0 2px 8px rgba(0,0,0,0.10), inset 0 1px 0 rgba(255,255,255,0.15)",
-				transition: "background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
-			}}
-		>
-			{/* Inner highlight */}
-			<div
-				className="pointer-events-none absolute inset-0"
-				style={{
-					background:
-						"linear-gradient(140deg, rgba(255,255,255,0.14) 0%, transparent 55%)",
-					borderRadius: 22,
-				}}
+		<div className="flex flex-col">
+			<span className="text-(--pass-text-muted) text-[8px] uppercase tracking-normal">
+				{label}
+			</span>
+			<input
+				className={cn(
+					"w-24 bg-transparent font-semibold text-(--pass-text) text-xs leading-tighter caret-(--pass-text) outline-none placeholder:text-(--pass-text-subtle)",
+					isEmpty && "animate-pulse"
+				)}
+				maxLength={24}
+				onChange={(e) => onChange(e.target.value)}
+				placeholder={placeholder}
+				type="text"
+				value={value}
 			/>
-
-			{/* Pattern overlay */}
-			{pattern !== "none" && (
-				<div
-					className="pointer-events-none absolute inset-0"
-					style={getPatternStyle(pattern)}
-				/>
-			)}
-
-			{/* Content */}
-			<div
-				className="relative flex h-full flex-col"
-				style={{ padding: "18px 20px 16px" }}
-			>
-				{/* Header */}
-				<div className="flex items-start justify-between">
-					<span
-						style={{
-							fontWeight: 700,
-							fontSize: 15,
-							color: "white",
-							letterSpacing: "-0.02em",
-						}}
-					>
-						Passlet
-					</span>
-					<div className="flex flex-col items-end">
-						<span
-							style={{
-								fontSize: 7.5,
-								letterSpacing: "0.1em",
-								color: "rgba(255,255,255,0.5)",
-								textTransform: "uppercase",
-							}}
-						>
-							No.
-						</span>
-						<span
-							style={{
-								fontWeight: 500,
-								fontSize: 11,
-								color: "white",
-								fontVariantNumeric: "tabular-nums",
-								lineHeight: 1.2,
-							}}
-						>
-							{memberNo}
-						</span>
-					</div>
-				</div>
-
-				{/* Fields */}
-				<div className="mt-auto flex flex-col gap-3">
-					<div className="flex gap-5">
-						<Field dim={isDim} label="Member" value={displayName} />
-						<Field label="Role" value="Early Adopter" />
-					</div>
-					<Field label="Since" value={since} />
-				</div>
-
-				{/* QR code */}
-				<div className="mt-4 flex justify-center">
-					<div
-						style={{
-							background: "rgba(255,255,255,0.96)",
-							borderRadius: 10,
-							padding: 7,
-						}}
-					>
-						<QRPlaceholder size={74} />
-					</div>
-				</div>
-			</div>
 		</div>
 	);
 }
 
-/* ─── Main component ──────────────────────────────────────── */
-export function PassPlayground() {
+export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
+	const memberNo = "123456";
+	const since = TODAY;
 	const [name, setName] = useState("");
-	const [color, setColor] = useState(COLORS[5].hex);
-	const [pattern, setPattern] = useState<Pattern>("none");
-	const [memberNo, setMemberNo] = useState("------");
-	const [placeholder, setPlaceholder] = useState(PLACEHOLDERS[0]);
-	const since = fmtDate(new Date());
+	const [color, setColor] = useState<ColorValue>("blue");
+	const [pattern, setPattern] = useState<PatternType>("waves");
 
-	useEffect(() => {
-		setPlaceholder(
-			PLACEHOLDERS[Math.floor(Math.random() * PLACEHOLDERS.length)]
-		);
-		const saved = getCookie("passlet_no");
-		setMemberNo(saved ?? randNo());
-	}, []);
-
-	function persist(currentNo: string) {
-		if (!getCookie("passlet_no")) {
-			saveCookie("passlet_no", currentNo);
-		}
-	}
+	const activeColor = COLORS.find((c) => c.value === color) ?? COLORS[5];
+	const [colorTransition, setColorTransition] = useState(false);
+	const cardStyle = {
+		backgroundColor: activeColor.color,
+		"--pass-text": activeColor.text,
+		"--pass-text-muted": activeColor.muted,
+		"--pass-text-subtle": activeColor.subtle,
+	} as CSSProperties;
 
 	return (
-		<div className="flex gap-6">
-			<WalletCard
-				color={color}
-				memberNo={memberNo}
-				name={name}
-				pattern={pattern}
-				placeholder={placeholder}
-				since={since}
-			/>
+		<div className="flex items-start gap-6">
+			{/* Card */}
+			<div
+				className={cn(
+					"relative aspect-181/251 w-[256px] shrink-0 select-none overflow-hidden rounded-lg border-overlay text-(--pass-text)",
+					colorTransition && "transition-colors duration-300"
+				)}
+				style={cardStyle}
+			>
+				{/* Noise overlay */}
+				<div
+					aria-hidden="true"
+					className="pointer-events-none absolute inset-0 z-10 opacity-10 mix-blend-overlay"
+					style={{
+						backgroundImage:
+							"url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E\")",
+						backgroundSize: "200px 200px",
+					}}
+				/>
+				<div className="flex h-full flex-col">
+					<div className="flex items-start justify-between p-3">
+						<span className="font-semibold">Passlet</span>
+						<div className="flex flex-col items-end">
+							<span className="text-(--pass-text-subtle) text-[8px] uppercase tracking-tight">
+								No.
+							</span>
+							<span className="font-medium text-[11px] tabular-nums leading-[1.2]">
+								{memberNo}
+							</span>
+						</div>
+					</div>
 
-			<div className="flex flex-1 flex-col gap-5 pt-1">
-				{/* Name */}
-				<div className="flex flex-col gap-1.5">
-					<label className="text-[#707070] text-xs" htmlFor="pass-name">
-						Name
-					</label>
-					<input
-						autoComplete="off"
-						className="w-full rounded-lg bg-white px-3 py-2 text-[#1E1E1E] outline-none transition-shadow placeholder:text-[#C8C8C8] focus:ring-2 focus:ring-blue-500/20"
-						id="pass-name"
-						maxLength={28}
-						onChange={(e) => {
-							setName(e.target.value);
-							persist(memberNo);
-						}}
-						placeholder={placeholder}
-						style={{
-							fontSize: 16,
-							boxShadow: "#0000000F 0px 0px 0px 1px, #00000008 0px 1px 2px",
-						}}
-						type="text"
-						value={name}
-					/>
+					<CardStrip pattern={pattern} />
+
+					<div className="flex flex-col gap-1 p-3">
+						<div className="flex justify-between">
+							<EditableField
+								label="Member"
+								onChange={setName}
+								placeholder="Your Name"
+								value={name}
+							/>
+							<Field label="Since" value={since} />
+						</div>
+					</div>
+
+					<div className="mt-auto flex justify-center pb-3">
+						<div className="size-24 overflow-hidden rounded-sm bg-white">
+							{qrSlot}
+						</div>
+					</div>
 				</div>
+			</div>
 
+			{/* Controls */}
+			<div className="flex flex-col gap-4 pt-1">
 				{/* Color */}
 				<div className="flex flex-col gap-2">
-					<span className="text-[#707070] text-xs">Background Color</span>
-					<div className="flex flex-wrap gap-1.5">
-						{COLORS.map((c) => (
-							<button
-								aria-label={`${c.label} color`}
-								className="cursor-pointer touch-manipulation"
-								key={c.hex}
-								onClick={() => {
-									setColor(c.hex);
-									persist(memberNo);
-								}}
-								style={{
-									width: 36,
-									height: 36,
-									display: "flex",
-									alignItems: "center",
-									justifyContent: "center",
-								}}
-								type="button"
-							>
-								<span
-									className="block rounded-full"
-									style={{
-										width: 22,
-										height: 22,
-										backgroundColor: c.hex,
-										boxShadow:
-											color === c.hex
-												? `0 0 0 2px white, 0 0 0 3.5px ${c.hex}`
-												: "0 0 0 1.5px rgba(0,0,0,0.08)",
-										transition: "box-shadow 0.15s ease",
+					<p className="font-medium text-[#707070] text-xs">Background Color</p>
+					<div className={cn("flex flex-wrap gap-1.5")}>
+						{COLORS.map((c) => {
+							const isSelected = color === c.value;
+							return (
+								<button
+									aria-label={`Select ${c.label} color`}
+									aria-pressed={isSelected}
+									className="relative size-5 cursor-pointer rounded-sm border-overlay transition-transform duration-150 ease-out after:absolute after:-inset-1.5 after:content-[''] focus:outline-none focus-visible:ring-2 focus-visible:ring-current focus-visible:ring-offset-2 active:scale-95"
+									key={c.value}
+									onClick={() => {
+										setColorTransition(true);
+										setColor(c.value);
 									}}
+									style={{
+										backgroundColor: c.color,
+										color: c.color,
+										...(isSelected && {
+											boxShadow: `inset 0 0 0 2px #F5F5F5, 0 0 0 2px ${c.color}`,
+										}),
+									}}
+									title={c.label}
+									type="button"
 								/>
-							</button>
-						))}
+							);
+						})}
 					</div>
 				</div>
 
 				{/* Pattern */}
 				<div className="flex flex-col gap-2">
-					<span className="text-[#707070] text-xs">Pattern</span>
+					<p className="font-medium text-[#707070] text-xs">Pattern</p>
 					<div className="flex gap-1.5">
-						{PATTERNS.map((p) => (
-							<button
-								aria-label={`${p === "none" ? "No" : p} pattern`}
-								className="cursor-pointer touch-manipulation"
-								key={p}
-								onClick={() => {
-									setPattern(p);
-									persist(memberNo);
-								}}
-								style={{
-									width: 44,
-									height: 44,
-									display: "flex",
-									alignItems: "center",
-									justifyContent: "center",
-									borderRadius: 8,
-									outline:
-										pattern === p
+						{PATTERNS.map((p) => {
+							const isSelected = pattern === p.value;
+							return (
+								<button
+									aria-label={`Select ${p.label} pattern`}
+									aria-pressed={isSelected}
+									className="relative cursor-pointer overflow-hidden rounded border-overlay transition-transform duration-150 ease-out after:absolute after:-inset-1.5 after:content-[''] focus:outline-none active:scale-95"
+									key={p.value}
+									onClick={() => setPattern(p.value)}
+									style={{
+										outline: isSelected
 											? "2px solid #1E1E1E"
 											: "2px solid transparent",
-									outlineOffset: 2,
-									transition: "outline-color 0.15s ease",
-								}}
-								type="button"
-							>
-								<PatternSwatch selected={pattern === p} type={p} />
-							</button>
-						))}
+										outlineOffset: 2,
+									}}
+									title={p.label}
+									type="button"
+								>
+									<PatternSwatch pattern={p.value} selected={isSelected} />
+								</button>
+							);
+						})}
 					</div>
 				</div>
 			</div>
