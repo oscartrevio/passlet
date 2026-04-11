@@ -373,13 +373,17 @@ function EditableField({
 	onChange: (v: string) => void;
 	placeholder?: string;
 }) {
+	const isEmpty = value.trim().length === 0;
 	return (
 		<div className="flex flex-col">
 			<span className="text-(--pass-text-muted) text-[8px] uppercase tracking-normal">
 				{label}
 			</span>
 			<input
-				className="w-24 bg-transparent font-semibold text-(--pass-text) text-xs leading-tighter caret-(--pass-text) outline-none placeholder:text-(--pass-text-subtle)"
+				className={cn(
+					"w-24 bg-transparent font-semibold text-(--pass-text) text-xs leading-tighter caret-(--pass-text) outline-none placeholder:text-(--pass-text-subtle)",
+					isEmpty && "animate-pulse"
+				)}
 				maxLength={24}
 				onChange={(e) => onChange(e.target.value)}
 				placeholder={placeholder}
