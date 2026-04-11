@@ -108,10 +108,14 @@ const DOT_R = 6;
 // Which patterns render as stroke vs fill
 const STROKE_PATTERNS = new Set<PatternType>(["waves", "zigzag"]);
 
-function buildWaves(W: number, H: number): string {
-	const targetWl = 35;
-	const targetSp = 20;
-	const amp = 5;
+function buildWaves(
+	W: number,
+	H: number,
+	options?: { targetWl?: number; targetSp?: number; amp?: number }
+): string {
+	const targetWl = options?.targetWl ?? 35;
+	const targetSp = options?.targetSp ?? 20;
+	const amp = options?.amp ?? 5;
 	// Snap wavelength and row spacing so tiles fit exactly
 	const segs = Math.round(W / targetWl);
 	const rows = Math.round(H / targetSp);
@@ -133,8 +137,12 @@ function buildWaves(W: number, H: number): string {
 	return parts.join(" ");
 }
 
-function buildChessboard(W: number, H: number): string {
-	const targetSq = 20;
+function buildChessboard(
+	W: number,
+	H: number,
+	options?: { targetSq?: number }
+): string {
+	const targetSq = options?.targetSq ?? 20;
 	const cols = Math.round(W / targetSq);
 	const rowCount = Math.round(H / targetSq);
 	const sqW = W / cols;
@@ -153,8 +161,12 @@ function buildChessboard(W: number, H: number): string {
 	return parts.join(" ");
 }
 
-function buildDots(W: number, H: number): string {
-	const targetSp = 18;
+function buildDots(
+	W: number,
+	H: number,
+	options?: { targetSp?: number }
+): string {
+	const targetSp = options?.targetSp ?? 18;
 	const cols = Math.round(W / targetSp);
 	const rows = Math.round(H / targetSp);
 	const spX = W / cols;
@@ -174,10 +186,14 @@ function buildDots(W: number, H: number): string {
 	return parts.join(" ");
 }
 
-function buildZigzag(W: number, H: number): string {
-	const targetWl = 20;
-	const targetSp = 18;
-	const amp = 6;
+function buildZigzag(
+	W: number,
+	H: number,
+	options?: { targetWl?: number; targetSp?: number; amp?: number }
+): string {
+	const targetWl = options?.targetWl ?? 20;
+	const targetSp = options?.targetSp ?? 18;
+	const amp = options?.amp ?? 6;
 	const segs = Math.round(W / targetWl);
 	const rows = Math.round(H / targetSp);
 	const wl = W / segs;
@@ -211,10 +227,18 @@ const SWATCH_W = 30;
 const SWATCH_H = 22;
 
 const SWATCH_PATHS: Record<PatternType, string> = {
-	waves: buildWaves(SWATCH_W, SWATCH_H),
-	zigzag: buildZigzag(SWATCH_W, SWATCH_H),
-	chessboard: buildChessboard(SWATCH_W, SWATCH_H),
-	dots: buildDots(SWATCH_W, SWATCH_H),
+	waves: buildWaves(SWATCH_W, SWATCH_H, {
+		targetWl: 26,
+		targetSp: 18,
+		amp: 4,
+	}),
+	zigzag: buildZigzag(SWATCH_W, SWATCH_H, {
+		targetWl: 14,
+		targetSp: 16,
+		amp: 6,
+	}),
+	chessboard: buildChessboard(SWATCH_W, SWATCH_H, { targetSq: 10 }),
+	dots: buildDots(SWATCH_W, SWATCH_H, { targetSp: 18 }),
 };
 
 function CardStrip({ pattern }: { pattern: PatternType }) {
