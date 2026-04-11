@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@passlet/ui/lib/utils";
-import { useEffect, useState } from "react";
+import { useRef, useState } from "react";
 import { TextMorph } from "torph/react";
 
 type PackageManager = "npm" | "pnpm" | "yarn" | "bun";
@@ -16,17 +16,13 @@ const COMMANDS: Record<PackageManager, string> = {
 export function InstallCommand() {
 	const [pm, setPm] = useState<PackageManager>("npm");
 	const [copied, setCopied] = useState(false);
-	const [mounted, setMounted] = useState(false);
-
-	useEffect(() => setMounted(true), []);
+	const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
 	const copy = () => {
-		if (copied) {
-			return;
-		}
 		navigator.clipboard.writeText(COMMANDS[pm]);
 		setCopied(true);
-		setTimeout(() => setCopied(false), 3000);
+		clearTimeout(timeoutRef.current);
+		timeoutRef.current = setTimeout(() => setCopied(false), 2500);
 	};
 
 	return (
@@ -55,15 +51,15 @@ export function InstallCommand() {
 						"#0000000F 0px 0px 0px 1px, #0000000F 0px 1px 2px -1px, #0000000A 0px 2px 4px",
 				}}
 			>
-				<div className="flex min-w-0 items-center gap-1.5">
-					<span className="shrink-0 text-[#9A9A9A] text-sm">$</span>
-					<span className="text-[#1E1E1E] text-sm">
-						{mounted ? <TextMorph>{COMMANDS[pm]}</TextMorph> : COMMANDS[pm]}
-					</span>
+				<div className="flex items-center gap-1.5">
+					<span className="text-[#9A9A9A] text-sm">$</span>
+					<div className="flex text-[#1E1E1E] text-sm">
+						<TextMorph>{COMMANDS[pm]}</TextMorph>
+					</div>
 				</div>
 				<button
 					aria-label="Copy install command"
-					className="relative shrink-0 cursor-pointer touch-manipulation"
+					className="group relative shrink-0 cursor-pointer touch-manipulation"
 					onClick={copy}
 					type="button"
 				>
@@ -89,7 +85,7 @@ export function InstallCommand() {
 						</div>
 						<div
 							className={cn(
-								"text-[#B8B8B8] transition-[opacity,filter,scale] duration-300 ease-in-out will-change-[opacity,filter,scale]",
+								"text-[#B8B8B8] transition-[opacity,filter,scale,color] duration-300 ease-in-out will-change-[opacity,filter,scale] group-hover:text-[#707070]",
 								copied
 									? "scale-[0.25] opacity-0 blur-sm"
 									: "scale-100 opacity-100 blur-0"

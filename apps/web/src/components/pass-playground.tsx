@@ -1,12 +1,9 @@
 "use client";
 
 import { cn } from "@passlet/ui/lib/utils";
-import type { ReactNode } from "react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
-/* ─── Colors ──────────────────────────────────────────────── */
 const COLORS = [
-	{ label: "Sand", value: "sand", color: "#E8E1D5" },
 	{ label: "Green", value: "green", color: "#22C55E" },
 	{ label: "Amber", value: "amber", color: "#F59E0B" },
 	{ label: "Orange", value: "orange", color: "#F97316" },
@@ -14,11 +11,11 @@ const COLORS = [
 	{ label: "Purple", value: "purple", color: "#A855F7" },
 	{ label: "Blue", value: "blue", color: "#3B82F6" },
 	{ label: "Midnight", value: "midnight", color: "#1C1C1E" },
+	{ label: "Sand", value: "sand", color: "#E8E1D5" },
 ] as const;
 
 type ColorValue = (typeof COLORS)[number]["value"];
 
-/* ─── Patterns ────────────────────────────────────────────── */
 type PatternType = "waves" | "chessboard";
 
 const PATTERNS: { value: PatternType; label: string }[] = [
@@ -26,7 +23,6 @@ const PATTERNS: { value: PatternType; label: string }[] = [
 	{ value: "chessboard", label: "Chess" },
 ];
 
-/* ─── Date ────────────────────────────────────────────────── */
 const MONTHS = [
 	"Jan",
 	"Feb",
@@ -113,7 +109,6 @@ const SWATCH_PATHS: Record<PatternType, string> = {
 	chessboard: buildChessboard(SWATCH_W, SWATCH_H),
 };
 
-/* ─── Card strip ──────────────────────────────────────────── */
 function CardStrip({ pattern }: { pattern: PatternType }) {
 	return (
 		<svg
@@ -182,7 +177,6 @@ function CardStrip({ pattern }: { pattern: PatternType }) {
 	);
 }
 
-/* ─── Pattern swatch ──────────────────────────────────────── */
 function PatternSwatch({
 	pattern,
 	selected,
@@ -223,7 +217,6 @@ function PatternSwatch({
 	);
 }
 
-/* ─── Card field ──────────────────────────────────────────── */
 function Field({ label, value }: { label: string; value: string }) {
 	return (
 		<div className="flex flex-col">
@@ -265,7 +258,6 @@ function EditableField({
 	);
 }
 
-/* ─── Playground ──────────────────────────────────────────── */
 export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 	const memberNo = "123456";
 	const since = fmtDate(new Date());
@@ -274,12 +266,16 @@ export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 	const [pattern, setPattern] = useState<PatternType>("waves");
 
 	const activeColor = COLORS.find((c) => c.value === color)?.color ?? "#3B82F6";
+	const [colorTransition, setColorTransition] = useState(false);
 
 	return (
 		<div className="flex items-start gap-6">
 			{/* Card */}
 			<div
-				className="relative aspect-181/251 w-[256px] shrink-0 select-none overflow-hidden rounded-lg transition-colors duration-300"
+				className={cn(
+					"relative aspect-181/251 w-[256px] shrink-0 select-none overflow-hidden rounded-lg",
+					colorTransition && "transition-colors duration-300"
+				)}
 				style={{ backgroundColor: activeColor }}
 			>
 				{/* Noise overlay */}
@@ -320,7 +316,9 @@ export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 					</div>
 
 					<div className="mt-auto flex justify-center pb-3">
-						<div className="rounded-sm bg-white p-2">{qrSlot}</div>
+						<div className="size-24 overflow-hidden rounded-sm bg-white">
+							{qrSlot}
+						</div>
 					</div>
 				</div>
 			</div>
@@ -339,7 +337,10 @@ export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 									aria-pressed={isSelected}
 									className="relative size-5 cursor-pointer rounded-md transition-transform duration-150 ease-out after:absolute after:-inset-1.5 after:content-[''] focus:outline-none focus-visible:ring-2 focus-visible:ring-current focus-visible:ring-offset-2 active:scale-95"
 									key={c.value}
-									onClick={() => setColor(c.value)}
+									onClick={() => {
+										setColorTransition(true);
+										setColor(c.value);
+									}}
 									style={{
 										backgroundColor: c.color,
 										color: c.color,
