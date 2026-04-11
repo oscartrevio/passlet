@@ -516,7 +516,6 @@ export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 								</button>
 							);
 						})}
-						https://github.com/oscartrevio/passlet{" "}
 					</div>
 				</div>
 			</div>
