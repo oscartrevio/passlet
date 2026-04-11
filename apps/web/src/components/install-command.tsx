@@ -31,7 +31,7 @@ export function InstallCommand() {
 				{(["npm", "pnpm", "yarn", "bun"] as PackageManager[]).map((p) => (
 					<button
 						className={cn(
-							"hit-area-2 cursor-pointer touch-manipulation font-medium text-xs transition-colors",
+							"hit-area-2 cursor-pointer touch-manipulation font-medium text-xs transition-colors duration-150 ease-out",
 							pm === p
 								? "text-[#1E1E1E]"
 								: "text-[#B8B8B8] hover:text-[#707070]"
@@ -44,7 +44,7 @@ export function InstallCommand() {
 					</button>
 				))}
 			</div>
-			<div className="hover:hover-border-shadow flex w-full items-center justify-between overflow-hidden rounded-xl border-shadow bg-white p-3 transition-shadow duration-150">
+			<div className="hover:hover-border-shadow flex w-full items-center justify-between overflow-hidden rounded-xl border-shadow bg-white p-3 transition-shadow duration-150 ease-out">
 				<div className="flex items-center gap-1.5">
 					<span className="text-[#9A9A9A] text-sm">$</span>
 					<div className="flex text-[#1E1E1E] text-sm">
