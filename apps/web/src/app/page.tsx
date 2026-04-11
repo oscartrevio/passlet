@@ -126,7 +126,7 @@ export default function Home() {
 					<div className="flex flex-col gap-2.5">
 						{features.map(({ icon, label, description }) => (
 							<div
-								className="group flex items-center justify-between"
+								className="group hit-area-y-1.5 flex items-center justify-between"
 								key={label}
 							>
 								<div className="flex items-center gap-1">
@@ -135,7 +135,7 @@ export default function Home() {
 										{label}
 									</span>
 								</div>
-								<span className="text-right font-medium text-[#B8B8B8] text-sm transition-colors duration-150 group-hover:text-[#8A8A8A]">
+								<span className="text-right font-medium text-[#B8B8B8] text-sm transition-colors duration-150 ease-out group-hover:text-[#8A8A8A]">
 									{description}
 								</span>
 							</div>
