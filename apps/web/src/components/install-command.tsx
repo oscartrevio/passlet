@@ -44,13 +44,7 @@ export function InstallCommand() {
 					</button>
 				))}
 			</div>
-			<div
-				className="flex w-full items-center justify-between overflow-hidden rounded-xl bg-white px-3.5 py-3"
-				style={{
-					boxShadow:
-						"#0000000F 0px 0px 0px 1px, #0000000F 0px 1px 2px -1px, #0000000A 0px 2px 4px",
-				}}
-			>
+			<div className="hover:hover-border-shadow flex w-full items-center justify-between overflow-hidden rounded-xl border-shadow bg-white p-3 transition-shadow duration-150">
 				<div className="flex items-center gap-1.5">
 					<span className="text-[#9A9A9A] text-sm">$</span>
 					<div className="flex text-[#1E1E1E] text-sm">
