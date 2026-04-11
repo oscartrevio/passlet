@@ -14,13 +14,14 @@
 
 ## The problem
 
-Apple Wallet and Google Wallet have nothing in common.
+Creating wallet passes is painful.
 
+Apple Wallet and Google Wallet have nothing in common.
 Apple uses `.pkpass` files — a signed ZIP bundle with a JSON manifest, PKCS#7 certificates, and SHA hashes for every asset. Google uses a REST API with service accounts, JWTs, and a completely different data model. Different field names. Different auth flows. Different everything.
 
 If your app supports both, you're building two separate systems.
 
-Passlet fixes that. Define a pass once, get both outputs.
+Passlet fixes that. One API that handles the signing, formatting, and platform translation for you — whether you need one wallet or both.
 
 ## Install
 
