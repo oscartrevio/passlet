@@ -51,6 +51,8 @@ export async function createPassAction(
 			id: `passlet-${input.memberNo}`,
 			name: "Passlet",
 			color: input.color,
+			logo:
+				input.provider === "google" ? process.env.GOOGLE_LOGO_URL : undefined,
 			banner: input.banner ? Buffer.from(input.banner, "base64") : undefined,
 			fields: [
 				field.header("memberId", "ID"),
