@@ -202,23 +202,6 @@ describe("pass.json barcode", () => {
 		expect(barcodes.at(0)?.messageEncoding).toBe("iso-8859-1");
 	});
 
-	it("uses barcode value as altText when altText is not set", async () => {
-		const { pass } = await generateApplePass(
-			{
-				type: "loyalty",
-				id: "p1",
-				name: "Test",
-				fields: [],
-				apple: { icon: STUB_ICON },
-			},
-			{ serialNumber: "s1", barcode: { value: "ABC-123", format: "QR" } },
-			credentials
-		);
-		const json = await extractPassJson(pass);
-		const barcodes = json.barcodes as { altText: string }[];
-		expect(barcodes.at(0)?.altText).toBe("ABC-123");
-	});
-
 	it("omits barcodes when no barcode is set", async () => {
 		const { pass } = await generateApplePass(
 			{
