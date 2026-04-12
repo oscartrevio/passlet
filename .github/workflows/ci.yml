@@ -26,7 +26,7 @@ jobs:
         run: pnpm biome check --no-errors-on-unmatched --files-ignore-unknown=true
 
       - name: Type check
-        run: pnpm check-types --filter=!@passlet/ui
+        run: pnpm check-types
 
       - name: Test
         run: pnpm -F passlet test
