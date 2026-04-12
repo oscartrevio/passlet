@@ -1,8 +1,10 @@
 import { Button } from "@passlet/ui/components/button";
 
-export function AddToGoogleWalletButton() {
+export function AddToGoogleWalletButton(
+	props: React.ComponentPropsWithoutRef<typeof Button>
+) {
 	return (
-		<Button className="" variant="default">
+		<Button className="" variant="default" {...props}>
 			<svg
 				aria-hidden="true"
 				fill="white"
