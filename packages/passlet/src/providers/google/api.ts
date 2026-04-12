@@ -124,12 +124,17 @@ export async function ensureClass(
 	);
 
 	if (existing.ok) {
-		await existing.body?.cancel();
-		// Class exists — PUT the full body so template changes (images, colors) are reflected.
-		// Strip reviewStatus: the API rejects PUT with APPROVED (only Google's review process
-		// may set that), and sending UNDER_REVIEW would demote an approved class. Omitting it
-		// leaves whatever status Google has on file unchanged.
-		const { reviewStatus: _removed, ...updateBody } = classBody;
+		const existingClass = (await existing.json()) as Record<string, unknown>;
+		// Class exists — PUT the body so template updates are reflected.
+		// Google Wallet requires the full body for PUT requests, so we merge
+		// our new attributes with the existing class from their API.
+		const updateBody = { ...existingClass, ...classBody };
+
+		// Note: reviewStatus must be 'UNDER_REVIEW' or 'DRAFT' for updates
+		if ("reviewStatus" in updateBody && updateBody.reviewStatus !== "DRAFT") {
+			updateBody.reviewStatus = "UNDER_REVIEW";
+		}
+
 		await assertOk(
 			await walletRequest(
 				"PUT",
