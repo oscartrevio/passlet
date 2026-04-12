@@ -620,7 +620,7 @@ export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 			</div>
 
 			{/* Controls */}
-			<div className="flex flex-col gap-4 self-stretch pt-1">
+			<div className="flex flex-col gap-4 pt-1">
 				<div className="flex flex-col gap-2">
 					<p className="font-medium text-[#707070] text-xs">Background Color</p>
 					<div className="flex flex-wrap gap-1.5">
@@ -736,22 +736,21 @@ export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 				</div>
 
 				<Button
-					className="mt-auto flex rounded-full bg-[#1E1E1E] font-medium text-white hover:bg-[#2E2E2E] active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+					className="mt-auto rounded-full bg-[#1E1E1E] font-medium text-white hover:bg-[#2E2E2E] active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
 					disabled={creating}
 					onClick={handleCreatePass}
-					type="button"
 				>
 					<svg
 						aria-hidden="true"
 						fill="currentColor"
-						height="18"
+						height="20"
 						viewBox="0 0 640 640"
-						width="18"
+						width="20"
 						xmlns="http://www.w3.org/2000/svg"
 					>
 						<path d="M128 96C92.7 96 64 124.7 64 160L64 448C64 483.3 92.7 512 128 512L512 512C547.3 512 576 483.3 576 448L576 256C576 220.7 547.3 192 512 192L136 192C122.7 192 112 181.3 112 168C112 154.7 122.7 144 136 144L520 144C533.3 144 544 133.3 544 120C544 106.7 533.3 96 520 96L128 96zM480 320C497.7 320 512 334.3 512 352C512 369.7 497.7 384 480 384C462.3 384 448 369.7 448 352C448 334.3 462.3 320 480 320z" />
 					</svg>
-					<span>Add to Wallet</span>
+					Add to Wallet
 				</Button>
 			</div>
 		</div>
