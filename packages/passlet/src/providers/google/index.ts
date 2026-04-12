@@ -189,9 +189,19 @@ function buildAppLinkData(d: {
 function buildClassBody(pass: PassConfig): Record<string, unknown> {
 	const logo = imageUri(pass.logo);
 	const wideLogo = imageUri(pass.google?.wideLogo);
-	const hero = imageUri(
-		typeof pass.banner === "string" ? pass.banner : undefined
-	);
+	// Google needs a URL for heroImage — extract it from a plain string or an ImageSet base.
+	// Bytes are not accepted by the Google Wallet API.
+	let bannerUrl: string | undefined;
+	if (typeof pass.banner === "string") {
+		bannerUrl = pass.banner;
+	} else if (
+		pass.banner &&
+		!(pass.banner instanceof Uint8Array) &&
+		typeof pass.banner.base === "string"
+	) {
+		bannerUrl = pass.banner.base;
+	}
+	const hero = imageUri(bannerUrl);
 
 	const body: Record<string, unknown> = {
 		...buildClassTypeFields(pass, pass.locales),
