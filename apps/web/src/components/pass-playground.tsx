@@ -1,7 +1,16 @@
 "use client";
 
+import { Button } from "@passlet/ui/components/button";
 import { cn } from "@passlet/ui/lib/utils";
 import { type CSSProperties, type ReactNode, useState } from "react";
+import { createPassAction } from "@/actions/create-pass";
+
+// ─── Types ────────────────────────────────────────────────────
+
+type PatternType = "waves" | "zigzag" | "chessboard" | "dots";
+type ColorValue = (typeof COLORS)[number]["value"];
+
+// ─── Data ─────────────────────────────────────────────────────
 
 const COLORS = [
 	{
@@ -9,70 +18,66 @@ const COLORS = [
 		value: "green",
 		color: "#22C55E",
 		text: "#F0FFF4",
-		muted: "rgba(240, 255, 244, 0.7)",
-		subtle: "rgba(240, 255, 244, 0.5)",
+		muted: "rgba(240,255,244,0.7)",
+		subtle: "rgba(240,255,244,0.5)",
 	},
 	{
 		label: "Amber",
 		value: "amber",
 		color: "#F59E0B",
 		text: "#FFF7E6",
-		muted: "rgba(255, 247, 230, 0.72)",
-		subtle: "rgba(255, 247, 230, 0.5)",
+		muted: "rgba(255,247,230,0.72)",
+		subtle: "rgba(255,247,230,0.5)",
 	},
 	{
 		label: "Orange",
 		value: "orange",
 		color: "#F97316",
 		text: "#FFF1E6",
-		muted: "rgba(255, 241, 230, 0.72)",
-		subtle: "rgba(255, 241, 230, 0.5)",
+		muted: "rgba(255,241,230,0.72)",
+		subtle: "rgba(255,241,230,0.5)",
 	},
 	{
 		label: "Red",
 		value: "red",
 		color: "#EF4444",
 		text: "#FFEDED",
-		muted: "rgba(255, 237, 237, 0.72)",
-		subtle: "rgba(255, 237, 237, 0.5)",
+		muted: "rgba(255,237,237,0.72)",
+		subtle: "rgba(255,237,237,0.5)",
 	},
 	{
 		label: "Purple",
 		value: "purple",
 		color: "#A855F7",
 		text: "#F4ECFF",
-		muted: "rgba(244, 236, 255, 0.72)",
-		subtle: "rgba(244, 236, 255, 0.5)",
+		muted: "rgba(244,236,255,0.72)",
+		subtle: "rgba(244,236,255,0.5)",
 	},
 	{
 		label: "Blue",
 		value: "blue",
 		color: "#3B82F6",
 		text: "#EAF2FF",
-		muted: "rgba(234, 242, 255, 0.72)",
-		subtle: "rgba(234, 242, 255, 0.5)",
+		muted: "rgba(234,242,255,0.72)",
+		subtle: "rgba(234,242,255,0.5)",
 	},
 	{
 		label: "Midnight",
 		value: "midnight",
 		color: "#1C1C1E",
 		text: "#E9E9F0",
-		muted: "rgba(233, 233, 240, 0.72)",
-		subtle: "rgba(233, 233, 240, 0.5)",
+		muted: "rgba(233,233,240,0.72)",
+		subtle: "rgba(233,233,240,0.5)",
 	},
 	{
 		label: "Sand",
 		value: "sand",
 		color: "#E8E1D5",
 		text: "#4A3F2F",
-		muted: "rgba(74, 63, 47, 0.6)",
-		subtle: "rgba(74, 63, 47, 0.45)",
+		muted: "rgba(74,63,47,0.6)",
+		subtle: "rgba(74,63,47,0.45)",
 	},
 ] as const;
-
-type ColorValue = (typeof COLORS)[number]["value"];
-
-type PatternType = "waves" | "chessboard" | "dots" | "zigzag";
 
 const PATTERNS: { value: PatternType; label: string }[] = [
 	{ value: "waves", label: "Waves" },
@@ -81,24 +86,50 @@ const PATTERNS: { value: PatternType; label: string }[] = [
 	{ value: "dots", label: "Dots" },
 ];
 
-const _d = new Date();
-const TODAY = `${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][_d.getMonth()]}/${String(_d.getDate()).padStart(2, "0")}/${_d.getFullYear()}`;
+// ─── Pattern config ───────────────────────────────────────────
 
 const STROKE_WIDTH = 10;
-const DOT_R = 8;
-
-// Which patterns render as stroke vs fill
+const DOT_RADIUS = 8;
 const STROKE_PATTERNS = new Set<PatternType>(["waves", "zigzag"]);
+
+const STRIP_W = 256;
+const STRIP_H = 104;
+const SWATCH_W = 30;
+const SWATCH_H = 22;
+
+// ─── Date ─────────────────────────────────────────────────────
+
+const MONTHS = [
+	"Jan",
+	"Feb",
+	"Mar",
+	"Apr",
+	"May",
+	"Jun",
+	"Jul",
+	"Aug",
+	"Sep",
+	"Oct",
+	"Nov",
+	"Dec",
+] as const;
+
+function formatDate(date: Date): string {
+	return `${MONTHS[date.getMonth()]}/${String(date.getDate()).padStart(2, "0")}/${date.getFullYear()}`;
+}
+
+const TODAY = formatDate(new Date());
+
+// ─── Path builders ────────────────────────────────────────────
 
 function buildWaves(
 	W: number,
 	H: number,
-	options?: { targetWl?: number; targetSp?: number; amp?: number }
+	opts?: { targetWl?: number; targetSp?: number; amp?: number }
 ): string {
-	const targetWl = options?.targetWl ?? 35;
-	const targetSp = options?.targetSp ?? 20;
-	const amp = options?.amp ?? 5;
-	// Snap wavelength and row spacing so tiles fit exactly
+	const targetWl = opts?.targetWl ?? 35;
+	const targetSp = opts?.targetSp ?? 20;
+	const amp = opts?.amp ?? 5;
 	const segs = Math.round(W / targetWl);
 	const rows = Math.round(H / targetSp);
 	const wl = W / segs;
@@ -107,7 +138,6 @@ function buildWaves(
 	const parts: string[] = [];
 	for (let r = 0; r < rows; r++) {
 		const y = sp * (r + 0.5);
-		// Start one segment before x=0 so stroke fills flush at left edge
 		let d = `M${-wl} ${y}`;
 		for (let i = -1; i <= segs; i++) {
 			const x = i * wl;
@@ -119,63 +149,14 @@ function buildWaves(
 	return parts.join(" ");
 }
 
-function buildChessboard(
-	W: number,
-	H: number,
-	options?: { targetSq?: number }
-): string {
-	const targetSq = options?.targetSq ?? 20;
-	const cols = Math.round(W / targetSq);
-	const rowCount = Math.round(H / targetSq);
-	const sqW = W / cols;
-	const sqH = H / rowCount;
-	const parts: string[] = [];
-	for (let row = 0; row < rowCount; row++) {
-		const startCol = row % 2 === 0 ? 0 : 1;
-		for (let col = startCol; col < cols; col += 2) {
-			const x = col * sqW;
-			const y = row * sqH;
-			parts.push(
-				`M${x} ${y} L${x + sqW} ${y} L${x + sqW} ${y + sqH} L${x} ${y + sqH} Z`
-			);
-		}
-	}
-	return parts.join(" ");
-}
-
-function buildDots(
-	W: number,
-	H: number,
-	options?: { targetSp?: number }
-): string {
-	const targetSp = options?.targetSp ?? 24;
-	const cols = Math.round(W / targetSp);
-	const rows = Math.round(H / targetSp);
-	const spX = W / cols;
-	const spY = H / rows;
-	const parts: string[] = [];
-	for (let row = 0; row < rows; row++) {
-		const offsetX = row % 2 === 0 ? 0 : spX / 2;
-		const cy = spY * (row + 0.5);
-		// One extra col to fill flush on offset rows
-		for (let col = 0; col < cols + 1; col++) {
-			const cx = spX * col + offsetX;
-			parts.push(
-				`M${cx - DOT_R} ${cy} a${DOT_R},${DOT_R} 0 1,0 ${DOT_R * 2},0 a${DOT_R},${DOT_R} 0 1,0 ${-DOT_R * 2},0`
-			);
-		}
-	}
-	return parts.join(" ");
-}
-
 function buildZigzag(
 	W: number,
 	H: number,
-	options?: { targetWl?: number; targetSp?: number; amp?: number }
+	opts?: { targetWl?: number; targetSp?: number; amp?: number }
 ): string {
-	const targetWl = options?.targetWl ?? 24;
-	const targetSp = options?.targetSp ?? 20;
-	const amp = options?.amp ?? 6;
+	const targetWl = opts?.targetWl ?? 24;
+	const targetSp = opts?.targetSp ?? 20;
+	const amp = opts?.amp ?? 6;
 	const segs = Math.round(W / targetWl);
 	const rows = Math.round(H / targetSp);
 	const wl = W / segs;
@@ -194,9 +175,51 @@ function buildZigzag(
 	return parts.join(" ");
 }
 
-/* ─── Precomputed paths ───────────────────────────────────── */
-const STRIP_W = 256;
-const STRIP_H = 104;
+function buildChessboard(
+	W: number,
+	H: number,
+	opts?: { targetSq?: number }
+): string {
+	const targetSq = opts?.targetSq ?? 20;
+	const cols = Math.round(W / targetSq);
+	const rowCount = Math.round(H / targetSq);
+	const sqW = W / cols;
+	const sqH = H / rowCount;
+	const parts: string[] = [];
+	for (let row = 0; row < rowCount; row++) {
+		const startCol = row % 2 === 0 ? 0 : 1;
+		for (let col = startCol; col < cols; col += 2) {
+			const x = col * sqW;
+			const y = row * sqH;
+			parts.push(
+				`M${x} ${y} L${x + sqW} ${y} L${x + sqW} ${y + sqH} L${x} ${y + sqH} Z`
+			);
+		}
+	}
+	return parts.join(" ");
+}
+
+function buildDots(W: number, H: number, opts?: { targetSp?: number }): string {
+	const targetSp = opts?.targetSp ?? 24;
+	const cols = Math.round(W / targetSp);
+	const rows = Math.round(H / targetSp);
+	const spX = W / cols;
+	const spY = H / rows;
+	const parts: string[] = [];
+	for (let row = 0; row < rows; row++) {
+		const offsetX = row % 2 === 0 ? 0 : spX / 2;
+		const cy = spY * (row + 0.5);
+		for (let col = 0; col < cols + 1; col++) {
+			const cx = spX * col + offsetX;
+			parts.push(
+				`M${cx - DOT_RADIUS} ${cy} a${DOT_RADIUS},${DOT_RADIUS} 0 1,0 ${DOT_RADIUS * 2},0 a${DOT_RADIUS},${DOT_RADIUS} 0 1,0 ${-DOT_RADIUS * 2},0`
+			);
+		}
+	}
+	return parts.join(" ");
+}
+
+// ─── Precomputed paths ────────────────────────────────────────
 
 const STRIP_PATHS: Record<PatternType, string> = {
 	waves: buildWaves(STRIP_W, STRIP_H),
@@ -205,15 +228,8 @@ const STRIP_PATHS: Record<PatternType, string> = {
 	dots: buildDots(STRIP_W, STRIP_H),
 };
 
-const SWATCH_W = 30;
-const SWATCH_H = 22;
-
 const SWATCH_PATHS: Record<PatternType, string> = {
-	waves: buildWaves(SWATCH_W, SWATCH_H, {
-		targetWl: 26,
-		targetSp: 18,
-		amp: 4,
-	}),
+	waves: buildWaves(SWATCH_W, SWATCH_H, { targetWl: 26, targetSp: 18, amp: 4 }),
 	zigzag: buildZigzag(SWATCH_W, SWATCH_H, {
 		targetWl: 14,
 		targetSp: 16,
@@ -222,6 +238,105 @@ const SWATCH_PATHS: Record<PatternType, string> = {
 	chessboard: buildChessboard(SWATCH_W, SWATCH_H, { targetSq: 10 }),
 	dots: buildDots(SWATCH_W, SWATCH_H, { targetSp: 18 }),
 };
+
+// ─── Banner capture ───────────────────────────────────────────
+
+// Renders the selected pattern at @2x (750×196) as a transparent PNG,
+// replicating the CardStrip SVG filter via canvas compositing:
+//   - Outer white glow below the path  (feComposite operator="out")
+//   - Dark inset shadow inside the path (feComposite operator="arithmetic" inset)
+// Parameters are doubled so visual density matches the card preview at 375pt.
+function captureBannerBytes(pattern: PatternType): Promise<string> {
+	const W = 750;
+	const H = 196;
+	const SW = STROKE_WIDTH * 2;
+
+	const pathBuilders: Record<PatternType, () => string> = {
+		waves: () => buildWaves(W, H, { targetWl: 70, targetSp: 40, amp: 10 }),
+		zigzag: () => buildZigzag(W, H, { targetWl: 48, targetSp: 40, amp: 12 }),
+		chessboard: () => buildChessboard(W, H, { targetSq: 40 }),
+		dots: () => buildDots(W, H, { targetSp: 48 }),
+	};
+	const path = new Path2D(pathBuilders[pattern]());
+	const isStroke = STROKE_PATTERNS.has(pattern);
+
+	const draw = (ctx: CanvasRenderingContext2D, color: string) => {
+		ctx.save();
+		if (isStroke) {
+			ctx.strokeStyle = color;
+			ctx.lineWidth = SW;
+			ctx.stroke(path);
+		} else {
+			ctx.fillStyle = color;
+			ctx.fill(path);
+		}
+		ctx.restore();
+	};
+
+	const offscreen = (fn: (ctx: CanvasRenderingContext2D) => void) => {
+		const el = document.createElement("canvas");
+		el.width = W;
+		el.height = H;
+		const ctx = el.getContext("2d");
+		if (!ctx) {
+			throw new Error("Canvas 2D context unavailable.");
+		}
+		fn(ctx);
+		return el;
+	};
+
+	// Outer white glow — draw path with shadow, then erase the path shape
+	// so only the glow that bleeds outside the path boundary remains.
+	const outerGlow = offscreen((ctx) => {
+		ctx.shadowColor = "rgba(255,255,255,0.15)";
+		ctx.shadowOffsetY = 2;
+		ctx.shadowBlur = 3;
+		draw(ctx, "white");
+		ctx.shadowColor = "transparent";
+		ctx.globalCompositeOperation = "destination-out";
+		draw(ctx, "white");
+	});
+
+	// Dark inset shadow — draw dark path shifted down, then clip it
+	// to the interior of the original path shape.
+	const insetShadow = offscreen((ctx) => {
+		ctx.shadowColor = "rgba(0,0,0,0.15)";
+		ctx.shadowOffsetY = -2;
+		ctx.shadowBlur = 3;
+		draw(ctx, "white");
+		ctx.shadowColor = "transparent";
+		ctx.globalCompositeOperation = "destination-out";
+		draw(ctx, "white");
+	});
+
+	const canvas = document.createElement("canvas");
+	canvas.width = W;
+	canvas.height = H;
+	const ctx = canvas.getContext("2d");
+	if (!ctx) {
+		throw new Error("Canvas 2D context unavailable.");
+	}
+	ctx.drawImage(outerGlow, 0, 0);
+	ctx.drawImage(insetShadow, 0, 0);
+
+	outerGlow.width = 0;
+	insetShadow.width = 0;
+
+	return new Promise((resolve, reject) => {
+		canvas.toBlob((blob) => {
+			canvas.width = 0;
+			if (!blob) {
+				reject(new Error("Failed to export banner image."));
+				return;
+			}
+			const reader = new FileReader();
+			reader.onload = () => resolve((reader.result as string).split(",")[1]);
+			reader.readAsDataURL(blob);
+		}, "image/png");
+	});
+}
+
+// ─── Sub-components ───────────────────────────────────────────
 
 function CardStrip({ pattern }: { pattern: PatternType }) {
 	return (
@@ -251,7 +366,6 @@ function CardStrip({ pattern }: { pattern: PatternType }) {
 					x="0"
 					y="0"
 				>
-					{/* Outer white drop shadow — #FFFFFF1A 0px 0.5px 1px */}
 					<feFlood floodOpacity="0" result="BackgroundImageFix" />
 					<feColorMatrix
 						in="SourceAlpha"
@@ -264,7 +378,6 @@ function CardStrip({ pattern }: { pattern: PatternType }) {
 					<feColorMatrix values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.2 0" />
 					<feBlend in2="BackgroundImageFix" result="shadow" />
 					<feBlend in="SourceGraphic" in2="shadow" result="shape" />
-					{/* Inner black shadow — #0000001A 0px 0.5px 1px inset */}
 					<feColorMatrix
 						in="SourceAlpha"
 						result="hardAlpha"
@@ -285,7 +398,7 @@ function CardStrip({ pattern }: { pattern: PatternType }) {
 					filter="url(#strip-filter)"
 					stroke="white"
 					strokeOpacity={0.01}
-					strokeWidth={pattern === "zigzag" ? STROKE_WIDTH : STROKE_WIDTH}
+					strokeWidth={STROKE_WIDTH}
 				/>
 			) : (
 				<path
@@ -327,7 +440,7 @@ function PatternSwatch({
 					fill="none"
 					stroke="white"
 					strokeOpacity={selected ? 0.55 : 0.45}
-					strokeWidth={pattern === "zigzag" ? STROKE_WIDTH : STROKE_WIDTH}
+					strokeWidth={STROKE_WIDTH}
 				/>
 			) : (
 				<path
@@ -359,13 +472,14 @@ function EditableField({
 	value,
 	onChange,
 	placeholder,
+	wiggle,
 }: {
 	label: string;
 	value: string;
 	onChange: (v: string) => void;
 	placeholder?: string;
+	wiggle?: boolean;
 }) {
-	const isEmpty = value.trim().length === 0;
 	return (
 		<div className="flex flex-col">
 			<span className="text-(--pass-text-muted) text-[8px] uppercase tracking-normal">
@@ -374,7 +488,8 @@ function EditableField({
 			<input
 				className={cn(
 					"w-24 bg-transparent font-semibold text-(--pass-text) text-xs leading-tighter caret-(--pass-text) outline-none placeholder:text-(--pass-text-subtle)",
-					isEmpty && "animate-pulse"
+					value.trim().length === 0 && "animate-pulse",
+					wiggle && "animate-[wiggle_0.3s_ease-in-out]"
 				)}
 				maxLength={24}
 				onChange={(e) => onChange(e.target.value)}
@@ -386,15 +501,20 @@ function EditableField({
 	);
 }
 
+// ─── Main component ───────────────────────────────────────────
+
 export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 	const memberNo = "123456";
-	const since = TODAY;
+
 	const [name, setName] = useState("");
 	const [color, setColor] = useState<ColorValue>("blue");
 	const [pattern, setPattern] = useState<PatternType>("waves");
+	const [provider, setProvider] = useState<"apple" | "google">("apple");
+	const [creating, setCreating] = useState(false);
+	const [wiggleName, setWiggleName] = useState(false);
 
 	const activeColor = COLORS.find((c) => c.value === color) ?? COLORS[5];
-	const [colorTransition, setColorTransition] = useState(false);
+
 	const cardStyle = {
 		backgroundColor: activeColor.color,
 		"--pass-text": activeColor.text,
@@ -402,14 +522,54 @@ export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 		"--pass-text-subtle": activeColor.subtle,
 	} as CSSProperties;
 
+	const handleCreatePass = async () => {
+		if (creating) {
+			return;
+		}
+		if (!name.trim()) {
+			setWiggleName(true);
+			setTimeout(() => setWiggleName(false), 300);
+			return;
+		}
+		setCreating(true);
+		try {
+			const banner = await captureBannerBytes(pattern);
+			const result = await createPassAction({
+				provider,
+				memberName: name.trim(),
+				memberNo,
+				since: TODAY,
+				color: activeColor.color,
+				textColor: activeColor.text,
+				banner,
+			});
+			if (result.appleBytes) {
+				const blob = new Blob([new Uint8Array(result.appleBytes)], {
+					type: "application/vnd.apple.pkpass",
+				});
+				const url = URL.createObjectURL(blob);
+				const a = document.createElement("a");
+				a.href = url;
+				a.download = "pass.pkpass";
+				a.click();
+				URL.revokeObjectURL(url);
+			}
+			if (result.googleJwt) {
+				window.open(
+					`https://pay.google.com/gp/v/save/${result.googleJwt}`,
+					"_blank"
+				);
+			}
+		} finally {
+			setCreating(false);
+		}
+	};
+
 	return (
-		<div className="flex items-start gap-6">
-			{/* Card */}
+		<div className="flex items-stretch gap-6">
+			{/* Card preview */}
 			<div
-				className={cn(
-					"relative aspect-181/251 w-[256px] shrink-0 select-none overflow-hidden rounded-lg border-overlay text-(--pass-text)",
-					colorTransition && "transition-colors duration-300"
-				)}
+				className="relative aspect-181/251 w-[256px] shrink-0 select-none overflow-hidden rounded-lg border-overlay text-(--pass-text) transition-colors duration-300"
 				style={cardStyle}
 			>
 				{/* Noise overlay */}
@@ -422,6 +582,7 @@ export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 						backgroundSize: "200px 200px",
 					}}
 				/>
+
 				<div className="flex h-full flex-col">
 					<div className="flex items-start justify-between p-3">
 						<span className="font-semibold">Passlet</span>
@@ -444,8 +605,9 @@ export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 								onChange={setName}
 								placeholder="Your Name"
 								value={name}
+								wiggle={wiggleName}
 							/>
-							<Field label="Since" value={since} />
+							<Field label="Since" value={TODAY} />
 						</div>
 					</div>
 
@@ -458,11 +620,10 @@ export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 			</div>
 
 			{/* Controls */}
-			<div className="flex flex-col gap-4 pt-1">
-				{/* Color */}
+			<div className="flex flex-col gap-4 self-stretch pt-1">
 				<div className="flex flex-col gap-2">
 					<p className="font-medium text-[#707070] text-xs">Background Color</p>
-					<div className={cn("flex flex-wrap gap-1.5")}>
+					<div className="flex flex-wrap gap-1.5">
 						{COLORS.map((c) => {
 							const isSelected = color === c.value;
 							return (
@@ -471,10 +632,7 @@ export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 									aria-pressed={isSelected}
 									className="relative size-5 cursor-pointer rounded-sm border-overlay transition-transform duration-150 ease-out after:absolute after:-inset-1.5 after:content-[''] focus:outline-none focus-visible:ring-2 focus-visible:ring-current focus-visible:ring-offset-2 active:scale-95"
 									key={c.value}
-									onClick={() => {
-										setColorTransition(true);
-										setColor(c.value);
-									}}
+									onClick={() => setColor(c.value)}
 									style={{
 										backgroundColor: c.color,
 										color: c.color,
@@ -490,7 +648,6 @@ export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 					</div>
 				</div>
 
-				{/* Pattern */}
 				<div className="flex flex-col gap-2">
 					<p className="font-medium text-[#707070] text-xs">Pattern</p>
 					<div className="flex gap-1.5">
@@ -518,6 +675,84 @@ export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 						})}
 					</div>
 				</div>
+
+				<div className="flex flex-col gap-2">
+					<p className="font-medium text-[#707070] text-xs">Wallet Provider</p>
+					<div className="flex gap-1.5">
+						<button
+							aria-label="Select Apple Wallet"
+							aria-pressed={provider === "apple"}
+							className={cn(
+								"flex h-7 w-12 cursor-pointer items-center justify-center rounded-md border-shadow transition-all duration-150 ease-out focus:outline-none active:scale-95",
+								provider === "apple"
+									? "bg-[#1E1E1E]"
+									: "bg-transparent hover:bg-[#F5F5F5]"
+							)}
+							onClick={() => setProvider("apple")}
+							type="button"
+						>
+							<svg
+								aria-hidden="true"
+								className={
+									provider === "apple" ? "text-white" : "text-[#1E1E1E]"
+								}
+								fill="currentColor"
+								height="20"
+								viewBox="0 0 640 640"
+								width="20"
+								xmlns="http://www.w3.org/2000/svg"
+							>
+								<path d="M447.1 332.7C446.9 296 463.5 268.3 497.1 247.9C478.3 221 449.9 206.2 412.4 203.3C376.9 200.5 338.1 224 323.9 224C308.9 224 274.5 204.3 247.5 204.3C191.7 205.2 132.4 248.8 132.4 337.5C132.4 363.7 137.2 390.8 146.8 418.7C159.6 455.4 205.8 545.4 254 543.9C279.2 543.3 297 526 329.8 526C361.6 526 378.1 543.9 406.2 543.9C454.8 543.2 496.6 461.4 508.8 424.6C443.6 393.9 447.1 334.6 447.1 332.7zM390.5 168.5C417.8 136.1 415.3 106.6 414.5 96C390.4 97.4 362.5 112.4 346.6 130.9C329.1 150.7 318.8 175.2 321 202.8C347.1 204.8 370.9 191.4 390.5 168.5z" />
+							</svg>
+						</button>
+
+						<button
+							aria-label="Select Google Wallet"
+							aria-pressed={provider === "google"}
+							className={cn(
+								"flex h-7 w-12 cursor-pointer items-center justify-center rounded-md border-shadow transition-all duration-150 ease-out focus:outline-none active:scale-95",
+								provider === "google"
+									? "bg-[#1E1E1E]"
+									: "bg-transparent hover:bg-[#F5F5F5]"
+							)}
+							onClick={() => setProvider("google")}
+							type="button"
+						>
+							<svg
+								aria-hidden="true"
+								className={
+									provider === "google" ? "text-white" : "text-[#1E1E1E]"
+								}
+								fill="currentColor"
+								height="16"
+								viewBox="0 0 640 640"
+								width="16"
+								xmlns="http://www.w3.org/2000/svg"
+							>
+								<path d="M564 325.8C564 467.3 467.1 568 324 568C186.8 568 76 457.2 76 320C76 182.8 186.8 72 324 72C390.8 72 447 96.5 490.3 136.9L422.8 201.8C334.5 116.6 170.3 180.6 170.3 320C170.3 406.5 239.4 476.6 324 476.6C422.2 476.6 459 406.2 464.8 369.7L324 369.7L324 284.4L560.1 284.4C562.4 297.1 564 309.3 564 325.8z" />
+							</svg>
+						</button>
+					</div>
+				</div>
+
+				<Button
+					className="mt-auto flex rounded-full bg-[#1E1E1E] font-medium text-white hover:bg-[#2E2E2E] active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+					disabled={creating}
+					onClick={handleCreatePass}
+					type="button"
+				>
+					<svg
+						aria-hidden="true"
+						fill="currentColor"
+						height="18"
+						viewBox="0 0 640 640"
+						width="18"
+						xmlns="http://www.w3.org/2000/svg"
+					>
+						<path d="M128 96C92.7 96 64 124.7 64 160L64 448C64 483.3 92.7 512 128 512L512 512C547.3 512 576 483.3 576 448L576 256C576 220.7 547.3 192 512 192L136 192C122.7 192 112 181.3 112 168C112 154.7 122.7 144 136 144L520 144C533.3 144 544 133.3 544 120C544 106.7 533.3 96 520 96L128 96zM480 320C497.7 320 512 334.3 512 352C512 369.7 497.7 384 480 384C462.3 384 448 369.7 448 352C448 334.3 462.3 320 480 320z" />
+					</svg>
+					<span>Add to Wallet</span>
+				</Button>
 			</div>
 		</div>
 	);

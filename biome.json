@@ -90,6 +90,12 @@
           }
         }
       }
+    },
+    {
+      "includes": ["packages/ui/**"],
+      "linter": {
+        "enabled": false
+      }
     }
   ]
 }

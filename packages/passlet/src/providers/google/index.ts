@@ -349,8 +349,7 @@ function buildObjectBody(
 			? {
 					type: toGoogleBarcodeType(createConfig.barcode.format),
 					value: createConfig.barcode.value,
-					alternateText:
-						createConfig.barcode.altText ?? createConfig.barcode.value,
+					alternateText: createConfig.barcode.altText,
 				}
 			: undefined,
 		validTimeInterval:

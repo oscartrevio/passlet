@@ -44,7 +44,7 @@ export function InstallCommand() {
 					</button>
 				))}
 			</div>
-			<div className="hover:hover-border-shadow flex w-full items-center justify-between overflow-hidden rounded-xl border-shadow bg-white p-3 transition-shadow duration-150 ease-out">
+			<div className="hover:hover-border-shadow flex w-full items-center justify-between overflow-hidden rounded-xl border-shadow bg-white p-3 transition-shadow duration-200 ease-out">
 				<div className="flex items-center gap-1.5">
 					<span className="text-[#9A9A9A] text-sm">$</span>
 					<div className="flex text-[#1E1E1E] text-sm">

@@ -164,7 +164,7 @@ function buildAppleCommonFields(
 						message: createConfig.barcode.value,
 						format: toAppleBarcodeFormat(createConfig.barcode.format),
 						messageEncoding: "iso-8859-1",
-						altText: createConfig.barcode.altText ?? createConfig.barcode.value,
+						altText: createConfig.barcode.altText,
 					},
 				]
 			: undefined,
