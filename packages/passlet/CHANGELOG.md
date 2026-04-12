@@ -1,5 +1,11 @@
 # passlet
 
+## 0.2.4
+
+### Patch Changes
+
+- b65596d: fix: omit barcode altText when not
+
 ## 0.2.3
 
 ### Patch Changes
