@@ -559,10 +559,11 @@ export function PassPlayground({
 				URL.revokeObjectURL(url);
 			}
 			if (result.googleJwt) {
-				window.open(
-					`https://pay.google.com/gp/v/save/${result.googleJwt}`,
-					"_blank"
-				);
+				const a = document.createElement("a");
+				a.href = `https://pay.google.com/gp/v/save/${result.googleJwt}`;
+				a.target = "_blank";
+				a.rel = "noopener noreferrer";
+				a.click();
 			}
 		} finally {
 			setCreating(false);
