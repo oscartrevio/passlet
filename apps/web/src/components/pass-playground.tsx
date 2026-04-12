@@ -1,10 +1,9 @@
 "use client";
 
+import { Button } from "@passlet/ui/components/button";
 import { cn } from "@passlet/ui/lib/utils";
 import { type CSSProperties, type ReactNode, useState } from "react";
 import { createPassAction } from "@/actions/create-pass";
-import { AddToAppleWalletButton } from "@/components/add-to-apple-wallet-button";
-import { AddToGoogleWalletButton } from "@/components/add-to-google-wallet-button";
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -507,7 +506,8 @@ export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 	const [name, setName] = useState("");
 	const [color, setColor] = useState<ColorValue>("blue");
 	const [pattern, setPattern] = useState<PatternType>("waves");
-	const [creating, setCreating] = useState<"apple" | "google" | null>(null);
+	const [provider, setProvider] = useState<"apple" | "google">("apple");
+	const [creating, setCreating] = useState(false);
 
 	const activeColor = COLORS.find((c) => c.value === color) ?? COLORS[5];
 
@@ -518,11 +518,11 @@ export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 		"--pass-text-subtle": activeColor.subtle,
 	} as CSSProperties;
 
-	const handleCreatePass = async (provider: "apple" | "google") => {
+	const handleCreatePass = async () => {
 		if (creating) {
 			return;
 		}
-		setCreating(provider);
+		setCreating(true);
 		try {
 			const banner = await captureBannerBytes(pattern);
 			const result = await createPassAction({
@@ -552,7 +552,7 @@ export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 				);
 			}
 		} finally {
-			setCreating(null);
+			setCreating(false);
 		}
 	};
 
@@ -666,16 +666,83 @@ export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 					</div>
 				</div>
 
-				<div className="mt-auto flex flex-col gap-1">
-					<AddToAppleWalletButton
-						disabled={!!creating}
-						onClick={() => handleCreatePass("apple")}
-					/>
-					<AddToGoogleWalletButton
-						disabled={!!creating}
-						onClick={() => handleCreatePass("google")}
-					/>
+				<div className="flex flex-col gap-2">
+					<p className="font-medium text-[#707070] text-xs">Wallet Provider</p>
+					<div className="flex gap-1.5">
+						<button
+							aria-label="Select Apple Wallet"
+							aria-pressed={provider === "apple"}
+							className={cn(
+								"flex h-7 w-12 cursor-pointer items-center justify-center rounded-md border-shadow transition-all duration-150 ease-out focus:outline-none active:scale-95",
+								provider === "apple"
+									? "bg-[#1E1E1E]"
+									: "bg-transparent hover:bg-[#F5F5F5]"
+							)}
+							onClick={() => setProvider("apple")}
+							type="button"
+						>
+							<svg
+								aria-hidden="true"
+								className={
+									provider === "apple" ? "text-white" : "text-[#1E1E1E]"
+								}
+								fill="currentColor"
+								height="18"
+								viewBox="0 0 640 640"
+								width="18"
+								xmlns="http://www.w3.org/2000/svg"
+							>
+								<path d="M447.1 332.7C446.9 296 463.5 268.3 497.1 247.9C478.3 221 449.9 206.2 412.4 203.3C376.9 200.5 338.1 224 323.9 224C308.9 224 274.5 204.3 247.5 204.3C191.7 205.2 132.4 248.8 132.4 337.5C132.4 363.7 137.2 390.8 146.8 418.7C159.6 455.4 205.8 545.4 254 543.9C279.2 543.3 297 526 329.8 526C361.6 526 378.1 543.9 406.2 543.9C454.8 543.2 496.6 461.4 508.8 424.6C443.6 393.9 447.1 334.6 447.1 332.7zM390.5 168.5C417.8 136.1 415.3 106.6 414.5 96C390.4 97.4 362.5 112.4 346.6 130.9C329.1 150.7 318.8 175.2 321 202.8C347.1 204.8 370.9 191.4 390.5 168.5z" />
+							</svg>
+						</button>
+
+						<button
+							aria-label="Select Google Wallet"
+							aria-pressed={provider === "google"}
+							className={cn(
+								"flex h-7 w-12 cursor-pointer items-center justify-center rounded-md border-shadow transition-all duration-150 ease-out focus:outline-none active:scale-95",
+								provider === "google"
+									? "bg-[#1E1E1E]"
+									: "bg-transparent hover:bg-[#F5F5F5]"
+							)}
+							onClick={() => setProvider("google")}
+							type="button"
+						>
+							<svg
+								aria-hidden="true"
+								className={
+									provider === "google" ? "text-white" : "text-[#1E1E1E]"
+								}
+								fill="currentColor"
+								height="16"
+								viewBox="0 0 640 640"
+								width="16"
+								xmlns="http://www.w3.org/2000/svg"
+							>
+								<path d="M564 325.8C564 467.3 467.1 568 324 568C186.8 568 76 457.2 76 320C76 182.8 186.8 72 324 72C390.8 72 447 96.5 490.3 136.9L422.8 201.8C334.5 116.6 170.3 180.6 170.3 320C170.3 406.5 239.4 476.6 324 476.6C422.2 476.6 459 406.2 464.8 369.7L324 369.7L324 284.4L560.1 284.4C562.4 297.1 564 309.3 564 325.8z" />
+							</svg>
+						</button>
+					</div>
 				</div>
+
+				<Button
+					className="mt-auto flex rounded-full bg-[#1E1E1E] font-medium text-white hover:bg-[#2E2E2E] active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+					disabled={creating}
+					onClick={handleCreatePass}
+					type="button"
+				>
+					<svg
+						aria-hidden="true"
+						fill="currentColor"
+						height="18"
+						viewBox="0 0 640 640"
+						width="18"
+						xmlns="http://www.w3.org/2000/svg"
+					>
+						<path d="M128 96C92.7 96 64 124.7 64 160L64 448C64 483.3 92.7 512 128 512L512 512C547.3 512 576 483.3 576 448L576 256C576 220.7 547.3 192 512 192L136 192C122.7 192 112 181.3 112 168C112 154.7 122.7 144 136 144L520 144C533.3 144 544 133.3 544 120C544 106.7 533.3 96 520 96L128 96zM480 320C497.7 320 512 334.3 512 352C512 369.7 497.7 384 480 384C462.3 384 448 369.7 448 352C448 334.3 462.3 320 480 320z" />
+					</svg>
+					<span>Add to Wallet</span>
+				</Button>
 			</div>
 		</div>
 	);

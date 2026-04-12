@@ -4,10 +4,10 @@ export function AddToGoogleWalletButton(
 	props: React.ComponentPropsWithoutRef<typeof Button>
 ) {
 	return (
-		<Button className="" variant="default" {...props}>
+		<Button className="" variant="secondary" {...props}>
 			<svg
 				aria-hidden="true"
-				fill="white"
+				fill="black"
 				height="20"
 				viewBox="0 0 640 640"
 				width="20"
