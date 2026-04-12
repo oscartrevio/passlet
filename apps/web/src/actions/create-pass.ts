@@ -64,6 +64,7 @@ export async function createPassAction(
 			barcode: {
 				format: "QR",
 				value: "https://github.com/oscartrevio/passlet",
+				altText: "",
 			},
 		});
 
