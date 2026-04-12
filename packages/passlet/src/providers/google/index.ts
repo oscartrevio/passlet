@@ -62,11 +62,15 @@ function validateGoogleRequirements(pass: PassConfig): void {
 function buildTextModules(
 	fields: FieldDef[],
 	values: Record<string, string | null>,
-	excludeSlots: FieldDef["slot"][]
+	excludeSlots: FieldDef["slot"][],
+	excludeKeys: string[] = []
 ): Array<{ header: string; body: string; id: string }> {
 	const modules: Array<{ header: string; body: string; id: string }> = [];
 	for (const f of fields) {
 		if (excludeSlots.includes(f.slot)) {
+			continue;
+		}
+		if (excludeKeys.includes(f.key)) {
 			continue;
 		}
 		const value = f.key in values ? values[f.key] : f.value;
@@ -307,7 +311,8 @@ function buildGiftCardObjectFields(
 function buildDisplayFields(
 	fields: FieldDef[],
 	values: Record<string, string | null>,
-	locales: PassConfig["locales"]
+	locales: PassConfig["locales"],
+	excludeKeys: string[] = []
 ): Record<string, unknown> {
 	const primaryField = fields.find((f) => f.slot === "primary");
 	const primaryValue =
@@ -316,7 +321,12 @@ function buildDisplayFields(
 			? values[primaryField.key]
 			: primaryField.value);
 
-	const textModules = buildTextModules(fields, values, ["primary", "back"]);
+	const textModules = buildTextModules(
+		fields,
+		values,
+		["primary", "back"],
+		excludeKeys
+	);
 
 	return {
 		subheader:
@@ -397,7 +407,14 @@ function buildObjectBody(
 				translationsFor("name", pass.locales)
 			),
 		}),
-		...buildDisplayFields(fields, values, pass.locales),
+		...buildDisplayFields(
+			fields,
+			values,
+			pass.locales,
+			// Loyalty structured fields (accountName, accountId, loyaltyPoints) are
+			// already rendered by buildLoyaltyObjectFields — exclude them from text modules.
+			pass.type === "loyalty" ? ["member", "memberId", "points"] : []
+		),
 	};
 }
 
