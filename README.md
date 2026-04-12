@@ -4,7 +4,7 @@
 </picture>
 
 <p align="center">
-  <a href="https://img.shields.io/npm/v/passlet"><img src="https://img.shields.io/npm/v/passlet?style=flat-square&color=cb3837" alt="npm"></a>
+  <a href="https://www.npmjs.com/package/passlet"><img src="https://img.shields.io/npm/v/passlet?style=flat-square" alt="npm"></a>
   <a href="https://img.shields.io/npm/l/passlet"><img src="https://img.shields.io/npm/l/passlet?style=flat-square" alt="license"></a>
 </p>
 
