@@ -86,6 +86,13 @@ const PATTERNS: { value: PatternType; label: string }[] = [
 	{ value: "dots", label: "Dots" },
 ];
 
+const BANNER_URLS: Record<PatternType, string> = {
+	waves: `${process.env.NEXT_PUBLIC_SERVER_URL}/banners/waves.png`,
+	zigzag: `${process.env.NEXT_PUBLIC_SERVER_URL}/banners/zigzag.png`,
+	chessboard: `${process.env.NEXT_PUBLIC_SERVER_URL}/banners/chessboard.png`,
+	dots: `${process.env.NEXT_PUBLIC_SERVER_URL}/banners/dots.png`,
+};
+
 // ─── Pattern config ───────────────────────────────────────────
 
 const STROKE_WIDTH = 10;
@@ -115,7 +122,7 @@ const MONTHS = [
 ] as const;
 
 function formatDate(date: Date): string {
-	return `${MONTHS[date.getMonth()]}/${String(date.getDate()).padStart(2, "0")}/${date.getFullYear()}`;
+	return `${MONTHS[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
 }
 
 const TODAY = formatDate(new Date());
@@ -537,7 +544,10 @@ export function PassPlayground({
 		}
 		setCreating(true);
 		try {
-			const banner = await captureBannerBytes(pattern);
+			const banner =
+				provider === "apple"
+					? await captureBannerBytes(pattern)
+					: BANNER_URLS[pattern];
 			const result = await createPassAction({
 				provider,
 				memberName: name.trim(),
