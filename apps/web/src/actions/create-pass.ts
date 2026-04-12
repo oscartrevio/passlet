@@ -48,14 +48,14 @@ export async function createPassAction(
 		);
 
 		const pass = wallet.loyalty({
-			id: "passlet-playground",
+			id: `passlet-${input.memberNo}`,
 			name: "Passlet",
 			color: input.color,
 			banner: input.banner ? Buffer.from(input.banner, "base64") : undefined,
 			fields: [
-				field.header("memberId", "No.", input.memberNo),
-				field.secondary("member", "Member", input.memberName),
-				field.secondary("since", "Issued On", input.since),
+				field.header("memberId", "ID"),
+				field.secondary("member", "Member"),
+				field.secondary("since", "Issued On"),
 			],
 			apple: {
 				icon: Buffer.from(APPLE_ICON_BASE64, "base64"),
@@ -66,6 +66,11 @@ export async function createPassAction(
 
 		const issued = await pass.create({
 			serialNumber: `passlet-${Date.now()}`,
+			values: {
+				memberId: input.memberNo,
+				member: input.memberName,
+				since: input.since,
+			},
 			barcode: {
 				format: "QR",
 				value: "https://github.com/oscartrevio/passlet",

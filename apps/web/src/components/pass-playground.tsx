@@ -290,7 +290,7 @@ function captureBannerBytes(pattern: PatternType): Promise<string> {
 	const outerGlow = offscreen((ctx) => {
 		ctx.shadowColor = "rgba(255,255,255,0.15)";
 		ctx.shadowOffsetY = 2;
-		ctx.shadowBlur = 3;
+		ctx.shadowBlur = 2;
 		draw(ctx, "white");
 		ctx.shadowColor = "transparent";
 		ctx.globalCompositeOperation = "destination-out";
@@ -302,7 +302,7 @@ function captureBannerBytes(pattern: PatternType): Promise<string> {
 	const insetShadow = offscreen((ctx) => {
 		ctx.shadowColor = "rgba(0,0,0,0.15)";
 		ctx.shadowOffsetY = -2;
-		ctx.shadowBlur = 3;
+		ctx.shadowBlur = 2;
 		draw(ctx, "white");
 		ctx.shadowColor = "transparent";
 		ctx.globalCompositeOperation = "destination-out";
@@ -503,9 +503,13 @@ function EditableField({
 
 // ─── Main component ───────────────────────────────────────────
 
-export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
-	const memberNo = "123456";
-
+export function PassPlayground({
+	memberNo,
+	qrSlot,
+}: {
+	memberNo: string;
+	qrSlot?: ReactNode;
+}) {
 	const [name, setName] = useState("");
 	const [color, setColor] = useState<ColorValue>("blue");
 	const [pattern, setPattern] = useState<PatternType>("waves");
@@ -588,7 +592,7 @@ export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 						<span className="font-semibold">Passlet</span>
 						<div className="flex flex-col items-end">
 							<span className="text-(--pass-text-subtle) text-[8px] uppercase tracking-tight">
-								No.
+								ID
 							</span>
 							<span className="font-medium text-[11px] tabular-nums leading-[1.2]">
 								{memberNo}

@@ -1,4 +1,5 @@
 import { QRCode } from "@passlet/ui/components/qr-code/server";
+import { cookies } from "next/headers";
 import Link from "next/link";
 import { InstallCommand } from "@/components/install-command";
 import { PassPlayground } from "@/components/pass-playground";
@@ -77,13 +78,17 @@ const features = [
 	},
 ];
 
-export default function Home() {
+export default async function Home() {
+	const cookieStore = await cookies();
+	const memberNo = cookieStore.get("passlet-member-id")?.value ?? "000000";
+
 	return (
 		<div className="flex min-h-svh flex-col font-open-runde">
 			{/* Playground hero */}
 			<div className="w-full bg-[#FAFAFA] py-12">
 				<div className="mx-auto max-w-xl px-4">
 					<PassPlayground
+						memberNo={memberNo}
 						qrSlot={
 							<QRCode
 								background="#ffffff"
