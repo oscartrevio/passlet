@@ -472,11 +472,13 @@ function EditableField({
 	value,
 	onChange,
 	placeholder,
+	wiggle,
 }: {
 	label: string;
 	value: string;
 	onChange: (v: string) => void;
 	placeholder?: string;
+	wiggle?: boolean;
 }) {
 	return (
 		<div className="flex flex-col">
@@ -486,7 +488,8 @@ function EditableField({
 			<input
 				className={cn(
 					"w-24 bg-transparent font-semibold text-(--pass-text) text-xs leading-tighter caret-(--pass-text) outline-none placeholder:text-(--pass-text-subtle)",
-					value.trim().length === 0 && "animate-pulse"
+					value.trim().length === 0 && "animate-pulse",
+					wiggle && "animate-[wiggle_0.3s_ease-in-out]"
 				)}
 				maxLength={24}
 				onChange={(e) => onChange(e.target.value)}
@@ -508,6 +511,7 @@ export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 	const [pattern, setPattern] = useState<PatternType>("waves");
 	const [provider, setProvider] = useState<"apple" | "google">("apple");
 	const [creating, setCreating] = useState(false);
+	const [wiggleName, setWiggleName] = useState(false);
 
 	const activeColor = COLORS.find((c) => c.value === color) ?? COLORS[5];
 
@@ -522,12 +526,17 @@ export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 		if (creating) {
 			return;
 		}
+		if (!name.trim()) {
+			setWiggleName(true);
+			setTimeout(() => setWiggleName(false), 300);
+			return;
+		}
 		setCreating(true);
 		try {
 			const banner = await captureBannerBytes(pattern);
 			const result = await createPassAction({
 				provider,
-				memberName: name.trim() || "Member",
+				memberName: name.trim(),
 				memberNo,
 				since: TODAY,
 				color: activeColor.color,
@@ -596,6 +605,7 @@ export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 								onChange={setName}
 								placeholder="Your Name"
 								value={name}
+								wiggle={wiggleName}
 							/>
 							<Field label="Since" value={TODAY} />
 						</div>
