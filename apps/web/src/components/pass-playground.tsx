@@ -86,12 +86,13 @@ const PATTERNS: { value: PatternType; label: string }[] = [
 	{ value: "dots", label: "Dots" },
 ];
 
-const BANNER_URLS: Record<PatternType, string> = {
-	waves: `${process.env.NEXT_PUBLIC_SERVER_URL}/banners/waves.png`,
-	zigzag: `${process.env.NEXT_PUBLIC_SERVER_URL}/banners/zigzag.png`,
-	chessboard: `${process.env.NEXT_PUBLIC_SERVER_URL}/banners/chessboard.png`,
-	dots: `${process.env.NEXT_PUBLIC_SERVER_URL}/banners/dots.png`,
-};
+// TODO: add /public/banners/{pattern}.png files, then swap undefined below for BANNER_URLS[pattern]
+// const BANNER_URLS: Record<PatternType, string> = {
+// 	waves: `${process.env.NEXT_PUBLIC_SERVER_URL}/banners/waves.png`,
+// 	zigzag: `${process.env.NEXT_PUBLIC_SERVER_URL}/banners/zigzag.png`,
+// 	chessboard: `${process.env.NEXT_PUBLIC_SERVER_URL}/banners/chessboard.png`,
+// 	dots: `${process.env.NEXT_PUBLIC_SERVER_URL}/banners/dots.png`,
+// };
 
 // ─── Pattern config ───────────────────────────────────────────
 
@@ -545,9 +546,7 @@ export function PassPlayground({
 		setCreating(true);
 		try {
 			const banner =
-				provider === "apple"
-					? await captureBannerBytes(pattern)
-					: BANNER_URLS[pattern];
+				provider === "apple" ? await captureBannerBytes(pattern) : undefined;
 			const result = await createPassAction({
 				provider,
 				memberName: name.trim(),
