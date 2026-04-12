@@ -4,6 +4,7 @@
 import { field, Wallet } from "passlet";
 
 export interface CreatePassInput {
+	banner?: string;
 	color: string;
 	memberName: string;
 	memberNo: string;
@@ -45,11 +46,11 @@ export async function createPassAction(
 			id: "passlet-playground",
 			name: "Passlet",
 			color: input.color,
-			logo: process.env.GOOGLE_LOGO_URL,
+			banner: input.banner ? Buffer.from(input.banner, "base64") : undefined,
 			fields: [
-				field.header("memberId", "Member No.", input.memberNo),
+				field.header("memberId", "No.", input.memberNo),
 				field.secondary("member", "Member", input.memberName),
-				field.secondary("since", "Since", input.since),
+				field.secondary("since", "Issued On", input.since),
 			],
 			apple: {
 				icon: Buffer.from(APPLE_ICON_BASE64, "base64"),
@@ -67,8 +68,12 @@ export async function createPassAction(
 		});
 
 		return {
-			appleBytes: issued.apple ? Array.from(issued.apple) : undefined,
-			googleJwt: issued.google ?? undefined,
+			appleBytes:
+				input.provider === "apple" && issued.apple
+					? Array.from(issued.apple)
+					: undefined,
+			googleJwt:
+				input.provider === "google" ? (issued.google ?? undefined) : undefined,
 			warnings: issued.warnings,
 		};
 	} catch (error) {

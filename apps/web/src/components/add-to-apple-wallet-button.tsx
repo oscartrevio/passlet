@@ -3,56 +3,34 @@ import { cn } from "@passlet/ui/lib/utils";
 
 interface AddToAppleWalletButtonProps {
 	className?: string;
+	disabled?: boolean;
+	download?: string;
 	href?: string;
 	onClick?: () => void;
 }
 
-const walletClass =
-	"inline-flex items-center gap-[7px] rounded-full bg-[#262626] px-4 py-[11px] h-auto hover:bg-[#262626]/90";
+const walletClass = "rounded-full";
 
 export function AddToAppleWalletButton({
 	href,
 	onClick,
 	className,
+	disabled,
+	download,
 }: AddToAppleWalletButtonProps) {
 	const inner = (
 		<>
-			{/* Apple Wallet stacked-cards icon */}
 			<svg
 				aria-hidden="true"
-				fill="none"
-				height="19"
-				viewBox="0 0 26 19"
-				width="26"
+				fill="white"
+				height="20"
+				viewBox="0 0 640 640"
+				width="20"
 				xmlns="http://www.w3.org/2000/svg"
 			>
-				<rect fill="#F2F2F2" height="4" rx="1.5" width="26" y="0" />
-				<rect fill="#FBBC04" height="5" rx="1.5" width="26" y="4" />
-				<rect fill="#34A853" height="5" rx="1.5" width="26" y="9" />
-				<rect
-					fill="url(#apple-wallet-grad)"
-					height="5"
-					rx="1.5"
-					width="26"
-					y="14"
-				/>
-				<defs>
-					<linearGradient
-						gradientUnits="userSpaceOnUse"
-						id="apple-wallet-grad"
-						x1="0"
-						x2="26"
-						y1="0"
-						y2="0"
-					>
-						<stop stopColor="#4285F4" />
-						<stop offset="1" stopColor="#1B74E8" />
-					</linearGradient>
-				</defs>
+				<path d="M447.1 332.7C446.9 296 463.5 268.3 497.1 247.9C478.3 221 449.9 206.2 412.4 203.3C376.9 200.5 338.1 224 323.9 224C308.9 224 274.5 204.3 247.5 204.3C191.7 205.2 132.4 248.8 132.4 337.5C132.4 363.7 137.2 390.8 146.8 418.7C159.6 455.4 205.8 545.4 254 543.9C279.2 543.3 297 526 329.8 526C361.6 526 378.1 543.9 406.2 543.9C454.8 543.2 496.6 461.4 508.8 424.6C443.6 393.9 447.1 334.6 447.1 332.7zM390.5 168.5C417.8 136.1 415.3 106.6 414.5 96C390.4 97.4 362.5 112.4 346.6 130.9C329.1 150.7 318.8 175.2 321 202.8C347.1 204.8 370.9 191.4 390.5 168.5z" />
 			</svg>
-			<span className="whitespace-nowrap font-medium text-sm text-white leading-4.5 tracking-[-0.14px]">
-				Add to Apple Wallet
-			</span>
+			<span className="whitespace-nowrap font-medium">Add to Apple Wallet</span>
 		</>
 	);
 
@@ -60,10 +38,11 @@ export function AddToAppleWalletButton({
 		return (
 			<a
 				className={cn(
-					buttonVariants({ variant: "default" }),
+					buttonVariants({ variant: "ghost" }),
 					walletClass,
 					className
 				)}
+				download={download}
 				href={href}
 				rel="noopener noreferrer"
 				target="_blank"
@@ -74,7 +53,11 @@ export function AddToAppleWalletButton({
 	}
 
 	return (
-		<Button className={cn(walletClass, className)} onClick={onClick}>
+		<Button
+			className={cn(walletClass, className)}
+			disabled={disabled}
+			onClick={onClick}
+		>
 			{inner}
 		</Button>
 	);

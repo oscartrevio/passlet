@@ -2,6 +2,16 @@
 
 import { cn } from "@passlet/ui/lib/utils";
 import { type CSSProperties, type ReactNode, useState } from "react";
+import { createPassAction } from "@/actions/create-pass";
+import { AddToAppleWalletButton } from "@/components/add-to-apple-wallet-button";
+import { AddToGoogleWalletButton } from "@/components/add-to-google-wallet-button";
+
+// ─── Types ────────────────────────────────────────────────────
+
+type PatternType = "waves" | "zigzag" | "chessboard" | "dots";
+type ColorValue = (typeof COLORS)[number]["value"];
+
+// ─── Data ─────────────────────────────────────────────────────
 
 const COLORS = [
 	{
@@ -9,70 +19,66 @@ const COLORS = [
 		value: "green",
 		color: "#22C55E",
 		text: "#F0FFF4",
-		muted: "rgba(240, 255, 244, 0.7)",
-		subtle: "rgba(240, 255, 244, 0.5)",
+		muted: "rgba(240,255,244,0.7)",
+		subtle: "rgba(240,255,244,0.5)",
 	},
 	{
 		label: "Amber",
 		value: "amber",
 		color: "#F59E0B",
 		text: "#FFF7E6",
-		muted: "rgba(255, 247, 230, 0.72)",
-		subtle: "rgba(255, 247, 230, 0.5)",
+		muted: "rgba(255,247,230,0.72)",
+		subtle: "rgba(255,247,230,0.5)",
 	},
 	{
 		label: "Orange",
 		value: "orange",
 		color: "#F97316",
 		text: "#FFF1E6",
-		muted: "rgba(255, 241, 230, 0.72)",
-		subtle: "rgba(255, 241, 230, 0.5)",
+		muted: "rgba(255,241,230,0.72)",
+		subtle: "rgba(255,241,230,0.5)",
 	},
 	{
 		label: "Red",
 		value: "red",
 		color: "#EF4444",
 		text: "#FFEDED",
-		muted: "rgba(255, 237, 237, 0.72)",
-		subtle: "rgba(255, 237, 237, 0.5)",
+		muted: "rgba(255,237,237,0.72)",
+		subtle: "rgba(255,237,237,0.5)",
 	},
 	{
 		label: "Purple",
 		value: "purple",
 		color: "#A855F7",
 		text: "#F4ECFF",
-		muted: "rgba(244, 236, 255, 0.72)",
-		subtle: "rgba(244, 236, 255, 0.5)",
+		muted: "rgba(244,236,255,0.72)",
+		subtle: "rgba(244,236,255,0.5)",
 	},
 	{
 		label: "Blue",
 		value: "blue",
 		color: "#3B82F6",
 		text: "#EAF2FF",
-		muted: "rgba(234, 242, 255, 0.72)",
-		subtle: "rgba(234, 242, 255, 0.5)",
+		muted: "rgba(234,242,255,0.72)",
+		subtle: "rgba(234,242,255,0.5)",
 	},
 	{
 		label: "Midnight",
 		value: "midnight",
 		color: "#1C1C1E",
 		text: "#E9E9F0",
-		muted: "rgba(233, 233, 240, 0.72)",
-		subtle: "rgba(233, 233, 240, 0.5)",
+		muted: "rgba(233,233,240,0.72)",
+		subtle: "rgba(233,233,240,0.5)",
 	},
 	{
 		label: "Sand",
 		value: "sand",
 		color: "#E8E1D5",
 		text: "#4A3F2F",
-		muted: "rgba(74, 63, 47, 0.6)",
-		subtle: "rgba(74, 63, 47, 0.45)",
+		muted: "rgba(74,63,47,0.6)",
+		subtle: "rgba(74,63,47,0.45)",
 	},
 ] as const;
-
-type ColorValue = (typeof COLORS)[number]["value"];
-
-type PatternType = "waves" | "chessboard" | "dots" | "zigzag";
 
 const PATTERNS: { value: PatternType; label: string }[] = [
 	{ value: "waves", label: "Waves" },
@@ -81,24 +87,50 @@ const PATTERNS: { value: PatternType; label: string }[] = [
 	{ value: "dots", label: "Dots" },
 ];
 
-const _d = new Date();
-const TODAY = `${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][_d.getMonth()]}/${String(_d.getDate()).padStart(2, "0")}/${_d.getFullYear()}`;
+// ─── Pattern config ───────────────────────────────────────────
 
 const STROKE_WIDTH = 10;
-const DOT_R = 8;
-
-// Which patterns render as stroke vs fill
+const DOT_RADIUS = 8;
 const STROKE_PATTERNS = new Set<PatternType>(["waves", "zigzag"]);
+
+const STRIP_W = 256;
+const STRIP_H = 104;
+const SWATCH_W = 30;
+const SWATCH_H = 22;
+
+// ─── Date ─────────────────────────────────────────────────────
+
+const MONTHS = [
+	"Jan",
+	"Feb",
+	"Mar",
+	"Apr",
+	"May",
+	"Jun",
+	"Jul",
+	"Aug",
+	"Sep",
+	"Oct",
+	"Nov",
+	"Dec",
+] as const;
+
+function formatDate(date: Date): string {
+	return `${MONTHS[date.getMonth()]}/${String(date.getDate()).padStart(2, "0")}/${date.getFullYear()}`;
+}
+
+const TODAY = formatDate(new Date());
+
+// ─── Path builders ────────────────────────────────────────────
 
 function buildWaves(
 	W: number,
 	H: number,
-	options?: { targetWl?: number; targetSp?: number; amp?: number }
+	opts?: { targetWl?: number; targetSp?: number; amp?: number }
 ): string {
-	const targetWl = options?.targetWl ?? 35;
-	const targetSp = options?.targetSp ?? 20;
-	const amp = options?.amp ?? 5;
-	// Snap wavelength and row spacing so tiles fit exactly
+	const targetWl = opts?.targetWl ?? 35;
+	const targetSp = opts?.targetSp ?? 20;
+	const amp = opts?.amp ?? 5;
 	const segs = Math.round(W / targetWl);
 	const rows = Math.round(H / targetSp);
 	const wl = W / segs;
@@ -107,7 +139,6 @@ function buildWaves(
 	const parts: string[] = [];
 	for (let r = 0; r < rows; r++) {
 		const y = sp * (r + 0.5);
-		// Start one segment before x=0 so stroke fills flush at left edge
 		let d = `M${-wl} ${y}`;
 		for (let i = -1; i <= segs; i++) {
 			const x = i * wl;
@@ -119,63 +150,14 @@ function buildWaves(
 	return parts.join(" ");
 }
 
-function buildChessboard(
-	W: number,
-	H: number,
-	options?: { targetSq?: number }
-): string {
-	const targetSq = options?.targetSq ?? 20;
-	const cols = Math.round(W / targetSq);
-	const rowCount = Math.round(H / targetSq);
-	const sqW = W / cols;
-	const sqH = H / rowCount;
-	const parts: string[] = [];
-	for (let row = 0; row < rowCount; row++) {
-		const startCol = row % 2 === 0 ? 0 : 1;
-		for (let col = startCol; col < cols; col += 2) {
-			const x = col * sqW;
-			const y = row * sqH;
-			parts.push(
-				`M${x} ${y} L${x + sqW} ${y} L${x + sqW} ${y + sqH} L${x} ${y + sqH} Z`
-			);
-		}
-	}
-	return parts.join(" ");
-}
-
-function buildDots(
-	W: number,
-	H: number,
-	options?: { targetSp?: number }
-): string {
-	const targetSp = options?.targetSp ?? 24;
-	const cols = Math.round(W / targetSp);
-	const rows = Math.round(H / targetSp);
-	const spX = W / cols;
-	const spY = H / rows;
-	const parts: string[] = [];
-	for (let row = 0; row < rows; row++) {
-		const offsetX = row % 2 === 0 ? 0 : spX / 2;
-		const cy = spY * (row + 0.5);
-		// One extra col to fill flush on offset rows
-		for (let col = 0; col < cols + 1; col++) {
-			const cx = spX * col + offsetX;
-			parts.push(
-				`M${cx - DOT_R} ${cy} a${DOT_R},${DOT_R} 0 1,0 ${DOT_R * 2},0 a${DOT_R},${DOT_R} 0 1,0 ${-DOT_R * 2},0`
-			);
-		}
-	}
-	return parts.join(" ");
-}
-
 function buildZigzag(
 	W: number,
 	H: number,
-	options?: { targetWl?: number; targetSp?: number; amp?: number }
+	opts?: { targetWl?: number; targetSp?: number; amp?: number }
 ): string {
-	const targetWl = options?.targetWl ?? 24;
-	const targetSp = options?.targetSp ?? 20;
-	const amp = options?.amp ?? 6;
+	const targetWl = opts?.targetWl ?? 24;
+	const targetSp = opts?.targetSp ?? 20;
+	const amp = opts?.amp ?? 6;
 	const segs = Math.round(W / targetWl);
 	const rows = Math.round(H / targetSp);
 	const wl = W / segs;
@@ -194,9 +176,51 @@ function buildZigzag(
 	return parts.join(" ");
 }
 
-/* ─── Precomputed paths ───────────────────────────────────── */
-const STRIP_W = 256;
-const STRIP_H = 104;
+function buildChessboard(
+	W: number,
+	H: number,
+	opts?: { targetSq?: number }
+): string {
+	const targetSq = opts?.targetSq ?? 20;
+	const cols = Math.round(W / targetSq);
+	const rowCount = Math.round(H / targetSq);
+	const sqW = W / cols;
+	const sqH = H / rowCount;
+	const parts: string[] = [];
+	for (let row = 0; row < rowCount; row++) {
+		const startCol = row % 2 === 0 ? 0 : 1;
+		for (let col = startCol; col < cols; col += 2) {
+			const x = col * sqW;
+			const y = row * sqH;
+			parts.push(
+				`M${x} ${y} L${x + sqW} ${y} L${x + sqW} ${y + sqH} L${x} ${y + sqH} Z`
+			);
+		}
+	}
+	return parts.join(" ");
+}
+
+function buildDots(W: number, H: number, opts?: { targetSp?: number }): string {
+	const targetSp = opts?.targetSp ?? 24;
+	const cols = Math.round(W / targetSp);
+	const rows = Math.round(H / targetSp);
+	const spX = W / cols;
+	const spY = H / rows;
+	const parts: string[] = [];
+	for (let row = 0; row < rows; row++) {
+		const offsetX = row % 2 === 0 ? 0 : spX / 2;
+		const cy = spY * (row + 0.5);
+		for (let col = 0; col < cols + 1; col++) {
+			const cx = spX * col + offsetX;
+			parts.push(
+				`M${cx - DOT_RADIUS} ${cy} a${DOT_RADIUS},${DOT_RADIUS} 0 1,0 ${DOT_RADIUS * 2},0 a${DOT_RADIUS},${DOT_RADIUS} 0 1,0 ${-DOT_RADIUS * 2},0`
+			);
+		}
+	}
+	return parts.join(" ");
+}
+
+// ─── Precomputed paths ────────────────────────────────────────
 
 const STRIP_PATHS: Record<PatternType, string> = {
 	waves: buildWaves(STRIP_W, STRIP_H),
@@ -205,15 +229,8 @@ const STRIP_PATHS: Record<PatternType, string> = {
 	dots: buildDots(STRIP_W, STRIP_H),
 };
 
-const SWATCH_W = 30;
-const SWATCH_H = 22;
-
 const SWATCH_PATHS: Record<PatternType, string> = {
-	waves: buildWaves(SWATCH_W, SWATCH_H, {
-		targetWl: 26,
-		targetSp: 18,
-		amp: 4,
-	}),
+	waves: buildWaves(SWATCH_W, SWATCH_H, { targetWl: 26, targetSp: 18, amp: 4 }),
 	zigzag: buildZigzag(SWATCH_W, SWATCH_H, {
 		targetWl: 14,
 		targetSp: 16,
@@ -222,6 +239,105 @@ const SWATCH_PATHS: Record<PatternType, string> = {
 	chessboard: buildChessboard(SWATCH_W, SWATCH_H, { targetSq: 10 }),
 	dots: buildDots(SWATCH_W, SWATCH_H, { targetSp: 18 }),
 };
+
+// ─── Banner capture ───────────────────────────────────────────
+
+// Renders the selected pattern at @2x (750×196) as a transparent PNG,
+// replicating the CardStrip SVG filter via canvas compositing:
+//   - Outer white glow below the path  (feComposite operator="out")
+//   - Dark inset shadow inside the path (feComposite operator="arithmetic" inset)
+// Parameters are doubled so visual density matches the card preview at 375pt.
+function captureBannerBytes(pattern: PatternType): Promise<string> {
+	const W = 750;
+	const H = 196;
+	const SW = STROKE_WIDTH * 2;
+
+	const pathBuilders: Record<PatternType, () => string> = {
+		waves: () => buildWaves(W, H, { targetWl: 70, targetSp: 40, amp: 10 }),
+		zigzag: () => buildZigzag(W, H, { targetWl: 48, targetSp: 40, amp: 12 }),
+		chessboard: () => buildChessboard(W, H, { targetSq: 40 }),
+		dots: () => buildDots(W, H, { targetSp: 48 }),
+	};
+	const path = new Path2D(pathBuilders[pattern]());
+	const isStroke = STROKE_PATTERNS.has(pattern);
+
+	const draw = (ctx: CanvasRenderingContext2D, color: string) => {
+		ctx.save();
+		if (isStroke) {
+			ctx.strokeStyle = color;
+			ctx.lineWidth = SW;
+			ctx.stroke(path);
+		} else {
+			ctx.fillStyle = color;
+			ctx.fill(path);
+		}
+		ctx.restore();
+	};
+
+	const offscreen = (fn: (ctx: CanvasRenderingContext2D) => void) => {
+		const el = document.createElement("canvas");
+		el.width = W;
+		el.height = H;
+		const ctx = el.getContext("2d");
+		if (!ctx) {
+			throw new Error("Canvas 2D context unavailable.");
+		}
+		fn(ctx);
+		return el;
+	};
+
+	// Outer white glow — draw path with shadow, then erase the path shape
+	// so only the glow that bleeds outside the path boundary remains.
+	const outerGlow = offscreen((ctx) => {
+		ctx.shadowColor = "rgba(255,255,255,0.15)";
+		ctx.shadowOffsetY = 2;
+		ctx.shadowBlur = 3;
+		draw(ctx, "white");
+		ctx.shadowColor = "transparent";
+		ctx.globalCompositeOperation = "destination-out";
+		draw(ctx, "white");
+	});
+
+	// Dark inset shadow — draw dark path shifted down, then clip it
+	// to the interior of the original path shape.
+	const insetShadow = offscreen((ctx) => {
+		ctx.shadowColor = "rgba(0,0,0,0.15)";
+		ctx.shadowOffsetY = -2;
+		ctx.shadowBlur = 3;
+		draw(ctx, "white");
+		ctx.shadowColor = "transparent";
+		ctx.globalCompositeOperation = "destination-out";
+		draw(ctx, "white");
+	});
+
+	const canvas = document.createElement("canvas");
+	canvas.width = W;
+	canvas.height = H;
+	const ctx = canvas.getContext("2d");
+	if (!ctx) {
+		throw new Error("Canvas 2D context unavailable.");
+	}
+	ctx.drawImage(outerGlow, 0, 0);
+	ctx.drawImage(insetShadow, 0, 0);
+
+	outerGlow.width = 0;
+	insetShadow.width = 0;
+
+	return new Promise((resolve, reject) => {
+		canvas.toBlob((blob) => {
+			canvas.width = 0;
+			if (!blob) {
+				reject(new Error("Failed to export banner image."));
+				return;
+			}
+			const reader = new FileReader();
+			reader.onload = () => resolve((reader.result as string).split(",")[1]);
+			reader.readAsDataURL(blob);
+		}, "image/png");
+	});
+}
+
+// ─── Sub-components ───────────────────────────────────────────
 
 function CardStrip({ pattern }: { pattern: PatternType }) {
 	return (
@@ -251,7 +367,6 @@ function CardStrip({ pattern }: { pattern: PatternType }) {
 					x="0"
 					y="0"
 				>
-					{/* Outer white drop shadow — #FFFFFF1A 0px 0.5px 1px */}
 					<feFlood floodOpacity="0" result="BackgroundImageFix" />
 					<feColorMatrix
 						in="SourceAlpha"
@@ -264,7 +379,6 @@ function CardStrip({ pattern }: { pattern: PatternType }) {
 					<feColorMatrix values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.2 0" />
 					<feBlend in2="BackgroundImageFix" result="shadow" />
 					<feBlend in="SourceGraphic" in2="shadow" result="shape" />
-					{/* Inner black shadow — #0000001A 0px 0.5px 1px inset */}
 					<feColorMatrix
 						in="SourceAlpha"
 						result="hardAlpha"
@@ -285,7 +399,7 @@ function CardStrip({ pattern }: { pattern: PatternType }) {
 					filter="url(#strip-filter)"
 					stroke="white"
 					strokeOpacity={0.01}
-					strokeWidth={pattern === "zigzag" ? STROKE_WIDTH : STROKE_WIDTH}
+					strokeWidth={STROKE_WIDTH}
 				/>
 			) : (
 				<path
@@ -327,7 +441,7 @@ function PatternSwatch({
 					fill="none"
 					stroke="white"
 					strokeOpacity={selected ? 0.55 : 0.45}
-					strokeWidth={pattern === "zigzag" ? STROKE_WIDTH : STROKE_WIDTH}
+					strokeWidth={STROKE_WIDTH}
 				/>
 			) : (
 				<path
@@ -365,7 +479,6 @@ function EditableField({
 	onChange: (v: string) => void;
 	placeholder?: string;
 }) {
-	const isEmpty = value.trim().length === 0;
 	return (
 		<div className="flex flex-col">
 			<span className="text-(--pass-text-muted) text-[8px] uppercase tracking-normal">
@@ -374,7 +487,7 @@ function EditableField({
 			<input
 				className={cn(
 					"w-24 bg-transparent font-semibold text-(--pass-text) text-xs leading-tighter caret-(--pass-text) outline-none placeholder:text-(--pass-text-subtle)",
-					isEmpty && "animate-pulse"
+					value.trim().length === 0 && "animate-pulse"
 				)}
 				maxLength={24}
 				onChange={(e) => onChange(e.target.value)}
@@ -386,15 +499,18 @@ function EditableField({
 	);
 }
 
+// ─── Main component ───────────────────────────────────────────
+
 export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 	const memberNo = "123456";
-	const since = TODAY;
+
 	const [name, setName] = useState("");
 	const [color, setColor] = useState<ColorValue>("blue");
 	const [pattern, setPattern] = useState<PatternType>("waves");
+	const [creating, setCreating] = useState<"apple" | "google" | null>(null);
 
 	const activeColor = COLORS.find((c) => c.value === color) ?? COLORS[5];
-	const [colorTransition, setColorTransition] = useState(false);
+
 	const cardStyle = {
 		backgroundColor: activeColor.color,
 		"--pass-text": activeColor.text,
@@ -402,14 +518,49 @@ export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 		"--pass-text-subtle": activeColor.subtle,
 	} as CSSProperties;
 
+	const handleCreatePass = async (provider: "apple" | "google") => {
+		if (creating) {
+			return;
+		}
+		setCreating(provider);
+		try {
+			const banner = await captureBannerBytes(pattern);
+			const result = await createPassAction({
+				provider,
+				memberName: name.trim() || "Member",
+				memberNo,
+				since: TODAY,
+				color: activeColor.color,
+				textColor: activeColor.text,
+				banner,
+			});
+			if (result.appleBytes) {
+				const blob = new Blob([new Uint8Array(result.appleBytes)], {
+					type: "application/vnd.apple.pkpass",
+				});
+				const url = URL.createObjectURL(blob);
+				const a = document.createElement("a");
+				a.href = url;
+				a.download = "pass.pkpass";
+				a.click();
+				URL.revokeObjectURL(url);
+			}
+			if (result.googleJwt) {
+				window.open(
+					`https://pay.google.com/gp/v/save/${result.googleJwt}`,
+					"_blank"
+				);
+			}
+		} finally {
+			setCreating(null);
+		}
+	};
+
 	return (
-		<div className="flex items-start gap-6">
-			{/* Card */}
+		<div className="flex items-stretch gap-6">
+			{/* Card preview */}
 			<div
-				className={cn(
-					"relative aspect-181/251 w-[256px] shrink-0 select-none overflow-hidden rounded-lg border-overlay text-(--pass-text)",
-					colorTransition && "transition-colors duration-300"
-				)}
+				className="relative aspect-181/251 w-[256px] shrink-0 select-none overflow-hidden rounded-lg border-overlay text-(--pass-text) transition-colors duration-300"
 				style={cardStyle}
 			>
 				{/* Noise overlay */}
@@ -422,6 +573,7 @@ export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 						backgroundSize: "200px 200px",
 					}}
 				/>
+
 				<div className="flex h-full flex-col">
 					<div className="flex items-start justify-between p-3">
 						<span className="font-semibold">Passlet</span>
@@ -445,7 +597,7 @@ export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 								placeholder="Your Name"
 								value={name}
 							/>
-							<Field label="Since" value={since} />
+							<Field label="Since" value={TODAY} />
 						</div>
 					</div>
 
@@ -458,11 +610,10 @@ export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 			</div>
 
 			{/* Controls */}
-			<div className="flex flex-col gap-4 pt-1">
-				{/* Color */}
+			<div className="flex flex-col gap-4 self-stretch pt-1">
 				<div className="flex flex-col gap-2">
 					<p className="font-medium text-[#707070] text-xs">Background Color</p>
-					<div className={cn("flex flex-wrap gap-1.5")}>
+					<div className="flex flex-wrap gap-1.5">
 						{COLORS.map((c) => {
 							const isSelected = color === c.value;
 							return (
@@ -471,10 +622,7 @@ export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 									aria-pressed={isSelected}
 									className="relative size-5 cursor-pointer rounded-sm border-overlay transition-transform duration-150 ease-out after:absolute after:-inset-1.5 after:content-[''] focus:outline-none focus-visible:ring-2 focus-visible:ring-current focus-visible:ring-offset-2 active:scale-95"
 									key={c.value}
-									onClick={() => {
-										setColorTransition(true);
-										setColor(c.value);
-									}}
+									onClick={() => setColor(c.value)}
 									style={{
 										backgroundColor: c.color,
 										color: c.color,
@@ -490,7 +638,6 @@ export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 					</div>
 				</div>
 
-				{/* Pattern */}
 				<div className="flex flex-col gap-2">
 					<p className="font-medium text-[#707070] text-xs">Pattern</p>
 					<div className="flex gap-1.5">
@@ -517,6 +664,17 @@ export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 							);
 						})}
 					</div>
+				</div>
+
+				<div className="mt-auto flex flex-col gap-1">
+					<AddToAppleWalletButton
+						disabled={!!creating}
+						onClick={() => handleCreatePass("apple")}
+					/>
+					<AddToGoogleWalletButton
+						disabled={!!creating}
+						onClick={() => handleCreatePass("google")}
+					/>
 				</div>
 			</div>
 		</div>
