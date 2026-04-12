@@ -1,23 +1,8 @@
-import { Button, buttonVariants } from "@passlet/ui/components/button";
-import { cn } from "@passlet/ui/lib/utils";
+import { Button } from "@passlet/ui/components/button";
 
-interface AddToGoogleWalletButtonProps {
-	className?: string;
-	disabled?: boolean;
-	href?: string;
-	onClick?: () => void;
-}
-
-const walletClass = "rounded-full";
-
-export function AddToGoogleWalletButton({
-	href,
-	onClick,
-	className,
-	disabled,
-}: AddToGoogleWalletButtonProps) {
-	const inner = (
-		<>
+export function AddToGoogleWalletButton() {
+	return (
+		<Button className="" variant="default">
 			<svg
 				aria-hidden="true"
 				fill="white"
@@ -31,33 +16,6 @@ export function AddToGoogleWalletButton({
 			<span className="whitespace-nowrap font-medium">
 				Add to Google Wallet
 			</span>
-		</>
-	);
-
-	if (href) {
-		return (
-			<a
-				className={cn(
-					buttonVariants({ variant: "default" }),
-					walletClass,
-					className
-				)}
-				href={href}
-				rel="noopener noreferrer"
-				target="_blank"
-			>
-				{inner}
-			</a>
-		);
-	}
-
-	return (
-		<Button
-			className={cn(walletClass, className)}
-			disabled={disabled}
-			onClick={onClick}
-		>
-			{inner}
 		</Button>
 	);
 }
