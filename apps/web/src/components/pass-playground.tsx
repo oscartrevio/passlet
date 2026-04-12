@@ -86,6 +86,14 @@ const PATTERNS: { value: PatternType; label: string }[] = [
 	{ value: "dots", label: "Dots" },
 ];
 
+// TODO: add /public/banners/{pattern}.png files, then swap undefined below for BANNER_URLS[pattern]
+// const BANNER_URLS: Record<PatternType, string> = {
+// 	waves: `${process.env.NEXT_PUBLIC_SERVER_URL}/banners/waves.png`,
+// 	zigzag: `${process.env.NEXT_PUBLIC_SERVER_URL}/banners/zigzag.png`,
+// 	chessboard: `${process.env.NEXT_PUBLIC_SERVER_URL}/banners/chessboard.png`,
+// 	dots: `${process.env.NEXT_PUBLIC_SERVER_URL}/banners/dots.png`,
+// };
+
 // ─── Pattern config ───────────────────────────────────────────
 
 const STROKE_WIDTH = 10;
@@ -115,7 +123,7 @@ const MONTHS = [
 ] as const;
 
 function formatDate(date: Date): string {
-	return `${MONTHS[date.getMonth()]}/${String(date.getDate()).padStart(2, "0")}/${date.getFullYear()}`;
+	return `${MONTHS[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
 }
 
 const TODAY = formatDate(new Date());
@@ -290,7 +298,7 @@ function captureBannerBytes(pattern: PatternType): Promise<string> {
 	const outerGlow = offscreen((ctx) => {
 		ctx.shadowColor = "rgba(255,255,255,0.15)";
 		ctx.shadowOffsetY = 2;
-		ctx.shadowBlur = 3;
+		ctx.shadowBlur = 2;
 		draw(ctx, "white");
 		ctx.shadowColor = "transparent";
 		ctx.globalCompositeOperation = "destination-out";
@@ -302,7 +310,7 @@ function captureBannerBytes(pattern: PatternType): Promise<string> {
 	const insetShadow = offscreen((ctx) => {
 		ctx.shadowColor = "rgba(0,0,0,0.15)";
 		ctx.shadowOffsetY = -2;
-		ctx.shadowBlur = 3;
+		ctx.shadowBlur = 2;
 		draw(ctx, "white");
 		ctx.shadowColor = "transparent";
 		ctx.globalCompositeOperation = "destination-out";
@@ -503,9 +511,13 @@ function EditableField({
 
 // ─── Main component ───────────────────────────────────────────
 
-export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
-	const memberNo = "123456";
-
+export function PassPlayground({
+	memberNo,
+	qrSlot,
+}: {
+	memberNo: string;
+	qrSlot?: ReactNode;
+}) {
 	const [name, setName] = useState("");
 	const [color, setColor] = useState<ColorValue>("blue");
 	const [pattern, setPattern] = useState<PatternType>("waves");
@@ -533,7 +545,8 @@ export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 		}
 		setCreating(true);
 		try {
-			const banner = await captureBannerBytes(pattern);
+			const banner =
+				provider === "apple" ? await captureBannerBytes(pattern) : undefined;
 			const result = await createPassAction({
 				provider,
 				memberName: name.trim(),
@@ -555,10 +568,11 @@ export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 				URL.revokeObjectURL(url);
 			}
 			if (result.googleJwt) {
-				window.open(
-					`https://pay.google.com/gp/v/save/${result.googleJwt}`,
-					"_blank"
-				);
+				const a = document.createElement("a");
+				a.href = `https://pay.google.com/gp/v/save/${result.googleJwt}`;
+				a.target = "_blank";
+				a.rel = "noopener noreferrer";
+				a.click();
 			}
 		} finally {
 			setCreating(false);
@@ -588,7 +602,7 @@ export function PassPlayground({ qrSlot }: { qrSlot?: ReactNode }) {
 						<span className="font-semibold">Passlet</span>
 						<div className="flex flex-col items-end">
 							<span className="text-(--pass-text-subtle) text-[8px] uppercase tracking-tight">
-								No.
+								ID
 							</span>
 							<span className="font-medium text-[11px] tabular-nums leading-[1.2]">
 								{memberNo}

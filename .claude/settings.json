@@ -1,5 +1,6 @@
 {
   "includeCoAuthoredBy": false,
+  "showThinkingSummaries": true,
   "hooks": {
     "PostToolUse": [
       {

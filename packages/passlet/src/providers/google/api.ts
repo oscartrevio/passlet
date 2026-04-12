@@ -108,8 +108,7 @@ async function assertOk(response: Response): Promise<void> {
 	}
 }
 
-// Ensure a Google Wallet class exists. Creates it if not found; no-ops if it already exists.
-// Class updates (template changes) are intentionally out of scope — use patchClass for that.
+// Ensure a Google Wallet class exists, creating or updating it as needed.
 export async function ensureClass(
 	classType: string,
 	classId: string,
@@ -125,7 +124,29 @@ export async function ensureClass(
 	);
 
 	if (existing.ok) {
-		await existing.body?.cancel();
+		const existingClass = (await existing.json()) as Record<string, unknown>;
+		// Class exists — PUT the body so template updates are reflected.
+		// Google Wallet requires the full body for PUT requests, so we merge
+		// our new attributes with the existing class from their API.
+		const updateBody = { ...existingClass, ...classBody };
+
+		// Note: reviewStatus must be 'UNDER_REVIEW' or 'DRAFT' for updates
+		if ("reviewStatus" in updateBody && updateBody.reviewStatus !== "DRAFT") {
+			updateBody.reviewStatus = "UNDER_REVIEW";
+		}
+
+		await assertOk(
+			await walletRequest(
+				"PUT",
+				`/${classType}/${classId}`,
+				credentials,
+				privateKey,
+				{
+					id: classId,
+					...updateBody,
+				}
+			)
+		);
 		return;
 	}
 

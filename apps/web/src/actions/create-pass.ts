@@ -23,34 +23,54 @@ export interface CreatePassResult {
 const APPLE_ICON_BASE64 =
 	"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7nWJ0AAAAASUVORK5CYII=";
 
-const wallet = new Wallet({
-	apple: {
-		passTypeIdentifier: process.env.APPLE_PASS_TYPE_IDENTIFIER!,
-		teamId: process.env.APPLE_TEAM_ID!,
-		signerCert: process.env.APPLE_SIGNER_CERT!,
-		signerKey: process.env.APPLE_SIGNER_KEY!,
-		wwdr: process.env.APPLE_WWDR!,
-	},
-	google: {
-		issuerId: process.env.GOOGLE_ISSUER_ID!,
-		clientEmail: process.env.GOOGLE_CLIENT_EMAIL!,
-		privateKey: process.env.GOOGLE_PRIVATE_KEY!,
-	},
-});
+const appleCredentials = {
+	passTypeIdentifier: process.env.APPLE_PASS_TYPE_IDENTIFIER!,
+	teamId: process.env.APPLE_TEAM_ID!,
+	signerCert: process.env.APPLE_SIGNER_CERT!,
+	signerKey: process.env.APPLE_SIGNER_KEY!,
+	wwdr: process.env.APPLE_WWDR!,
+};
+
+const googleCredentials = {
+	issuerId: process.env.GOOGLE_ISSUER_ID!,
+	clientEmail: process.env.GOOGLE_CLIENT_EMAIL!,
+	privateKey: process.env.GOOGLE_PRIVATE_KEY!,
+};
+
+function resolveBanner(
+	provider: CreatePassInput["provider"],
+	banner: string | undefined
+): Buffer | string | undefined {
+	if (!banner) {
+		return undefined;
+	}
+	if (provider === "apple") {
+		return Buffer.from(banner, "base64");
+	}
+	return banner;
+}
 
 export async function createPassAction(
 	input: CreatePassInput
 ): Promise<CreatePassResult> {
 	try {
+		const wallet = new Wallet(
+			input.provider === "apple"
+				? { apple: appleCredentials }
+				: { google: googleCredentials }
+		);
+
 		const pass = wallet.loyalty({
-			id: "passlet-playground",
+			id: `passlet-${input.memberNo}`,
 			name: "Passlet",
 			color: input.color,
-			banner: input.banner ? Buffer.from(input.banner, "base64") : undefined,
+			logo:
+				input.provider === "google" ? process.env.GOOGLE_LOGO_URL : undefined,
+			banner: resolveBanner(input.provider, input.banner),
 			fields: [
-				field.header("memberId", "No.", input.memberNo),
-				field.secondary("member", "Member", input.memberName),
-				field.secondary("since", "Issued On", input.since),
+				field.header("memberId", "ID"),
+				field.secondary("member", "Member"),
+				field.secondary("since", "Issued On"),
 			],
 			apple: {
 				icon: Buffer.from(APPLE_ICON_BASE64, "base64"),
@@ -61,6 +81,11 @@ export async function createPassAction(
 
 		const issued = await pass.create({
 			serialNumber: `passlet-${Date.now()}`,
+			values: {
+				memberId: input.memberNo,
+				member: input.memberName,
+				since: input.since,
+			},
 			barcode: {
 				format: "QR",
 				value: "https://github.com/oscartrevio/passlet",
