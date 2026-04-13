@@ -33,7 +33,7 @@
     "@passlet/config": "workspace:*",
     "@types/node": "^20.19.39",
     "lefthook": "latest",
-    "turbo": "^2.9.5",
+    "turbo": "^2.9.6",
     "typescript": "^5.9.3",
     "ultracite": "7.4.2"
   },
