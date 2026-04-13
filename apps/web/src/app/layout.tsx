@@ -1,12 +1,10 @@
-import type { Metadata } from "next";
 import { fonts } from "@/lib/fonts";
+import { METADATA, VIEWPORT } from "@/lib/site";
 
 import "../index.css";
 
-export const metadata: Metadata = {
-	title: "Passlet",
-	description: "One API for Apple Wallet and Google Wallet passes.",
-};
+export const metadata = METADATA;
+export const viewport = VIEWPORT;
 
 export default function RootLayout({
 	children,
@@ -15,7 +13,9 @@ export default function RootLayout({
 }>) {
 	return (
 		<html lang="en" suppressHydrationWarning>
-			<body className={`${fonts} min-h-full antialiased`}>{children}</body>
+			<body className={`${fonts} min-h-full bg-white antialiased`}>
+				{children}
+			</body>
 		</html>
 	);
 }
