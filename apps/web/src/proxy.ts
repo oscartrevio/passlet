@@ -1,10 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server";
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
 	const response = NextResponse.next();
-	if (!request.cookies.get("passlet-member-id")) {
+	if (!request.cookies.get("passlet-id")) {
 		const id = crypto.randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase();
-		response.cookies.set("passlet-member-id", id, {
+		response.cookies.set("passlet-id", id, {
 			maxAge: 60 * 60 * 24 * 365,
 			path: "/",
 		});
