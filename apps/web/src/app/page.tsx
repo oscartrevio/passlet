@@ -2,7 +2,8 @@ import { QRCode } from "@passlet/ui/components/qr-code/server";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { InstallCommand } from "@/components/install-command";
-import { type ColorValue, PassPlayground } from "@/components/pass-playground";
+import { PassPlayground } from "@/components/pass-playground";
+import type { ColorValue } from "@/lib/data";
 import { version } from "../../../../packages/passlet/package.json";
 
 const s = (fill: string) =>
