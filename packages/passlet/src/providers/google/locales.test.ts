@@ -165,7 +165,6 @@ describe("Google locale translations", () => {
 				type: "loyalty",
 				id: "p1",
 				name: "Rewards",
-				logo: "https://example.com/logo.png",
 				fields: [
 					{ slot: "primary", key: "points", label: "Points", value: "500" },
 				],
@@ -173,6 +172,7 @@ describe("Google locale translations", () => {
 					es: { points: "Puntos" },
 					fr: { points: "Points FR" },
 				},
+				google: { logo: "https://example.com/logo.png" },
 			},
 			{ serialNumber: "s1" }
 		);
@@ -199,7 +199,7 @@ describe("Google locale translations", () => {
 				type: "loyalty",
 				id: "p1",
 				name: "Rewards",
-				logo: "https://example.com/logo.png",
+				google: { logo: "https://example.com/logo.png" },
 				fields: [
 					{ slot: "primary", key: "tier", label: "Tier", value: "Gold" },
 				],
@@ -228,7 +228,7 @@ describe("Google locale translations", () => {
 				type: "loyalty",
 				id: "p1",
 				name: "Rewards",
-				logo: "https://example.com/logo.png",
+				google: { logo: "https://example.com/logo.png" },
 				fields: [
 					{ slot: "primary", key: "points", label: "Points", value: "500" },
 				],
