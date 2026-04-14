@@ -1,11 +1,5 @@
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { cookies } from "next/headers";
-import { ImageResponse } from "next/og";
-
-export const size = { width: 32, height: 32 };
-export const contentType = "image/png";
-export const dynamic = "force-dynamic";
+import { NextResponse } from "next/server";
 
 const VALID_COLORS = new Set([
 	"green",
@@ -20,21 +14,16 @@ const VALID_COLORS = new Set([
 
 const DEFAULT_COLOR = "blue";
 
-export default async function Icon() {
+export const dynamic = "force-dynamic";
+
+export async function GET(request: Request) {
 	const cookieStore = await cookies();
 	const raw = cookieStore.get("passlet-color")?.value ?? DEFAULT_COLOR;
 	const color = VALID_COLORS.has(raw) ? raw : DEFAULT_COLOR;
 
-	const svg = await readFile(
-		path.join(process.cwd(), "public", "favicon", `favicon-${color}.svg`)
-	);
-	const src = `data:image/svg+xml;base64,${svg.toString("base64")}`;
-
-	return new ImageResponse(
-		// biome-ignore lint/performance/noImgElement: ImageResponse does not support next/image
-		<img alt="" height={32} src={src} width={32} />,
-		{
-			...size,
-		}
-	);
+	const { origin } = new URL(request.url);
+	return NextResponse.redirect(`${origin}/favicon/favicon-${color}.svg`, {
+		status: 302,
+		headers: { "Cache-Control": "no-store" },
+	});
 }

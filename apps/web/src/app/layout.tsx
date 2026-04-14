@@ -13,6 +13,9 @@ export default function RootLayout({
 }>) {
 	return (
 		<html lang="en" suppressHydrationWarning>
+			<head>
+				<link href="/icon" rel="icon" type="image/svg+xml" />
+			</head>
 			<body className={`${fonts} min-h-full bg-white antialiased`}>
 				{children}
 			</body>
