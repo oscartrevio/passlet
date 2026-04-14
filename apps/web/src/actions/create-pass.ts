@@ -64,7 +64,7 @@ export async function createPassAction(
 			},
 			google: {
 				logo: process.env.GOOGLE_LOGO_URL,
-				hero: input.banner ?? undefined,
+				// hero requires a public URL — the playground banner is binary, not hosted
 			},
 		});
 
