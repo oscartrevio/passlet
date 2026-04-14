@@ -169,7 +169,7 @@ Requires a Google Wallet issuer account.
 
 - [ ] Pass updates and push notifications (APNs + Google API)
 - [ ] CLI for quick pass generation
-- [ ] Pass playground
+- [X] Pass playground
 
 ## Contributing
 
