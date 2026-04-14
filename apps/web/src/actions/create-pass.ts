@@ -37,19 +37,6 @@ const googleCredentials = {
 	privateKey: process.env.GOOGLE_PRIVATE_KEY!,
 };
 
-function resolveBanner(
-	provider: CreatePassInput["provider"],
-	banner: string | undefined
-): Buffer | string | undefined {
-	if (!banner) {
-		return undefined;
-	}
-	if (provider === "apple") {
-		return Buffer.from(banner, "base64");
-	}
-	return banner;
-}
-
 export async function createPassAction(
 	input: CreatePassInput
 ): Promise<CreatePassResult> {
@@ -64,9 +51,6 @@ export async function createPassAction(
 			id: `passlet-${input.memberNo}`,
 			name: "Passlet",
 			color: input.color,
-			logo:
-				input.provider === "google" ? process.env.GOOGLE_LOGO_URL : undefined,
-			banner: resolveBanner(input.provider, input.banner),
 			fields: [
 				field.header("memberId", "ID"),
 				field.secondary("member", "Member"),
@@ -74,8 +58,13 @@ export async function createPassAction(
 			],
 			apple: {
 				icon: Buffer.from(APPLE_ICON_BASE64, "base64"),
+				strip: input.banner ? Buffer.from(input.banner, "base64") : undefined,
 				foregroundColor: input.textColor,
 				labelColor: input.textColor,
+			},
+			google: {
+				logo: process.env.GOOGLE_LOGO_URL,
+				hero: input.banner ?? undefined,
 			},
 		});
 
