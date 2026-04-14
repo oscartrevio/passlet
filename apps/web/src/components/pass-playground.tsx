@@ -4,6 +4,7 @@ import { Button } from "@passlet/ui/components/button";
 import { cn } from "@passlet/ui/lib/utils";
 import { type CSSProperties, type ReactNode, useState } from "react";
 import { createPassAction } from "@/actions/create-pass";
+import { setPassletColor } from "@/actions/set-color";
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -529,12 +530,7 @@ export function PassPlayground({
 
 	const handleColorChange = (value: ColorValue) => {
 		setColor(value);
-		// biome-ignore lint/suspicious/noDocumentCookie: setting a persistent user preference cookie
-		document.cookie = `passlet-color=${value}; path=/; max-age=31536000; SameSite=Lax`;
-		const link = document.querySelector<HTMLLinkElement>("link[rel*='icon']");
-		if (link) {
-			link.href = `/favicon.svg?t=${Date.now()}`;
-		}
+		setPassletColor(value);
 	};
 
 	const cardStyle = {
