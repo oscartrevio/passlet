@@ -2,7 +2,7 @@ import { QRCode } from "@passlet/ui/components/qr-code/server";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { InstallCommand } from "@/components/install-command";
-import { PassPlayground } from "@/components/pass-playground";
+import { type ColorValue, PassPlayground } from "@/components/pass-playground";
 import { version } from "../../../../packages/passlet/package.json";
 
 const s = (fill: string) =>
@@ -81,6 +81,8 @@ const features = [
 export default async function Home() {
 	const cookieStore = await cookies();
 	const memberNo = cookieStore.get("passlet-id")?.value ?? "000000";
+	const initialColor = (cookieStore.get("passlet-color")?.value ??
+		"blue") as ColorValue;
 
 	return (
 		<div className="flex min-h-svh flex-col font-open-runde">
@@ -88,6 +90,7 @@ export default async function Home() {
 			<div className="w-full bg-[#FAFAFA] py-12">
 				<div className="mx-auto max-w-xl px-4">
 					<PassPlayground
+						initialColor={initialColor}
 						memberNo={memberNo}
 						qrSlot={
 							<QRCode
