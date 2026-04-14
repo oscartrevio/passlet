@@ -115,7 +115,9 @@ const relevantDateSchema = z.object({
 const appleOptionsSchema = z.object({
 	// Required by Apple Wallet — validated at create() time
 	icon: imageSet,
-	// Apple-only image slots
+	// Apple image slots (accepts bytes or URL)
+	logo: imageSet,
+	strip: imageSet,
 	background: imageSet,
 	thumbnail: imageSet,
 	footer: imageSet,
@@ -272,15 +274,18 @@ const googleAppLinkDataSchema = z.object({
 // Google-specific options — no cross-platform equivalent
 
 const googleOptionsSchema = z.object({
+	// Google image slots (URL only — Google Wallet does not accept binary uploads)
+	logo: z.url().optional(),
+	hero: z.url().optional(),
 	// Google: wideLogo — wider variant of the logo shown on some pass layouts
 	wideLogo: z.url().optional(),
 	// Google: issuerName — displayed as the pass issuer
 	issuerName: z.string().optional(),
 	// Required by Google for loyalty, event, flight, coupon, and giftCard classes.
-	// "UNDER_REVIEW" is the default for new classes; set to "APPROVED" once approved in the console.
+	// Defaults to "UNDER_REVIEW" for new classes; set to "APPROVED" once approved in the console.
 	reviewStatus: z
 		.enum(["UNDER_REVIEW", "APPROVED", "REJECTED", "DRAFT"])
-		.default("UNDER_REVIEW"),
+		.optional(),
 	// Smart Tap NFC — enable tap-to-redeem at supported terminals
 	enableSmartTap: z.boolean().optional(),
 	// Smart Tap issuer IDs allowed to redeem this pass (required when enableSmartTap is true)
@@ -315,16 +320,6 @@ const basePassSchema = z.object({
 	// Apple: backgroundColor
 	// Google: hexBackgroundColor
 	color: hexColor,
-
-	// Shared logo image.
-	// Apple: logo (accepts bytes or URL)
-	// Google: logo (URL only — validated at create() time)
-	logo: imageSet,
-
-	// Shared banner image — same visual purpose, different placement per platform.
-	// Apple: strip (shown behind the fields, top of pass)
-	// Google: hero (shown at the bottom of the pass)
-	banner: imageSet,
 
 	// Geo-relevance — show pass on lock screen when near these coordinates.
 	// Apple: locations[] — up to 10 entries

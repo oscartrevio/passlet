@@ -141,8 +141,8 @@ await run(
 				field.secondary("tier", "Tier", "Gold"),
 				field.back("member", "Member", "Jane Doe"),
 			],
-			logo: process.env.GOOGLE_LOGO_URL,
 			apple: { icon: STUB_ICON },
+			google: { logo: process.env.GOOGLE_LOGO_URL },
 		})
 		.create({ serialNumber: "smoke-loyalty" })
 );
@@ -305,12 +305,12 @@ await run(
 		.loyalty({
 			id: "smoke-override",
 			name: "Override Test",
-			logo: process.env.GOOGLE_LOGO_URL,
 			fields: [
 				field.primary("points", "Points", "0"),
 				field.secondary("tier", "Tier", "Bronze"),
 			],
 			apple: { icon: STUB_ICON },
+			google: { logo: process.env.GOOGLE_LOGO_URL },
 		})
 		.create({
 			serialNumber: "smoke-fields-override",
@@ -325,12 +325,12 @@ await run(
 		.loyalty({
 			id: "smoke-null",
 			name: "Null Test",
-			logo: process.env.GOOGLE_LOGO_URL,
 			fields: [
 				field.primary("points", "Points", "100"),
 				field.secondary("tier", "Tier", "Gold"),
 			],
 			apple: { icon: STUB_ICON },
+			google: { logo: process.env.GOOGLE_LOGO_URL },
 		})
 		.create({
 			serialNumber: "smoke-fields-null",
@@ -350,13 +350,13 @@ await run(
 			id: "smoke-apple-colors",
 			name: "Color Test",
 			color: "#1a1a2e",
-			logo: process.env.GOOGLE_LOGO_URL,
 			fields: [field.primary("points", "Points", "500")],
 			apple: {
 				icon: STUB_ICON,
 				foregroundColor: "#ffffff",
 				labelColor: "#aaaaaa",
 			},
+			google: { logo: process.env.GOOGLE_LOGO_URL },
 		})
 		.create({ serialNumber: "smoke-apple-colors" })
 );
@@ -368,13 +368,13 @@ await run(
 		.loyalty({
 			id: "smoke-apple-text",
 			name: "Text Test",
-			logo: process.env.GOOGLE_LOGO_URL,
 			fields: [],
 			apple: {
 				icon: STUB_ICON,
 				description: "Custom pass description",
 				logoText: "My Brand",
 			},
+			google: { logo: process.env.GOOGLE_LOGO_URL },
 		})
 		.create({ serialNumber: "smoke-apple-text" })
 );
@@ -448,9 +448,9 @@ await run(
 			id: "smoke-google-messages",
 			name: "Messages Test",
 			fields: [field.primary("points", "Points", "500")],
-			logo: process.env.GOOGLE_LOGO_URL,
 			apple: { icon: STUB_ICON },
 			google: {
+				logo: process.env.GOOGLE_LOGO_URL,
 				messages: [
 					{
 						header: "Welcome back!",
@@ -472,8 +472,8 @@ await run(
 			id: "smoke-google-obj-msg",
 			name: "Object Messages",
 			fields: [field.primary("points", "Points", "200")],
-			logo: process.env.GOOGLE_LOGO_URL,
 			apple: { icon: STUB_ICON },
+			google: { logo: process.env.GOOGLE_LOGO_URL },
 		})
 		.create({
 			serialNumber: "smoke-google-obj-messages",
@@ -544,8 +544,8 @@ if (google) {
 		id: "smoke-lifecycle",
 		name: "Lifecycle Test",
 		fields: [field.primary("points", "Points", "100")],
-		logo: process.env.GOOGLE_LOGO_URL,
 		apple: { icon: STUB_ICON },
+		google: { logo: process.env.GOOGLE_LOGO_URL },
 	});
 
 	await run(

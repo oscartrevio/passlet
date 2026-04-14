@@ -238,8 +238,8 @@ async function collectImages(
 
 	// All other images are optional — adds warnings on failure
 	const optional = await Promise.all([
-		resolveImageSet("logo", pass.logo, warnings),
-		resolveImageSet("strip", pass.banner, warnings), // banner → strip on Apple
+		resolveImageSet("logo", pass.apple?.logo, warnings),
+		resolveImageSet("strip", pass.apple?.strip, warnings),
 		resolveImageSet("background", pass.apple?.background, warnings),
 		resolveImageSet("thumbnail", pass.apple?.thumbnail, warnings),
 		resolveImageSet("footer", pass.apple?.footer, warnings),
