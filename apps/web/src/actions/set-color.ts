@@ -10,4 +10,3 @@ export async function setPassletColor(color: string) {
 		sameSite: "lax",
 	});
 }
-1;
