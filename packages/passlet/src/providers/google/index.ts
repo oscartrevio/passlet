@@ -33,18 +33,11 @@ const OBJECT_TYPE: Record<PassType, string> = {
 };
 
 function validateGoogleRequirements(pass: PassConfig): void {
-	// Google logo must be a URL (not bytes — Google can't accept binary uploads directly)
-	if (pass.logo !== undefined && pass.logo instanceof Uint8Array) {
-		throw new WalletError(
-			"GOOGLE_MISSING_LOGO",
-			"Google Wallet logo must be a URL string, not bytes"
-		);
-	}
 	// Google loyalty classes require a programLogo URL — the API returns 400 without it
-	if (pass.type === "loyalty" && !pass.logo) {
+	if (pass.type === "loyalty" && !pass.google?.logo) {
 		throw new WalletError(
 			"GOOGLE_MISSING_LOGO",
-			"Google Wallet loyalty passes require a logo URL (programLogo)"
+			"Google Wallet loyalty passes require a logo URL (programLogo) in google.logo"
 		);
 	}
 	if (pass.type === "flight") {
@@ -191,21 +184,9 @@ function buildAppLinkData(d: {
 
 // Build the class body — defines the pass template (shared across all recipients)
 function buildClassBody(pass: PassConfig): Record<string, unknown> {
-	const logo = imageUri(pass.logo);
+	const logo = imageUri(pass.google?.logo);
 	const wideLogo = imageUri(pass.google?.wideLogo);
-	// Google needs a URL for heroImage — extract it from a plain string or an ImageSet base.
-	// Bytes are not accepted by the Google Wallet API.
-	let bannerUrl: string | undefined;
-	if (typeof pass.banner === "string") {
-		bannerUrl = pass.banner;
-	} else if (
-		pass.banner &&
-		!(pass.banner instanceof Uint8Array) &&
-		typeof pass.banner.base === "string"
-	) {
-		bannerUrl = pass.banner.base;
-	}
-	const hero = imageUri(bannerUrl);
+	const hero = imageUri(pass.google?.hero);
 
 	const body: Record<string, unknown> = {
 		...buildClassTypeFields(pass, pass.locales),
