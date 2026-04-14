@@ -527,6 +527,16 @@ export function PassPlayground({
 
 	const activeColor = COLORS.find((c) => c.value === color) ?? COLORS[5];
 
+	const handleColorChange = (value: ColorValue) => {
+		setColor(value);
+		// biome-ignore lint/suspicious/noDocumentCookie: setting a persistent user preference cookie
+		document.cookie = `passlet-color=${value}; path=/; max-age=31536000; SameSite=Lax`;
+		const link = document.querySelector<HTMLLinkElement>("link[rel*='icon']");
+		if (link) {
+			link.href = `/favicon.svg?t=${Date.now()}`;
+		}
+	};
+
 	const cardStyle = {
 		backgroundColor: activeColor.color,
 		"--pass-text": activeColor.text,
@@ -646,7 +656,7 @@ export function PassPlayground({
 									aria-pressed={isSelected}
 									className="relative size-5 cursor-pointer rounded-sm border-overlay transition-transform duration-150 ease-out after:absolute after:-inset-1.5 after:content-[''] focus:outline-none focus-visible:ring-2 focus-visible:ring-current focus-visible:ring-offset-2 active:scale-95"
 									key={c.value}
-									onClick={() => setColor(c.value)}
+									onClick={() => handleColorChange(c.value)}
 									style={{
 										backgroundColor: c.color,
 										color: c.color,
