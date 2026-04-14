@@ -34,7 +34,7 @@ export function InstallCommand() {
 							"hit-area-2 cursor-pointer touch-manipulation font-medium text-xs transition-colors duration-150 ease-out",
 							pm === p
 								? "text-[#1E1E1E]"
-								: "text-[#B8B8B8] hover:text-[#707070]"
+								: "text-(--gray-a8) hover:text-(--gray-a9)"
 						)}
 						key={p}
 						onClick={() => setPm(p)}
@@ -46,8 +46,8 @@ export function InstallCommand() {
 			</div>
 			<div className="hover:hover-border-shadow flex w-full items-center justify-between overflow-hidden rounded-xl border-shadow bg-white p-3 transition-shadow duration-200 ease-out">
 				<div className="flex items-center gap-1.5">
-					<span className="text-[#9A9A9A] text-sm">$</span>
-					<div className="flex text-[#1E1E1E] text-sm">
+					<span className="text-(--gray-a8) text-sm">$</span>
+					<div className="flex text-(--gray-a12) text-sm">
 						<TextMorph>{COMMANDS[pm]}</TextMorph>
 					</div>
 				</div>
@@ -60,7 +60,7 @@ export function InstallCommand() {
 					<div className="hit-area-3 relative size-4.5">
 						<div
 							className={cn(
-								"absolute inset-0 flex items-center justify-center text-[#30A34A] transition-[opacity,filter,scale] duration-300 ease-in-out will-change-[opacity,filter,scale]",
+								"absolute inset-0 flex items-center justify-center text-(--green-a10) transition-[opacity,filter,scale] duration-300 ease-in-out will-change-[opacity,filter,scale]",
 								copied
 									? "scale-100 opacity-100 blur-0"
 									: "scale-[0.25] opacity-0 blur-sm"
@@ -79,7 +79,7 @@ export function InstallCommand() {
 						</div>
 						<div
 							className={cn(
-								"text-[#B8B8B8] transition-[opacity,filter,scale,color] duration-300 ease-in-out will-change-[opacity,filter,scale] group-hover:text-[#707070]",
+								"text-(--gray-a8) transition-[opacity,filter,scale,color] duration-300 ease-in-out will-change-[opacity,filter,scale] group-hover:text-(--gray-a9)",
 								copied
 									? "scale-[0.25] opacity-0 blur-sm"
 									: "scale-100 opacity-100 blur-0"

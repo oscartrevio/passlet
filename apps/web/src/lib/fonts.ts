@@ -1,7 +1,7 @@
 import localFont from "next/font/local";
 
 const openRunde = localFont({
-	variable: "--font-family-open-runde",
+	variable: "--font-open-runde",
 	src: [
 		{
 			path: "../lib/fonts/OpenRunde-Regular.woff2",
@@ -24,7 +24,7 @@ const openRunde = localFont({
 			style: "normal",
 		},
 	],
-	display: "swap",
+	display: "auto",
 });
 
 export const fonts = [openRunde.variable].join(" ");

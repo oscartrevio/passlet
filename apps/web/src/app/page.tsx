@@ -86,9 +86,9 @@ export default async function Home() {
 		"blue") as ColorValue;
 
 	return (
-		<div className="flex min-h-svh flex-col font-open-runde">
+		<div className="flex min-h-svh flex-col">
 			{/* Playground hero */}
-			<div className="w-full bg-[#FAFAFA] py-12">
+			<div className="w-full bg-(--gray-a2) py-12">
 				<div className="mx-auto max-w-xl px-4">
 					<PassPlayground
 						initialColor={initialColor}
@@ -109,10 +109,10 @@ export default async function Home() {
 			<div className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-18 px-4 py-12">
 				{/* Title + subtitle */}
 				<div className="flex flex-col gap-3">
-					<h1 className="text-balance font-semibold text-2xl text-[#1E1E1E] tracking-tighter">
+					<h1 className="text-balance font-semibold text-(--gray-a12) text-2xl tracking-tighter">
 						Passlet
 					</h1>
-					<p className="text-[#707070] text-sm leading-normal">
+					<p className="text-(--gray-a11) text-sm leading-normal">
 						One API for Apple Wallet and Google Wallet passes.
 						<br />
 						Define a pass once and get .pkpass for Apple, JWT for Google.
@@ -121,7 +121,7 @@ export default async function Home() {
 
 				{/* Install */}
 				<div className="flex flex-col gap-3">
-					<h2 className="text-balance font-semibold text-[#1E1E1E] text-sm">
+					<h2 className="text-balance font-semibold text-(--gray-a12) text-sm">
 						Install to get started
 					</h2>
 					<InstallCommand />
@@ -129,7 +129,7 @@ export default async function Home() {
 
 				{/* What you get */}
 				<div className="flex flex-col gap-3">
-					<h2 className="text-balance font-semibold text-[#1E1E1E] text-sm">
+					<h2 className="text-balance font-semibold text-(--gray-a12) text-sm">
 						What you get
 					</h2>
 					<div className="flex flex-col gap-2.5">
@@ -140,11 +140,11 @@ export default async function Home() {
 							>
 								<div className="flex items-center gap-1">
 									{icon}
-									<span className="text-balance font-semibold text-[#1E1E1E] text-sm">
+									<span className="text-balance font-semibold text-(--gray-a12) text-sm">
 										{label}
 									</span>
 								</div>
-								<span className="text-right font-medium text-[#B8B8B8] text-sm transition-colors duration-150 ease-out group-hover:text-[#8A8A8A]">
+								<span className="text-right font-medium text-(--gray-a8) text-sm transition-colors duration-150 ease-out group-hover:text-(--gray-a9)">
 									{description}
 								</span>
 							</div>
@@ -153,11 +153,11 @@ export default async function Home() {
 				</div>
 
 				{/* Footer */}
-				<div className="mt-auto flex items-center justify-between pb-[env(safe-area-inset-bottom)]">
-					<span className="text-[#B8B8B8] text-xs">
+				<div className="mt-auto flex items-center justify-between pb-[env(safe-area-inset-bottom)] font-medium">
+					<span className="text-(--gray-a8) text-xs">
 						Created by{" "}
 						<Link
-							className="transition-colors hover:text-[#707070]"
+							className="transition-colors hover:text-(--gray-a9)"
 							href="https://oscartrevio.xyz"
 							rel="noopener noreferrer"
 							target="_blank"
@@ -166,7 +166,7 @@ export default async function Home() {
 						</Link>
 					</span>
 					<Link
-						className="text-[#B8B8B8] text-xs transition-colors hover:text-[#707070]"
+						className="text-(--gray-a8) text-xs transition-colors hover:text-(--gray-a9)"
 						href="https://github.com/oscartrevio/passlet"
 						rel="noopener noreferrer"
 						target="_blank"

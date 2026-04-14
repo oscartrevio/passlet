@@ -35,7 +35,7 @@ export default function RootLayout({
 }>) {
 	return (
 		<html lang="en" suppressHydrationWarning>
-			<body className={`${fonts} min-h-full bg-white antialiased`}>
+			<body className={`${fonts} min-h-full bg-(--gray-a1) antialiased`}>
 				{children}
 			</body>
 		</html>
