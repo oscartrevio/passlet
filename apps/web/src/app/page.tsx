@@ -80,7 +80,7 @@ const features = [
 
 export default async function Home() {
 	const cookieStore = await cookies();
-	const memberNo = cookieStore.get("passlet-member-id")?.value ?? "000000";
+	const memberNo = cookieStore.get("passlet-id")?.value ?? "000000";
 
 	return (
 		<div className="flex min-h-svh flex-col font-open-runde">
