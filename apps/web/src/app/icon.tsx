@@ -22,7 +22,7 @@ const ACCENT_COLORS: Record<string, string> = {
 
 export default async function Icon() {
 	const cookieStore = await cookies();
-	const accent = cookieStore.get("pref-accent-color")?.value ?? "blue";
+	const accent = cookieStore.get("passlet-color")?.value ?? "blue";
 	const fill = ACCENT_COLORS[accent] ?? ACCENT_COLORS.blue;
 
 	return new ImageResponse(

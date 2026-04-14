@@ -530,7 +530,7 @@ export function PassPlayground({
 	const handleColorChange = (value: ColorValue) => {
 		setColor(value);
 		// biome-ignore lint/suspicious/noDocumentCookie: setting a persistent user preference cookie
-		document.cookie = `pref-accent-color=${value}; path=/; max-age=31536000; SameSite=Lax`;
+		document.cookie = `passlet-color=${value}; path=/; max-age=31536000; SameSite=Lax`;
 		const link = document.querySelector<HTMLLinkElement>("link[rel*='icon']");
 		if (link) {
 			link.href = `/favicon.svg?t=${Date.now()}`;
