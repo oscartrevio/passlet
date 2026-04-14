@@ -3,7 +3,8 @@ import type { Metadata, Viewport } from "next";
 export const SITE_MANIFEST = {
 	name: "Passlet",
 	short_name: "Passlet",
-	description: "One API for Apple Wallet and Google Wallet passes.",
+	description:
+		"One API for Apple Wallet and Google Wallet passes. Define a pass once and get .pkpass for Apple, JWT for Google.",
 	start_url: "/",
 	display: "standalone" as const,
 	background_color: "#FAFAFA",
