@@ -26,13 +26,13 @@ export function InstallCommand() {
 
 	return (
 		<div className="flex flex-col gap-1.5">
-			<div className="flex gap-3.5">
+			<div className="flex gap-3">
 				{(["npm", "pnpm", "yarn", "bun"] as PackageManager[]).map((p) => (
 					<button
 						className={cn(
 							"hit-area-2 cursor-pointer touch-manipulation font-medium text-xs transition-colors duration-150 ease-out",
 							pm === p
-								? "text-[#1E1E1E]"
+								? "text-(--gray-a11)"
 								: "text-(--gray-a8) hover:text-(--gray-a9)"
 						)}
 						key={p}
