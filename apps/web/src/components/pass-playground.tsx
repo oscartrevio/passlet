@@ -273,7 +273,7 @@ export function PassPlayground({
 	};
 
 	return (
-		<div className="flex items-stretch gap-6">
+		<div className="flex items-stretch gap-4">
 			{/* Card preview */}
 			<div
 				className="relative aspect-181/251 w-[256px] shrink-0 select-none overflow-hidden rounded-lg border-overlay text-(--pass-text) transition-colors duration-300"

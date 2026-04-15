@@ -89,7 +89,7 @@ export default async function Home() {
 		<div className="flex min-h-svh flex-col">
 			{/* Playground hero */}
 			<div className="w-full bg-(--gray-a2) py-12">
-				<div className="mx-auto max-w-xl px-4">
+				<div className="mx-auto max-w-lg px-4">
 					<PassPlayground
 						initialColor={initialColor}
 						memberNo={memberNo}
@@ -106,7 +106,7 @@ export default async function Home() {
 			</div>
 
 			{/* Content */}
-			<div className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-18 px-4 py-12">
+			<div className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-18 px-4 py-12">
 				{/* Title + subtitle */}
 				<div className="flex flex-col gap-3">
 					<h1 className="text-balance font-semibold text-(--gray-a12) text-2xl tracking-tighter">
