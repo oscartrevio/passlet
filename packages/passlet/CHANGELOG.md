@@ -1,5 +1,11 @@
 # passlet
 
+## 1.0.1
+
+### Patch Changes
+
+- 7f83a3a: chore: codebase quality cleanup
+
 ## 1.0.0
 
 ### Major Changes
