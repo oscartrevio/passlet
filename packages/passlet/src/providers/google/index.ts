@@ -1,6 +1,12 @@
 import { WalletError } from "../../errors";
 import type { GoogleCredentials } from "../../types/credentials";
-import type { CreateConfig, FieldDef, PassConfig } from "../../types/schemas";
+import type {
+	AppLinkData,
+	CreateConfig,
+	FieldDef,
+	PassConfig,
+	PassType,
+} from "../../types/schemas";
 import { deleteObject, ensureClass, importGoogleKey, patchObject } from "./api";
 import {
 	imageUri,
@@ -9,28 +15,56 @@ import {
 	translationsFor,
 } from "./utils";
 
-// Typed maps — pass.type is always one of these keys so access is always string (not string | undefined)
-type PassType = PassConfig["type"];
-
 // Google Wallet class type per pass type
-const CLASS_TYPE: Record<PassType, string> = {
+const CLASS_TYPE = {
 	loyalty: "loyaltyClass",
 	event: "eventTicketClass",
 	flight: "flightClass",
 	coupon: "offerClass",
 	giftCard: "giftCardClass",
 	generic: "genericClass",
-};
+} as const satisfies Record<PassType, string>;
 
 // Google Wallet object type per pass type
-const OBJECT_TYPE: Record<PassType, string> = {
+const OBJECT_TYPE = {
 	loyalty: "loyaltyObject",
 	event: "eventTicketObject",
 	flight: "flightObject",
 	coupon: "offerObject",
 	giftCard: "giftCardObject",
 	generic: "genericObject",
-};
+} as const satisfies Record<PassType, string>;
+
+function resolveFieldValue(
+	field: FieldDef,
+	values: Record<string, string | null>
+): string | undefined {
+	const value = field.key in values ? values[field.key] : field.value;
+	return value === null || value === undefined ? undefined : value;
+}
+
+function resolveValueByKey(
+	fields: FieldDef[],
+	values: Record<string, string | null>,
+	key: string
+): string | undefined {
+	const match = fields.find((field) => field.key === key);
+	if (!match) {
+		return undefined;
+	}
+	return resolveFieldValue(match, values);
+}
+
+function googleObjectRef(
+	credentials: GoogleCredentials,
+	pass: PassConfig,
+	serialNumber: string
+) {
+	return {
+		objectType: OBJECT_TYPE[pass.type],
+		objectId: `${credentials.issuerId}.${serialNumber}`,
+	};
+}
 
 function validateGoogleRequirements(pass: PassConfig): void {
 	// Google loyalty classes require a programLogo URL — the API returns 400 without it
@@ -66,8 +100,8 @@ function buildTextModules(
 		if (excludeKeys.includes(f.key)) {
 			continue;
 		}
-		const value = f.key in values ? values[f.key] : f.value;
-		if (value === null || value === undefined) {
+		const value = resolveFieldValue(f, values);
+		if (value === undefined) {
 			continue;
 		}
 		modules.push({ header: f.label, body: value, id: f.key });
@@ -91,8 +125,8 @@ function buildInfoModuleData(
 		if (f.slot !== "back") {
 			continue;
 		}
-		const value = f.key in values ? values[f.key] : f.value;
-		if (value === null || value === undefined) {
+		const value = resolveFieldValue(f, values);
+		if (value === undefined) {
 			continue;
 		}
 		rows.push({ label: f.label, value });
@@ -165,16 +199,7 @@ function buildAppLinkInfo(info: {
 	};
 }
 
-function buildAppLinkData(d: {
-	android?: {
-		uri: string;
-		title?: string;
-		description?: string;
-		logoUrl?: string;
-	};
-	ios?: { uri: string; title?: string; description?: string; logoUrl?: string };
-	web?: { uri: string; title?: string; description?: string; logoUrl?: string };
-}): Record<string, unknown> {
+function buildAppLinkData(d: AppLinkData): Record<string, unknown> {
 	return {
 		androidAppLinkInfo: d.android ? buildAppLinkInfo(d.android) : undefined,
 		iosAppLinkInfo: d.ios ? buildAppLinkInfo(d.ios) : undefined,
@@ -239,11 +264,9 @@ function buildLoyaltyObjectFields(
 	fields: FieldDef[],
 	values: Record<string, string | null>
 ): Record<string, unknown> {
-	const resolve = (key: string) =>
-		values[key] ?? fields.find((f) => f.key === key)?.value;
-	const points = resolve("points");
-	const member = resolve("member");
-	const memberId = resolve("memberId");
+	const points = resolveValueByKey(fields, values, "points");
+	const member = resolveValueByKey(fields, values, "member");
+	const memberId = resolveValueByKey(fields, values, "memberId");
 	return {
 		loyaltyPoints: points == null ? undefined : { balance: { string: points } },
 		accountName: member ?? undefined,
@@ -276,7 +299,7 @@ function buildGiftCardObjectFields(
 	fields: FieldDef[],
 	values: Record<string, string | null>
 ): Record<string, unknown> {
-	const raw = values.balance ?? fields.find((f) => f.key === "balance")?.value;
+	const raw = resolveValueByKey(fields, values, "balance");
 	return {
 		balance:
 			raw == null
@@ -296,11 +319,9 @@ function buildDisplayFields(
 	excludeKeys: string[] = []
 ): Record<string, unknown> {
 	const primaryField = fields.find((f) => f.slot === "primary");
-	const primaryValue =
-		primaryField &&
-		(primaryField.key in values
-			? values[primaryField.key]
-			: primaryField.value);
+	const primaryValue = primaryField
+		? resolveFieldValue(primaryField, values)
+		: undefined;
 
 	const textModules = buildTextModules(
 		fields,
@@ -454,9 +475,12 @@ export async function updateGooglePass(
 	credentials: GoogleCredentials
 ): Promise<void> {
 	const privateKey = await importGoogleKey(credentials);
-	const objectType = OBJECT_TYPE[pass.type];
+	const { objectType, objectId } = googleObjectRef(
+		credentials,
+		pass,
+		createConfig.serialNumber
+	);
 	const classId = `${credentials.issuerId}.${pass.id}`;
-	const objectId = `${credentials.issuerId}.${createConfig.serialNumber}`;
 
 	const patch = buildObjectBody(pass, createConfig, classId, objectId, []);
 
@@ -469,8 +493,11 @@ export async function deleteGooglePass(
 	credentials: GoogleCredentials
 ): Promise<void> {
 	const privateKey = await importGoogleKey(credentials);
-	const objectType = OBJECT_TYPE[pass.type];
-	const objectId = `${credentials.issuerId}.${serialNumber}`;
+	const { objectType, objectId } = googleObjectRef(
+		credentials,
+		pass,
+		serialNumber
+	);
 
 	await deleteObject(objectType, objectId, credentials, privateKey);
 }
@@ -481,8 +508,11 @@ export async function expireGooglePass(
 	credentials: GoogleCredentials
 ): Promise<void> {
 	const privateKey = await importGoogleKey(credentials);
-	const objectType = OBJECT_TYPE[pass.type];
-	const objectId = `${credentials.issuerId}.${serialNumber}`;
+	const { objectType, objectId } = googleObjectRef(
+		credentials,
+		pass,
+		serialNumber
+	);
 
 	await patchObject(
 		objectType,

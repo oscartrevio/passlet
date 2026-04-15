@@ -26,10 +26,8 @@ describe("toAppleBarcodeFormat", () => {
 		["Aztec", "PKBarcodeFormatAztec"],
 		["Code128", "PKBarcodeFormatCode128"],
 	])("maps %s to %s", (input, expected) => {
-		expect(toAppleBarcodeFormat(input)).toBe(expected);
-	});
-
-	it("defaults unknown format to QR", () => {
-		expect(toAppleBarcodeFormat("EAN13")).toBe("PKBarcodeFormatQR");
+		expect(
+			toAppleBarcodeFormat(input as "QR" | "PDF417" | "Aztec" | "Code128")
+		).toBe(expected);
 	});
 });

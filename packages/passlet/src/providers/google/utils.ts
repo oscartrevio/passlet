@@ -1,12 +1,14 @@
-const GOOGLE_BARCODE_TYPE: Record<string, string> = {
+import type { BarcodeFormat, GoogleImage, Locales } from "../../types/schemas";
+
+const GOOGLE_BARCODE_TYPE: Record<BarcodeFormat, string> = {
 	QR: "QR_CODE",
 	PDF417: "PDF_417",
 	Aztec: "AZTEC",
 	Code128: "CODE_128",
 };
 
-export function toGoogleBarcodeType(format: string): string {
-	return GOOGLE_BARCODE_TYPE[format] ?? "QR_CODE";
+export function toGoogleBarcodeType(format: BarcodeFormat): string {
+	return GOOGLE_BARCODE_TYPE[format];
 }
 
 interface TranslatedValue {
@@ -36,7 +38,7 @@ export function localized(
 // Used to look up field key translations (labels) and key_value translations (static values).
 export function translationsFor(
 	key: string,
-	locales: Record<string, Record<string, string>> | undefined
+	locales: Locales | undefined
 ): TranslatedValue[] | undefined {
 	if (!locales) {
 		return undefined;
@@ -48,6 +50,6 @@ export function translationsFor(
 }
 
 // Wrap a URL string as a Google Wallet ImageUri object.
-export function imageUri(url: unknown): Record<string, unknown> | undefined {
-	return typeof url === "string" ? { sourceUri: { uri: url } } : undefined;
+export function imageUri(url: string | undefined): GoogleImage | undefined {
+	return url ? { sourceUri: { uri: url } } : undefined;
 }

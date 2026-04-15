@@ -8,11 +8,9 @@ describe("toGoogleBarcodeType", () => {
 		["Aztec", "AZTEC"],
 		["Code128", "CODE_128"],
 	])("maps %s to %s", (input, expected) => {
-		expect(toGoogleBarcodeType(input)).toBe(expected);
-	});
-
-	it("defaults unknown format to QR_CODE", () => {
-		expect(toGoogleBarcodeType("EAN13")).toBe("QR_CODE");
+		expect(
+			toGoogleBarcodeType(input as "QR" | "PDF417" | "Aztec" | "Code128")
+		).toBe(expected);
 	});
 });
 
@@ -37,15 +35,7 @@ describe("imageUri", () => {
 		});
 	});
 
-	it("returns undefined for Uint8Array (bytes not supported by Google)", () => {
-		expect(imageUri(new Uint8Array([1, 2, 3]))).toBeUndefined();
-	});
-
 	it("returns undefined for undefined", () => {
 		expect(imageUri(undefined)).toBeUndefined();
-	});
-
-	it("returns undefined for null", () => {
-		expect(imageUri(null)).toBeUndefined();
 	});
 });

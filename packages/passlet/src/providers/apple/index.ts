@@ -2,7 +2,12 @@ import { createHash } from "node:crypto";
 import JSZip from "jszip";
 import { WalletError } from "../../errors";
 import type { AppleCredentials } from "../../types/credentials";
-import type { CreateConfig, FieldDef, PassConfig } from "../../types/schemas";
+import type {
+	CreateConfig,
+	FieldDef,
+	PassConfig,
+	PassType,
+} from "../../types/schemas";
 import { signManifest } from "./signer";
 import {
 	hexToRgb,
@@ -12,7 +17,7 @@ import {
 } from "./utils";
 
 // Apple pass type → pass.json key
-const PASS_TYPE_KEY: Record<string, string> = {
+const PASS_TYPE_KEY: Record<PassType, string> = {
 	loyalty: "storeCard",
 	coupon: "coupon",
 	event: "eventTicket",
@@ -21,7 +26,10 @@ const PASS_TYPE_KEY: Record<string, string> = {
 	generic: "generic",
 };
 
-const TRANSIT_TYPE: Record<string, string> = {
+const TRANSIT_TYPE: Record<
+	NonNullable<Extract<PassConfig, { type: "flight" }>["transitType"]>,
+	string
+> = {
 	air: "PKTransitTypeAir",
 	train: "PKTransitTypeTrain",
 	bus: "PKTransitTypeBus",
@@ -29,7 +37,7 @@ const TRANSIT_TYPE: Record<string, string> = {
 };
 
 // Apple field slot → pass.json key
-const SLOT_KEY: Record<FieldDef["slot"], string> = {
+const SLOT_KEY: Record<FieldDef["slot"], keyof AppleSlots> = {
 	header: "headerFields",
 	primary: "primaryFields",
 	secondary: "secondaryFields",
@@ -46,11 +54,33 @@ function validateAppleRequirements(pass: PassConfig): void {
 	}
 }
 
+interface AppleField {
+	changeMessage?: string;
+	currencyCode?: string;
+	dateStyle?: FieldDef["dateStyle"];
+	key: string;
+	label: string;
+	numberStyle?: FieldDef["numberStyle"];
+	row?: 0 | 1;
+	textAlignment?: FieldDef["textAlignment"];
+	timeStyle?: FieldDef["timeStyle"];
+	value: string;
+}
+
+type AppleSlots = Record<
+	| "headerFields"
+	| "primaryFields"
+	| "secondaryFields"
+	| "auxiliaryFields"
+	| "backFields",
+	AppleField[]
+>;
+
 function buildSlots(
 	fields: FieldDef[],
 	values: Record<string, string | null>
-): Record<string, unknown[]> {
-	const slots: Record<string, unknown[]> = {
+): AppleSlots {
+	const slots: AppleSlots = {
 		headerFields: [],
 		primaryFields: [],
 		secondaryFields: [],
@@ -83,12 +113,12 @@ function buildSlots(
 
 function buildPassTypeContent(
 	pass: PassConfig,
-	slots: Record<string, unknown[]>
+	slots: AppleSlots
 ): Record<string, unknown> {
 	const content: Record<string, unknown> = { ...slots };
 	if (pass.type === "flight") {
-		content.transitType =
-			TRANSIT_TYPE[pass.transitType ?? "air"] ?? "PKTransitTypeAir";
+		const transitType = pass.transitType ?? "air";
+		content.transitType = TRANSIT_TYPE[transitType];
 	}
 	return content;
 }
@@ -178,7 +208,6 @@ function buildAppleCommonFields(
 			})
 		),
 		beacons: a?.beacons,
-		relevantDate: a?.relevantDate,
 		relevantDates: a?.relevantDates,
 		groupingIdentifier: a?.groupingIdentifier,
 		suppressStripShine: a?.suppressStripShine,
@@ -203,7 +232,7 @@ function buildPassJson(
 	createConfig: CreateConfig,
 	credentials: AppleCredentials
 ): Record<string, unknown> {
-	const passTypeKey = PASS_TYPE_KEY[pass.type] ?? "generic";
+	const passTypeKey = PASS_TYPE_KEY[pass.type];
 	const slots = buildSlots(pass.fields, createConfig.values ?? {});
 	const a = pass.apple;
 
