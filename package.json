@@ -19,12 +19,7 @@
     "version": "changeset version",
     "release": "turbo build --filter=passlet && changeset publish"
   },
-  "dependencies": {
-    "@commitlint/types": "^20.5.0",
-    "@passlet/env": "workspace:*",
-    "dotenv": "catalog:",
-    "zod": "catalog:"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@biomejs/biome": "2.4.9",
     "@changesets/cli": "^2.30.0",
