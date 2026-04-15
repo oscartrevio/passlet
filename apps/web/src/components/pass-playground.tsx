@@ -33,7 +33,7 @@ function CardStrip({ pattern }: { pattern: PatternType }) {
 	return (
 		<svg
 			aria-hidden="true"
-			className="pointer-events-none w-full overflow-visible"
+			className="pointer-events-none w-full"
 			fill="none"
 			overflow="visible"
 			viewBox={`0 0 ${STRIP_W} ${STRIP_H}`}
@@ -57,17 +57,18 @@ function CardStrip({ pattern }: { pattern: PatternType }) {
 					x="0"
 					y="0"
 				>
-					<feFlood floodOpacity="0" result="BackgroundImageFix" />
 					<feColorMatrix
 						in="SourceAlpha"
 						result="hardAlpha"
 						values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0"
 					/>
 					<feOffset dy="1" />
-					<feGaussianBlur stdDeviation="0.5" />
+					<feGaussianBlur stdDeviation="1" />
 					<feComposite in2="hardAlpha" operator="out" />
-					<feColorMatrix values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.2 0" />
-					<feBlend in2="BackgroundImageFix" result="shadow" />
+					<feColorMatrix
+						result="shadow"
+						values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.2 0"
+					/>
 					<feBlend in="SourceGraphic" in2="shadow" result="shape" />
 					<feColorMatrix
 						in="SourceAlpha"
@@ -75,7 +76,7 @@ function CardStrip({ pattern }: { pattern: PatternType }) {
 						values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0"
 					/>
 					<feOffset dy="1" />
-					<feGaussianBlur stdDeviation="0.5" />
+					<feGaussianBlur stdDeviation="1" />
 					<feComposite in2="hardAlpha" k2="-1" k3="1" operator="arithmetic" />
 					<feColorMatrix values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.2 0" />
 					<feBlend in2="shape" />
@@ -226,7 +227,8 @@ export function PassPlayground({
 		if (creating) {
 			return;
 		}
-		if (!name.trim()) {
+		const trimmedName = name.trim();
+		if (!trimmedName) {
 			setWiggleName(true);
 			setTimeout(() => setWiggleName(false), 300);
 			return;
@@ -238,7 +240,7 @@ export function PassPlayground({
 			const [result] = await Promise.all([
 				createPassAction({
 					provider,
-					memberName: name.trim(),
+					memberName: trimmedName,
 					memberNo,
 					since: TODAY,
 					color: activeColor.color,
