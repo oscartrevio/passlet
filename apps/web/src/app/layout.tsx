@@ -1,3 +1,4 @@
+import { Analytics } from "@vercel/analytics/next";
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { fonts } from "@/lib/fonts";
@@ -37,6 +38,7 @@ export default function RootLayout({
 		<html lang="en" suppressHydrationWarning>
 			<body className={`${fonts} min-h-full bg-(--gray-a1) antialiased`}>
 				{children}
+				<Analytics />
 			</body>
 		</html>
 	);
