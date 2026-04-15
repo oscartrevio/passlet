@@ -2,7 +2,6 @@
 
 import { cn } from "@passlet/ui/lib/utils";
 import { useRef, useState } from "react";
-import { TextMorph } from "torph/react";
 
 type PackageManager = "npm" | "pnpm" | "yarn" | "bun";
 
@@ -48,7 +47,7 @@ export function InstallCommand() {
 				<div className="flex items-center gap-1.5">
 					<span className="text-(--gray-a8) text-sm">$</span>
 					<div className="flex text-(--gray-a12) text-sm">
-						<TextMorph>{COMMANDS[pm]}</TextMorph>
+						<span>{COMMANDS[pm]}</span>
 					</div>
 				</div>
 				<button
