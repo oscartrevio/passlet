@@ -3,7 +3,12 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { InstallCommand } from "@/components/install-command";
 import { PassPlayground } from "@/components/pass-playground";
-import type { ColorValue } from "@/lib/data";
+import {
+	DEFAULT_PASSLET_ID,
+	PASSLET_COLOR_COOKIE,
+	PASSLET_ID_COOKIE,
+} from "@/lib/cookies";
+import { DEFAULT_COLOR, isColorValue } from "@/lib/data";
 import { version } from "../../../../packages/passlet/package.json";
 
 const s = (fill: string) =>
@@ -81,13 +86,14 @@ const features = [
 
 export default async function Home() {
 	const cookieStore = await cookies();
-	const memberNo = cookieStore.get("passlet-id")?.value ?? "000000";
-	const initialColor = (cookieStore.get("passlet-color")?.value ??
-		"blue") as ColorValue;
+	const memberNo =
+		cookieStore.get(PASSLET_ID_COOKIE)?.value ?? DEFAULT_PASSLET_ID;
+	const rawColor = cookieStore.get(PASSLET_COLOR_COOKIE)?.value;
+	const initialColor =
+		rawColor && isColorValue(rawColor) ? rawColor : DEFAULT_COLOR;
 
 	return (
 		<div className="flex min-h-svh flex-col">
-			{/* Playground hero */}
 			<div className="w-full bg-(--gray-a2) py-12">
 				<div className="mx-auto max-w-lg px-4">
 					<PassPlayground
@@ -105,9 +111,7 @@ export default async function Home() {
 				</div>
 			</div>
 
-			{/* Content */}
 			<div className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-18 px-4 py-12">
-				{/* Title + subtitle */}
 				<div className="flex flex-col gap-3">
 					<h1 className="text-balance font-semibold text-(--gray-a12) text-2xl tracking-tighter">
 						Passlet
@@ -119,7 +123,6 @@ export default async function Home() {
 					</p>
 				</div>
 
-				{/* Install */}
 				<div className="flex flex-col gap-3">
 					<h2 className="text-balance font-semibold text-(--gray-a12) text-sm">
 						Install to get started
@@ -127,7 +130,6 @@ export default async function Home() {
 					<InstallCommand />
 				</div>
 
-				{/* What you get */}
 				<div className="flex flex-col gap-3">
 					<h2 className="text-balance font-semibold text-(--gray-a12) text-sm">
 						What you get
@@ -152,7 +154,6 @@ export default async function Home() {
 					</div>
 				</div>
 
-				{/* Footer */}
 				<div className="mt-auto flex items-center justify-between pb-[env(safe-area-inset-bottom)] font-medium">
 					<span className="text-(--gray-a8) text-xs">
 						Created by{" "}
