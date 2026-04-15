@@ -12,9 +12,6 @@ catalogs:
     '@types/react-dom':
       specifier: ^19.2.3
       version: 19.2.3
-    dotenv:
-      specifier: ^17.4.2
-      version: 17.4.2
     lucide-react:
       specifier: ^0.546.0
       version: 0.546.0
@@ -40,19 +37,6 @@ catalogs:
 importers:
 
   .:
-    dependencies:
-      '@commitlint/types':
-        specifier: ^20.5.0
-        version: 20.5.0
-      '@passlet/env':
-        specifier: workspace:*
-        version: link:packages/env
-      dotenv:
-        specifier: 'catalog:'
-        version: 17.4.2
-      zod:
-        specifier: 'catalog:'
-        version: 4.3.6
     devDependencies:
       '@biomejs/biome':
         specifier: 2.4.9
@@ -99,18 +83,9 @@ importers:
       babel-plugin-react-compiler:
         specifier: ^1.0.0
         version: 1.0.0
-      dotenv:
-        specifier: 'catalog:'
-        version: 17.4.2
-      lucide-react:
-        specifier: 'catalog:'
-        version: 0.546.0(react@19.2.5)
       next:
         specifier: ^16.2.3
         version: 16.2.3(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      next-themes:
-        specifier: 'catalog:'
-        version: 0.4.6(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       passlet:
         specifier: workspace:*
         version: link:../../packages/passlet
@@ -120,16 +95,7 @@ importers:
       react-dom:
         specifier: 'catalog:'
         version: 19.2.5(react@19.2.5)
-      sonner:
-        specifier: 'catalog:'
-        version: 2.0.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      zod:
-        specifier: 'catalog:'
-        version: 4.3.6
     devDependencies:
-      '@passlet/config':
-        specifier: workspace:*
-        version: link:../../packages/config
       '@tailwindcss/postcss':
         specifier: ^4.2.2
         version: 4.2.2
@@ -156,9 +122,6 @@ importers:
       '@t3-oss/env-nextjs':
         specifier: ^0.13.1
         version: 0.13.11(typescript@5.9.3)(zod@4.3.6)
-      dotenv:
-        specifier: 'catalog:'
-        version: 17.4.2
       zod:
         specifier: 'catalog:'
         version: 4.3.6

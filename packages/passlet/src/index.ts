@@ -28,6 +28,7 @@ export type {
 	LoyaltyPassConfig,
 	NumberStyle,
 	PassConfig,
+	PassType,
 	RotatingBarcode,
 	TextAlignment,
 	TranslationMap,

@@ -6,6 +6,45 @@ const WALLET_BASE = "https://walletobjects.googleapis.com/walletobjects/v1";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const WALLET_SCOPE = "https://www.googleapis.com/auth/wallet_object.issuer";
 
+interface JsonArray
+	extends Array<string | number | boolean | null | JsonObject | JsonArray> {}
+
+interface JsonObject {
+	[key: string]: string | number | boolean | null | JsonObject | JsonArray;
+}
+
+const WALLET_METHOD = {
+	GET: "GET",
+	POST: "POST",
+	PUT: "PUT",
+	PATCH: "PATCH",
+	DELETE: "DELETE",
+} as const;
+
+const GOOGLE_CLASS_TYPE = {
+	LOYALTY: "loyaltyClass",
+	EVENT: "eventTicketClass",
+	FLIGHT: "flightClass",
+	COUPON: "offerClass",
+	GIFTCARD: "giftCardClass",
+	GENERIC: "genericClass",
+} as const;
+
+const GOOGLE_OBJECT_TYPE = {
+	LOYALTY: "loyaltyObject",
+	EVENT: "eventTicketObject",
+	FLIGHT: "flightObject",
+	COUPON: "offerObject",
+	GIFTCARD: "giftCardObject",
+	GENERIC: "genericObject",
+} as const;
+
+type WalletMethod = (typeof WALLET_METHOD)[keyof typeof WALLET_METHOD];
+type GoogleClassType =
+	(typeof GOOGLE_CLASS_TYPE)[keyof typeof GOOGLE_CLASS_TYPE];
+type GoogleObjectType =
+	(typeof GOOGLE_OBJECT_TYPE)[keyof typeof GOOGLE_OBJECT_TYPE];
+
 // Cache access tokens for 55 minutes (tokens expire in 60).
 const tokenCache = new Map<string, { token: string; expiresAt: number }>();
 
@@ -43,7 +82,7 @@ async function getAccessToken(
 	}
 
 	const response = await fetch(TOKEN_URL, {
-		method: "POST",
+		method: WALLET_METHOD.POST,
 		headers: { "Content-Type": "application/x-www-form-urlencoded" },
 		body: new URLSearchParams({
 			grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
@@ -68,7 +107,7 @@ async function getAccessToken(
 }
 
 async function walletRequest(
-	method: string,
+	method: WalletMethod,
 	path: string,
 	credentials: GoogleCredentials,
 	privateKey: CryptoKey,
@@ -110,21 +149,28 @@ async function assertOk(response: Response): Promise<void> {
 
 // Ensure a Google Wallet class exists, creating or updating it as needed.
 export async function ensureClass(
-	classType: string,
+	classType: GoogleClassType,
 	classId: string,
 	classBody: Record<string, unknown>,
 	credentials: GoogleCredentials,
 	privateKey: CryptoKey
 ): Promise<void> {
 	const existing = await walletRequest(
-		"GET",
+		WALLET_METHOD.GET,
 		`/${classType}/${classId}`,
 		credentials,
 		privateKey
 	);
 
 	if (existing.ok) {
-		const existingClass = (await existing.json()) as Record<string, unknown>;
+		const rawClass: unknown = await existing.json();
+		if (!rawClass || typeof rawClass !== "object" || Array.isArray(rawClass)) {
+			throw new WalletError(
+				"GOOGLE_API_ERROR",
+				"Google Wallet API returned an invalid class payload"
+			);
+		}
+		const existingClass = rawClass as JsonObject;
 		// Class exists — PUT the body so template updates are reflected.
 		// Google Wallet requires the full body for PUT requests, so we merge
 		// our new attributes with the existing class from their API.
@@ -137,7 +183,7 @@ export async function ensureClass(
 
 		await assertOk(
 			await walletRequest(
-				"PUT",
+				WALLET_METHOD.PUT,
 				`/${classType}/${classId}`,
 				credentials,
 				privateKey,
@@ -159,21 +205,27 @@ export async function ensureClass(
 	}
 
 	await assertOk(
-		await walletRequest("POST", `/${classType}`, credentials, privateKey, {
-			id: classId,
-			...classBody,
-		})
+		await walletRequest(
+			WALLET_METHOD.POST,
+			`/${classType}`,
+			credentials,
+			privateKey,
+			{
+				id: classId,
+				...classBody,
+			}
+		)
 	);
 }
 
 export async function deleteObject(
-	objectType: string,
+	objectType: GoogleObjectType,
 	objectId: string,
 	credentials: GoogleCredentials,
 	privateKey: CryptoKey
 ): Promise<void> {
 	const response = await walletRequest(
-		"DELETE",
+		WALLET_METHOD.DELETE,
 		`/${objectType}/${objectId}`,
 		credentials,
 		privateKey
@@ -188,14 +240,14 @@ export async function deleteObject(
 }
 
 export async function patchObject(
-	objectType: string,
+	objectType: GoogleObjectType,
 	objectId: string,
 	patch: Record<string, unknown>,
 	credentials: GoogleCredentials,
 	privateKey: CryptoKey
 ): Promise<void> {
 	const response = await walletRequest(
-		"PATCH",
+		WALLET_METHOD.PATCH,
 		`/${objectType}/${objectId}`,
 		credentials,
 		privateKey,

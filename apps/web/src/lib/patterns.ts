@@ -9,7 +9,7 @@ export const STRIP_H = 104;
 export const SWATCH_W = 30;
 export const SWATCH_H = 22;
 
-export function buildWaves(
+function buildWaves(
 	W: number,
 	H: number,
 	opts?: { targetWl?: number; targetSp?: number; amp?: number }
@@ -36,7 +36,7 @@ export function buildWaves(
 	return parts.join(" ");
 }
 
-export function buildZigzag(
+function buildZigzag(
 	W: number,
 	H: number,
 	opts?: { targetWl?: number; targetSp?: number; amp?: number }
@@ -62,7 +62,7 @@ export function buildZigzag(
 	return parts.join(" ");
 }
 
-export function buildChessboard(
+function buildChessboard(
 	W: number,
 	H: number,
 	opts?: { targetSq?: number }
@@ -86,11 +86,7 @@ export function buildChessboard(
 	return parts.join(" ");
 }
 
-export function buildDots(
-	W: number,
-	H: number,
-	opts?: { targetSp?: number }
-): string {
+function buildDots(W: number, H: number, opts?: { targetSp?: number }): string {
 	const targetSp = opts?.targetSp ?? 24;
 	const cols = Math.round(W / targetSp);
 	const rows = Math.round(H / targetSp);

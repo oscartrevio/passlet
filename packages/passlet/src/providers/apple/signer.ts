@@ -35,8 +35,7 @@ export function signManifest(options: SignManifestOptions): Uint8Array {
 
 	try {
 		// forge requires a binary string — decode the Uint8Array as latin1
-		// biome-ignore lint/suspicious/noExplicitAny: "iso-8859-1" is valid but not in strict Encoding types
-		const binaryStr = new TextDecoder("iso-8859-1" as any).decode(manifest);
+		const binaryStr = new TextDecoder("latin1").decode(manifest);
 
 		const p7 = forge.pkcs7.createSignedData();
 		p7.content = forge.util.createBuffer(binaryStr);

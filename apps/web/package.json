@@ -12,18 +12,12 @@
     "@passlet/ui": "workspace:*",
     "@vercel/analytics": "^2.0.1",
     "babel-plugin-react-compiler": "^1.0.0",
-    "dotenv": "catalog:",
-    "lucide-react": "catalog:",
     "next": "^16.2.3",
-    "next-themes": "catalog:",
     "passlet": "workspace:*",
     "react": "catalog:",
-    "react-dom": "catalog:",
-    "sonner": "catalog:",
-    "zod": "catalog:"
+    "react-dom": "catalog:"
   },
   "devDependencies": {
-    "@passlet/config": "workspace:*",
     "@tailwindcss/postcss": "^4.2.2",
     "@types/node": "^20.19.39",
     "@types/react": "catalog:",

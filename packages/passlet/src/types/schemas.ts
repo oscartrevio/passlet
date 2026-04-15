@@ -128,13 +128,7 @@ const appleOptionsSchema = z.object({
 	// Apple: foregroundColor (text color), labelColor (label text color)
 	foregroundColor: hexColor,
 	labelColor: hexColor,
-	// Deprecated — use relevantDates instead
-	relevantDate: z.iso
-		.datetime({
-			message: 'must be an ISO datetime e.g. "2024-06-01T20:00:00Z"',
-		})
-		.optional(),
-	// Date intervals during which the pass is relevant (replaces relevantDate)
+	// Date intervals during which the pass is relevant
 	relevantDates: z.array(relevantDateSchema).optional(),
 	// Groups passes of the same type into a single stack in Wallet
 	groupingIdentifier: z.string().optional(),
@@ -540,7 +534,7 @@ export type LocaleCode = CommonLocaleCode;
 // Keys are field keys, "name" for the pass title, or "fieldKey_value" for static field values.
 export type TranslationMap = Record<string, string>;
 
-export type Locales = Record<LocaleCode, TranslationMap>;
+export type Locales = Record<string, TranslationMap>;
 export type Location = z.infer<typeof locationSchema>;
 export type ImageSource = string | Uint8Array;
 export type ImageSet =
@@ -548,6 +542,9 @@ export type ImageSet =
 	| { base: ImageSource; retina?: ImageSource; superRetina?: ImageSource };
 export type BarcodeFormat = z.infer<typeof barcodeFormatSchema>;
 export type Barcode = z.infer<typeof barcodeSchema>;
+export interface GoogleImage {
+	sourceUri: { uri: string };
+}
 export type DateStyle = z.infer<typeof dateStyleSchema>;
 export type NumberStyle = z.infer<typeof numberStyleSchema>;
 export type TextAlignment = z.infer<typeof textAlignmentSchema>;
@@ -608,6 +605,7 @@ export type GiftCardPassConfig = Omit<
 > & { fields: FieldDefWith<GiftCardFieldKey>[] };
 export type GenericPassConfig = z.infer<typeof genericPassSchema>;
 export type PassConfig = z.infer<typeof passConfigSchema>;
+export type PassType = PassConfig["type"];
 export type CreateConfig = z.infer<typeof createConfigSchema>;
 export type GooglePassMessage = z.infer<typeof googleMessageSchema>;
 export type RotatingBarcode = z.infer<typeof googleRotatingBarcodeSchema>;

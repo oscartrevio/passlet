@@ -4,14 +4,8 @@
 import { cn } from "@passlet/ui/lib/utils";
 import { formatHex, oklch } from "culori";
 import QR from "qrcode";
-import { type HTMLAttributes, useEffect, useState } from "react";
-
-export type QRCodeProps = HTMLAttributes<HTMLDivElement> & {
-	data: string;
-	foreground?: string;
-	background?: string;
-	robustness?: "L" | "M" | "Q" | "H";
-};
+import { useEffect, useState } from "react";
+import type { QRCodeClientProps } from "./types";
 
 const oklchRegex = /oklch\(([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)\)/;
 
@@ -36,7 +30,7 @@ export const QRCode = ({
 	robustness = "M",
 	className,
 	...props
-}: QRCodeProps) => {
+}: QRCodeClientProps) => {
 	const [svg, setSVG] = useState<string | null>(null);
 
 	useEffect(() => {

@@ -1,13 +1,6 @@
 import { cn } from "@passlet/ui/lib/utils";
 import QR from "qrcode";
-import type { HTMLAttributes } from "react";
-
-export type QRCodeProps = HTMLAttributes<HTMLDivElement> & {
-	data: string;
-	foreground: string;
-	background: string;
-	robustness?: "L" | "M" | "Q" | "H";
-};
+import type { QRCodeServerProps } from "./types";
 
 export const QRCode = async ({
 	data,
@@ -16,7 +9,7 @@ export const QRCode = async ({
 	robustness = "M",
 	className,
 	...props
-}: QRCodeProps) => {
+}: QRCodeServerProps) => {
 	const svg = await QR.toString(data, {
 		type: "svg",
 		color: {

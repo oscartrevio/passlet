@@ -69,6 +69,13 @@ export const COLORS = [
 
 export type ColorValue = (typeof COLORS)[number]["value"];
 
+export const COLOR_VALUES = COLORS.map((color) => color.value) as ColorValue[];
+export const DEFAULT_COLOR: ColorValue = "blue";
+
+export function isColorValue(value: string): value is ColorValue {
+	return COLOR_VALUES.includes(value as ColorValue);
+}
+
 export const PATTERNS: { value: PatternType; label: string }[] = [
 	{ value: "waves", label: "Waves" },
 	{ value: "zigzag", label: "Zigzag" },
