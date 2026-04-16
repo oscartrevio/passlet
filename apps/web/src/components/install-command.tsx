@@ -1,5 +1,6 @@
 "use client";
 
+import { Separator } from "@passlet/ui/components/separator";
 import { cn } from "@passlet/ui/lib/utils";
 import { useRef, useState } from "react";
 
@@ -27,22 +28,27 @@ export function InstallCommand() {
 
 	return (
 		<div className="flex flex-col gap-1.5">
-			<div className="flex gap-3">
+			<div className="flex items-center gap-3">
 				{(["npm", "pnpm", "yarn", "bun", "skill"] as InstallOption[]).map(
 					(p) => (
-						<button
-							className={cn(
-								"hit-area-2 cursor-pointer touch-manipulation font-medium text-xs transition-colors duration-150 ease-out",
-								pm === p
-									? "text-(--gray-a11)"
-									: "text-(--gray-a8) hover:text-(--gray-a9)"
+						<>
+							<button
+								className={cn(
+									"hit-area-2 cursor-pointer touch-manipulation font-medium text-xs transition-colors duration-150 ease-out",
+									pm === p
+										? "text-(--gray-a11)"
+										: "text-(--gray-a8) hover:text-(--gray-a9)"
+								)}
+								key={p}
+								onClick={() => setPm(p)}
+								type="button"
+							>
+								{p}{" "}
+							</button>
+							{p === "bun" && (
+								<Separator className="rounded-full" orientation="vertical" />
 							)}
-							key={p}
-							onClick={() => setPm(p)}
-							type="button"
-						>
-							{p}
-						</button>
+						</>
 					)
 				)}
 			</div>
