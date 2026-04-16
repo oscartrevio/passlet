@@ -3,17 +3,18 @@
 import { cn } from "@passlet/ui/lib/utils";
 import { useRef, useState } from "react";
 
-type PackageManager = "npm" | "pnpm" | "yarn" | "bun";
+type InstallOption = "npm" | "pnpm" | "yarn" | "bun" | "skill";
 
-const COMMANDS: Record<PackageManager, string> = {
+const COMMANDS: Record<InstallOption, string> = {
 	npm: "npm i passlet",
 	pnpm: "pnpm i passlet",
 	yarn: "yarn add passlet",
 	bun: "bun i passlet",
+	skill: "npx skills add oscartrevio/passlet",
 };
 
 export function InstallCommand() {
-	const [pm, setPm] = useState<PackageManager>("npm");
+	const [pm, setPm] = useState<InstallOption>("npm");
 	const [copied, setCopied] = useState(false);
 	const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -27,21 +28,23 @@ export function InstallCommand() {
 	return (
 		<div className="flex flex-col gap-1.5">
 			<div className="flex gap-3">
-				{(["npm", "pnpm", "yarn", "bun"] as PackageManager[]).map((p) => (
-					<button
-						className={cn(
-							"hit-area-2 cursor-pointer touch-manipulation font-medium text-xs transition-colors duration-150 ease-out",
-							pm === p
-								? "text-(--gray-a11)"
-								: "text-(--gray-a8) hover:text-(--gray-a9)"
-						)}
-						key={p}
-						onClick={() => setPm(p)}
-						type="button"
-					>
-						{p}
-					</button>
-				))}
+				{(["npm", "pnpm", "yarn", "bun", "skill"] as InstallOption[]).map(
+					(p) => (
+						<button
+							className={cn(
+								"hit-area-2 cursor-pointer touch-manipulation font-medium text-xs transition-colors duration-150 ease-out",
+								pm === p
+									? "text-(--gray-a11)"
+									: "text-(--gray-a8) hover:text-(--gray-a9)"
+							)}
+							key={p}
+							onClick={() => setPm(p)}
+							type="button"
+						>
+							{p}
+						</button>
+					)
+				)}
 			</div>
 			<div className="hover:hover-border-shadow flex w-full items-center justify-between overflow-hidden rounded-xl border-shadow bg-white p-3 transition-shadow duration-200 ease-out">
 				<div className="flex items-center gap-1.5">
