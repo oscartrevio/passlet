@@ -2,7 +2,7 @@
 
 import { Separator } from "@passlet/ui/components/separator";
 import { cn } from "@passlet/ui/lib/utils";
-import { useRef, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 
 type InstallOption = "npm" | "pnpm" | "yarn" | "bun" | "skill";
 
@@ -27,11 +27,11 @@ export function InstallCommand() {
 	};
 
 	return (
-		<div className="flex flex-col gap-1.5">
+		<div className="flex flex-col gap-2">
 			<div className="flex items-center gap-3">
 				{(["npm", "pnpm", "yarn", "bun", "skill"] as InstallOption[]).map(
 					(p) => (
-						<>
+						<Fragment key={p}>
 							<button
 								className={cn(
 									"hit-area-2 cursor-pointer touch-manipulation font-medium text-xs transition-colors duration-150 ease-out",
@@ -39,7 +39,6 @@ export function InstallCommand() {
 										? "text-(--gray-a11)"
 										: "text-(--gray-a8) hover:text-(--gray-a9)"
 								)}
-								key={p}
 								onClick={() => setPm(p)}
 								type="button"
 							>
@@ -48,7 +47,7 @@ export function InstallCommand() {
 							{p === "bun" && (
 								<Separator className="rounded-full" orientation="vertical" />
 							)}
-						</>
+						</Fragment>
 					)
 				)}
 			</div>

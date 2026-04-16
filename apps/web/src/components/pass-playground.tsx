@@ -2,6 +2,7 @@
 
 import { Button } from "@passlet/ui/components/button";
 import { cn } from "@passlet/ui/lib/utils";
+import { motion, useAnimationControls, useReducedMotion } from "motion/react";
 import { type CSSProperties, type ReactNode, useState } from "react";
 import { createPassAction } from "@/actions/create-pass";
 import { setPassletColor } from "@/actions/set-color";
@@ -211,11 +212,28 @@ export function PassPlayground({
 	const [creating, setCreating] = useState(false);
 	const [wiggleName, setWiggleName] = useState(false);
 	const [createError, setCreateError] = useState<string | null>(null);
+	const shouldReduceMotion = useReducedMotion();
+	const colorDelightControls = useAnimationControls();
 
 	const activeColor = COLORS.find((c) => c.value === color) ?? COLORS[5];
 
 	const handleColorChange = (value: ColorValue) => {
+		if (value === color) {
+			return;
+		}
 		setColor(value);
+		if (!shouldReduceMotion) {
+			colorDelightControls
+				.start({
+					y: [0, -1, 0],
+					scale: [1, 1.008, 1],
+					transition: {
+						duration: 0.25,
+						ease: "easeInOut",
+					},
+				})
+				.catch(() => undefined);
+		}
 		setPassletColor(value).catch(() => {
 			setCreateError("Unable to save your color preference.");
 		});
@@ -284,8 +302,10 @@ export function PassPlayground({
 
 	return (
 		<div className="flex items-stretch gap-4">
-			<div
-				className="relative aspect-181/251 w-[256px] shrink-0 select-none overflow-hidden rounded-lg border-overlay text-(--pass-text) transition-colors duration-300"
+			<motion.div
+				animate={colorDelightControls}
+				className="relative aspect-181/251 w-[256px] shrink-0 select-none overflow-hidden rounded-lg border-overlay text-(--pass-text) transition-colors duration-[250ms]"
+				initial={false}
 				style={cardStyle}
 			>
 				<div className="flex h-full flex-col">
@@ -322,7 +342,7 @@ export function PassPlayground({
 						</div>
 					</div>
 				</div>
-			</div>
+			</motion.div>
 
 			<div className="flex flex-col gap-4 pt-1">
 				<div className="flex flex-col gap-2">
