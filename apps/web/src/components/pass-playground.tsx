@@ -39,6 +39,7 @@ function CardStrip({ pattern }: { pattern: PatternType }) {
 			className="pointer-events-none w-full"
 			fill="none"
 			overflow="visible"
+			style={{ color: "var(--pass-secondary)" }}
 			viewBox={`0 0 ${STRIP_W} ${STRIP_H}`}
 			xmlns="http://www.w3.org/2000/svg"
 		>
@@ -51,57 +52,22 @@ function CardStrip({ pattern }: { pattern: PatternType }) {
 						y={-STROKE_WIDTH / 2}
 					/>
 				</clipPath>
-				<filter
-					colorInterpolationFilters="sRGB"
-					filterUnits="userSpaceOnUse"
-					height={STRIP_H + 2}
-					id="strip-filter"
-					width={STRIP_W}
-					x="0"
-					y="0"
-				>
-					<feColorMatrix
-						in="SourceAlpha"
-						result="hardAlpha"
-						values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0"
-					/>
-					<feOffset dy="1" />
-					<feGaussianBlur stdDeviation="1" />
-					<feComposite in2="hardAlpha" operator="out" />
-					<feColorMatrix
-						result="shadow"
-						values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.2 0"
-					/>
-					<feBlend in="SourceGraphic" in2="shadow" result="shape" />
-					<feColorMatrix
-						in="SourceAlpha"
-						result="hardAlpha"
-						values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0"
-					/>
-					<feOffset dy="1" />
-					<feGaussianBlur stdDeviation="1" />
-					<feComposite in2="hardAlpha" k2="-1" k3="1" operator="arithmetic" />
-					<feColorMatrix values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.2 0" />
-					<feBlend in2="shape" />
-				</filter>
 			</defs>
 			{STROKE_PATTERNS.has(pattern) ? (
 				<path
 					clipPath="url(#strip-clip)"
 					d={STRIP_PATHS[pattern]}
 					fill="none"
-					filter="url(#strip-filter)"
-					stroke="white"
-					strokeOpacity={0.01}
+					stroke="currentColor"
+					strokeOpacity={0.5}
 					strokeWidth={STROKE_WIDTH}
 				/>
 			) : (
 				<path
 					clipPath="url(#strip-clip)"
 					d={STRIP_PATHS[pattern]}
-					fill="white"
-					fillOpacity={0.01}
-					filter="url(#strip-filter)"
+					fill="currentColor"
+					fillOpacity={0.5}
 					shapeRendering="crispEdges"
 				/>
 			)}
@@ -244,6 +210,7 @@ export function PassPlayground({
 		"--pass-text": activeColor.text,
 		"--pass-text-muted": activeColor.muted,
 		"--pass-text-subtle": activeColor.subtle,
+		"--pass-secondary": activeColor.secondary,
 	} as CSSProperties;
 
 	const handleCreatePass = async () => {
@@ -304,7 +271,7 @@ export function PassPlayground({
 		<div className="flex items-stretch gap-4">
 			<motion.div
 				animate={colorDelightControls}
-				className="relative aspect-181/251 w-[256px] shrink-0 select-none overflow-hidden rounded-lg border-overlay text-(--pass-text) transition-colors duration-[250ms]"
+				className="relative aspect-181/251 w-[256px] shrink-0 select-none overflow-hidden rounded-lg text-(--pass-text) transition-colors duration-[250ms]"
 				initial={false}
 				style={cardStyle}
 			>
