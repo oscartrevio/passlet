@@ -301,104 +301,110 @@ export function PassPlayground({
 	};
 
 	return (
-		<div className="flex items-stretch gap-4">
-			<motion.div
-				animate={colorDelightControls}
-				className="relative aspect-181/251 w-[256px] shrink-0 select-none overflow-hidden rounded-lg border-overlay text-(--pass-text) transition-colors duration-[250ms]"
-				initial={false}
-				style={cardStyle}
-			>
-				<div className="flex h-full flex-col">
-					<div className="flex items-start justify-between p-3">
-						<span className="font-semibold">Passlet</span>
-						<div className="flex flex-col items-end">
-							<span className="text-(--pass-text-subtle) text-[8px] uppercase tracking-tight">
-								ID
-							</span>
-							<span className="font-medium text-[11px] tabular-nums leading-[1.2]">
-								{memberNo}
-							</span>
-						</div>
-					</div>
+		<div className="flex w-full flex-col gap-6">
+			<div className="flex justify-center">
+				<div className="w-full max-w-[320px] lg:max-w-[420px]">
+					<motion.div
+						animate={colorDelightControls}
+						className="relative aspect-181/251 w-full select-none overflow-hidden rounded-lg border-overlay text-(--pass-text) transition-colors duration-[250ms]"
+						initial={false}
+						style={cardStyle}
+					>
+						<div className="flex h-full flex-col">
+							<div className="flex items-start justify-between p-3">
+								<span className="font-semibold">Passlet</span>
+								<div className="flex flex-col items-end">
+									<span className="text-(--pass-text-subtle) text-[8px] uppercase tracking-tight">
+										ID
+									</span>
+									<span className="font-medium text-[11px] tabular-nums leading-[1.2]">
+										{memberNo}
+									</span>
+								</div>
+							</div>
 
-					<CardStrip pattern={pattern} />
+							<CardStrip pattern={pattern} />
 
-					<div className="flex flex-col gap-1 p-3">
-						<div className="flex justify-between">
-							<EditableField
-								label="Member"
-								onChange={setName}
-								placeholder="Your Name"
-								value={name}
-								wiggle={wiggleName}
-							/>
-							<Field label="Since" value={TODAY} />
-						</div>
-					</div>
+							<div className="flex flex-col gap-1 p-3">
+								<div className="flex justify-between">
+									<EditableField
+										label="Member"
+										onChange={setName}
+										placeholder="Your Name"
+										value={name}
+										wiggle={wiggleName}
+									/>
+									<Field label="Since" value={TODAY} />
+								</div>
+							</div>
 
-					<div className="mt-auto flex justify-center pb-3">
-						<div className="size-24 overflow-hidden rounded-sm bg-white">
-							{qrSlot}
+							<div className="mt-auto flex justify-center pb-3">
+								<div className="size-24 overflow-hidden rounded-sm bg-white">
+									{qrSlot}
+								</div>
+							</div>
 						</div>
-					</div>
+					</motion.div>
 				</div>
-			</motion.div>
+			</div>
 
-			<div className="flex flex-col gap-4 pt-1">
-				<div className="flex flex-col gap-2">
-					<p className="font-medium text-(--gray-a8) text-xs">
-						Background Color
-					</p>
-					<div className="flex flex-wrap gap-1.5">
-						{COLORS.map((c) => {
-							const isSelected = color === c.value;
-							return (
-								<button
-									aria-label={`Select ${c.label} color`}
-									aria-pressed={isSelected}
-									className="relative size-5 cursor-pointer rounded-sm border-overlay transition-transform duration-150 ease-out after:absolute after:-inset-1.5 after:content-[''] focus:outline-none focus-visible:ring-2 focus-visible:ring-current focus-visible:ring-offset-2 active:scale-95"
-									key={c.value}
-									onClick={() => handleColorChange(c.value)}
-									style={{
-										backgroundColor: c.color,
-										color: c.color,
-										...(isSelected && {
-											boxShadow: `inset 0 0 0 2px #F5F5F5, 0 0 0 2px ${c.color}`,
-										}),
-									}}
-									title={c.label}
-									type="button"
-								/>
-							);
-						})}
+			<div className="flex flex-col gap-4 pt-1 lg:mx-auto lg:w-full lg:max-w-[360px]">
+				<div className="flex gap-6">
+					<div className="flex flex-col gap-2">
+						<p className="font-medium text-(--gray-a8) text-xs">
+							Background Color
+						</p>
+						<div className="flex flex-wrap gap-1.5">
+							{COLORS.map((c) => {
+								const isSelected = color === c.value;
+								return (
+									<button
+										aria-label={`Select ${c.label} color`}
+										aria-pressed={isSelected}
+										className="relative size-5 cursor-pointer rounded-sm border-overlay transition-transform duration-150 ease-out after:absolute after:-inset-1.5 after:content-[''] focus:outline-none focus-visible:ring-2 focus-visible:ring-current focus-visible:ring-offset-2 active:scale-95"
+										key={c.value}
+										onClick={() => handleColorChange(c.value)}
+										style={{
+											backgroundColor: c.color,
+											color: c.color,
+											...(isSelected && {
+												boxShadow: `inset 0 0 0 2px #F5F5F5, 0 0 0 2px ${c.color}`,
+											}),
+										}}
+										title={c.label}
+										type="button"
+									/>
+								);
+							})}
+						</div>
 					</div>
-				</div>
 
-				<div className="flex flex-col gap-2">
-					<p className="font-medium text-(--gray-a8) text-xs">Pattern</p>
-					<div className="flex gap-1.5">
-						{PATTERNS.map((p) => {
-							const isSelected = pattern === p.value;
-							return (
-								<button
-									aria-label={`Select ${p.label} pattern`}
-									aria-pressed={isSelected}
-									className="relative cursor-pointer overflow-hidden rounded border-overlay transition-transform duration-150 ease-out after:absolute after:-inset-1.5 after:content-[''] focus:outline-none active:scale-95"
-									key={p.value}
-									onClick={() => setPattern(p.value)}
-									style={{
-										outline: isSelected
-											? "2px solid #1E1E1E"
-											: "2px solid transparent",
-										outlineOffset: 2,
-									}}
-									title={p.label}
-									type="button"
-								>
-									<PatternSwatch pattern={p.value} selected={isSelected} />
-								</button>
-							);
-						})}
+					<div className="flex flex-col gap-2">
+						<p className="font-medium text-(--gray-a8) text-xs">Pattern</p>
+						<div className="flex gap-1.5">
+							{PATTERNS.map((p) => {
+								const isSelected = pattern === p.value;
+								return (
+									<button
+										aria-label={`Select ${p.label} pattern`}
+										aria-pressed={isSelected}
+										className="relative cursor-pointer overflow-hidden rounded border-overlay transition-transform duration-150 ease-out after:absolute after:-inset-1.5 after:content-[''] focus:outline-none active:scale-95"
+										key={p.value}
+										onClick={() => setPattern(p.value)}
+										style={{
+											outline: isSelected
+												? "2px solid #1E1E1E"
+												: "2px solid transparent",
+											outlineOffset: 2,
+										}}
+										title={p.label}
+										type="button"
+									>
+										<PatternSwatch pattern={p.value} selected={isSelected} />
+									</button>
+								);
+							})}
+						</div>
 					</div>
 				</div>
 
@@ -454,7 +460,7 @@ export function PassPlayground({
 				) : null}
 
 				<Button
-					className="mt-auto rounded-full bg-(--gray-a12) font-medium font-sans! text-white tracking-tight hover:bg-(--gray-a11) active:scale-95"
+					className="rounded-full bg-(--gray-a12) font-medium font-sans! text-white tracking-tight hover:bg-(--gray-a11) active:scale-95"
 					disabled={creating}
 					onClick={handleCreatePass}
 				>
