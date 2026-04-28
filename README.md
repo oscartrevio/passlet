@@ -177,4 +177,4 @@ PRs welcome. If you've dealt with wallet pass APIs before, you know why this nee
 
 ## License
 
-MIT
+[MIT](LICENSE) © [Oscar Treviño](https://github.com/oscartrevio)
