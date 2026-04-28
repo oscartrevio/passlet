@@ -111,7 +111,7 @@ export default async function Home() {
 				</div>
 			</div>
 
-			<div className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-18 px-4 py-12">
+			<div className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-16 px-4 py-12">
 				<div className="flex flex-col gap-3">
 					<h1 className="text-balance font-semibold text-(--gray-a12) text-2xl tracking-tighter">
 						Passlet
@@ -128,6 +128,30 @@ export default async function Home() {
 						Install to get started
 					</h2>
 					<InstallCommand />
+				</div>
+
+				<div className="flex flex-col gap-3">
+					<h2 className="text-balance font-semibold text-(--gray-a12) text-sm">
+						How it works
+					</h2>
+					<ol className="flex flex-col gap-2">
+						{[
+							"Configure credentials once.",
+							"Define a pass.",
+							"Create your pass.",
+							"Apple gets a signed .pkpass, Google gets a JWT.",
+						].map((step, i) => (
+							<li
+								className="flex items-center gap-1 font-medium text-(--gray-a11) text-sm"
+								key={step}
+							>
+								<span className="w-4 shrink-0 font-semibold text-(--gray-a8)">
+									{i + 1}.
+								</span>
+								{step}
+							</li>
+						))}
+					</ol>
 				</div>
 
 				<div className="flex flex-col gap-3">
