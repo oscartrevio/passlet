@@ -50,7 +50,7 @@ function resolveValueByKey(
 ): string | undefined {
 	const match = fields.find((field) => field.key === key);
 	if (!match) {
-		return undefined;
+		return;
 	}
 	return resolveFieldValue(match, values);
 }
@@ -132,7 +132,7 @@ function buildInfoModuleData(
 		rows.push({ label: f.label, value });
 	}
 	if (rows.length === 0) {
-		return undefined;
+		return;
 	}
 	return { labelValueRows: rows.map((r) => ({ columns: [r] })) };
 }
