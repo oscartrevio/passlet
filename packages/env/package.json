@@ -7,11 +7,11 @@
     "./web": "./src/web.ts"
   },
   "dependencies": {
-    "@t3-oss/env-nextjs": "^0.13.1",
+    "@t3-oss/env-nextjs": "^0.13.11",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@passlet/config": "workspace:*",
-    "typescript": "^5"
+    "typescript": "^6.0.3"
   }
 }
