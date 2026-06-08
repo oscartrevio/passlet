@@ -3,6 +3,7 @@
   "compilerOptions": {
     "target": "ESNext",
     "module": "ESNext",
+    "ignoreDeprecations": "6.0",
     "moduleResolution": "bundler",
     "lib": ["ESNext"],
     "verbatimModuleSyntax": true,

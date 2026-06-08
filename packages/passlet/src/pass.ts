@@ -19,7 +19,7 @@ type FieldArg = string | FieldOptions;
 
 function resolveOptions(arg: FieldArg | undefined): FieldOptions | undefined {
 	if (arg === undefined) {
-		return undefined;
+		return;
 	}
 	return typeof arg === "string" ? { value: arg } : arg;
 }

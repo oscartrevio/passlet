@@ -41,7 +41,7 @@ export function translationsFor(
 	locales: Locales | undefined
 ): TranslatedValue[] | undefined {
 	if (!locales) {
-		return undefined;
+		return;
 	}
 	const result = Object.entries(locales)
 		.filter(([, t]) => t[key] !== undefined)
