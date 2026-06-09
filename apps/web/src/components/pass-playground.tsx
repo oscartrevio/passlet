@@ -2,6 +2,8 @@
 
 import { Button } from "@passlet/ui/components/button";
 import { cn } from "@passlet/ui/lib/utils";
+import type { SoundPatch } from "@web-kits/audio";
+import { usePatch } from "@web-kits/audio/react";
 import { motion, useAnimationControls, useReducedMotion } from "motion/react";
 import { type CSSProperties, type ReactNode, useState } from "react";
 import { createPassAction } from "@/actions/create-pass";
@@ -25,6 +27,7 @@ import {
 	SWATCH_W,
 } from "@/lib/patterns";
 import type { WalletProvider } from "@/types/pass";
+import minimalPatch from "../../.web-kits/minimal.json";
 
 const TODAY = new Date().toLocaleDateString("en-US", {
 	year: "numeric",
@@ -179,30 +182,53 @@ export function PassPlayground({
 	const [wiggleName, setWiggleName] = useState(false);
 	const [createError, setCreateError] = useState<string | null>(null);
 	const shouldReduceMotion = useReducedMotion();
-	const colorDelightControls = useAnimationControls();
+	const delightControls = useAnimationControls();
+
+	const sounds = usePatch(minimalPatch as SoundPatch);
+
+	const playSound = (soundName: string) => {
+		if (sounds.ready) {
+			sounds.play(soundName);
+		}
+	};
 
 	const activeColor = COLORS.find((c) => c.value === color) ?? COLORS[5];
+
+	const triggerDelight = () => {
+		if (shouldReduceMotion) {
+			return;
+		}
+		delightControls
+			.start({
+				y: [0, -1, 0],
+				scale: [1, 1.008, 1],
+				transition: {
+					duration: 0.25,
+					ease: "easeInOut",
+				},
+			})
+			.catch(() => undefined);
+	};
 
 	const handleColorChange = (value: ColorValue) => {
 		if (value === color) {
 			return;
 		}
 		setColor(value);
-		if (!shouldReduceMotion) {
-			colorDelightControls
-				.start({
-					y: [0, -1, 0],
-					scale: [1, 1.008, 1],
-					transition: {
-						duration: 0.25,
-						ease: "easeInOut",
-					},
-				})
-				.catch(() => undefined);
-		}
+		playSound("select");
+		triggerDelight();
 		setPassletColor(value).catch(() => {
 			setCreateError("Unable to save your color preference.");
 		});
+	};
+
+	const handlePatternChange = (value: PatternType) => {
+		if (value === pattern) {
+			return;
+		}
+		setPattern(value);
+		playSound("tap");
+		triggerDelight();
 	};
 
 	const cardStyle = {
@@ -258,10 +284,12 @@ export function PassPlayground({
 				a.rel = "noopener noreferrer";
 				a.click();
 			}
+			playSound("success");
 		} catch (error) {
 			setCreateError(
 				error instanceof Error ? error.message : "Failed to create pass."
 			);
+			playSound("error");
 		} finally {
 			setCreating(false);
 		}
@@ -270,7 +298,7 @@ export function PassPlayground({
 	return (
 		<div className="flex flex-col gap-4 md:flex-row md:items-stretch">
 			<motion.div
-				animate={colorDelightControls}
+				animate={delightControls}
 				className="relative mx-auto aspect-181/251 w-full max-w-[256px] select-none overflow-hidden rounded-lg text-(--pass-text) transition-colors duration-250 md:mx-0 md:w-[256px]"
 				initial={false}
 				style={cardStyle}
@@ -352,7 +380,7 @@ export function PassPlayground({
 									aria-pressed={isSelected}
 									className="relative cursor-pointer overflow-hidden rounded border-overlay transition-transform duration-150 ease-out after:absolute after:-inset-1.5 after:content-[''] focus:outline-none active:scale-95"
 									key={p.value}
-									onClick={() => setPattern(p.value)}
+									onClick={() => handlePatternChange(p.value)}
 									style={{
 										outline: isSelected
 											? "2px solid #1E1E1E"
