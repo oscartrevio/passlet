@@ -57,7 +57,7 @@ importers:
         specifier: ^20.19.42
         version: 20.19.42
       lefthook:
-        specifier: latest
+        specifier: ^2.1.9
         version: 2.1.9
       turbo:
         specifier: ^2.9.16
