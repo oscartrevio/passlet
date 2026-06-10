@@ -3,6 +3,9 @@
 
 pre-commit:
   parallel: true
+  skip:
+    - merge
+    - rebase
   jobs:
     - name: biome
       glob: "*.{js,ts,cjs,mjs,d.cts,d.mts,jsx,tsx,json,jsonc,css}"
@@ -13,3 +16,14 @@ commit-msg:
   jobs:
     - name: commitlint
       run: pnpm commitlint --edit {1}
+
+pre-push:
+  parallel: true
+  skip:
+    - merge
+    - rebase
+  jobs:
+    - name: check-types
+      run: pnpm check-types
+    - name: test
+      run: pnpm turbo test
