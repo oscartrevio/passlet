@@ -7,6 +7,12 @@ on:
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
+# Git hooks are local-dev ergonomics; CI runs its checks as explicit steps.
+# Without this, lefthook's commit-msg hook runs commitlint on the changesets
+# bot's "Version Packages" commit and fails the release.
+env:
+  LEFTHOOK: "0"
+
 permissions:
   contents: write
   pull-requests: write
