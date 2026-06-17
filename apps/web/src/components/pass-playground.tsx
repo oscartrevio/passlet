@@ -299,7 +299,7 @@ export function PassPlayground({
 		<div className="flex flex-col gap-4 md:flex-row md:items-stretch">
 			<motion.div
 				animate={delightControls}
-				className="relative mx-auto aspect-181/251 w-full max-w-[256px] select-none overflow-hidden rounded-lg text-(--pass-text) transition-colors duration-250 md:mx-0 md:w-[256px]"
+				className="relative mx-auto aspect-181/251 w-full max-w-[256px] select-none overflow-hidden rounded-lg border-overlay text-(--pass-text) transition-colors duration-250 md:mx-0 md:w-[256px]"
 				initial={false}
 				style={cardStyle}
 			>
