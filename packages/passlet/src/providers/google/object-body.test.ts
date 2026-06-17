@@ -247,8 +247,10 @@ describe("event pass", () => {
 			eventName: {
 				defaultValue: { language: "en-US", value: "Summer Festival" },
 			},
-			localScheduledStartDateTime: "2026-07-15T20:00:00",
-			localScheduledEndDateTime: "2026-07-15T23:00:00",
+			dateTime: {
+				start: "2026-07-15T20:00:00",
+				end: "2026-07-15T23:00:00",
+			},
 			hexBackgroundColor: "#6a0572",
 			issuerName: "Summer Festival",
 			reviewStatus: "UNDER_REVIEW",

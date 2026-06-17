@@ -149,8 +149,12 @@ function buildClassTypeFields(
 	if (pass.type === "event") {
 		return {
 			eventName: localized(pass.name, "en-US", nameTranslations),
-			localScheduledStartDateTime: pass.startsAt?.replace("Z", ""),
-			localScheduledEndDateTime: pass.endsAt?.replace("Z", ""),
+			dateTime: pass.startsAt
+				? {
+						start: pass.startsAt.replace("Z", ""),
+						end: pass.endsAt?.replace("Z", ""),
+					}
+				: undefined,
 		};
 	}
 	if (pass.type === "flight") {
