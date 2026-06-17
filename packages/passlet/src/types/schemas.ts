@@ -351,7 +351,7 @@ export const eventPassSchema = basePassSchema
 	.extend({
 		type: z.literal("event"),
 		// Apple: relevant date for lock screen suggestion
-		// Google: localScheduledStartDateTime (required for eventTicketClass)
+		// Google: dateTime.start on eventTicketClass (EventDateTime)
 		startsAt: z.iso
 			.datetime({
 				message: 'must be an ISO datetime e.g. "2024-06-01T20:00:00Z"',
