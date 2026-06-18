@@ -228,6 +228,28 @@ function buildEventSemantics(pass: EventPass): Record<string, unknown> {
 	return semantics;
 }
 
+// A poster event ticket uses eventLogoText, not logoText. We treat the pass as
+// a poster when it opts into the poster style scheme or sets eventLogoText.
+function isPosterEventTicket(pass: PassConfig): boolean {
+	if (pass.type !== "event") {
+		return false;
+	}
+	const a = pass.apple;
+	return Boolean(
+		a?.eventLogoText || a?.preferredStyleSchemes?.includes("posterEventTicket")
+	);
+}
+
+// logoText is only emitted when the caller sets it — never defaulted to the
+// pass name — and is omitted for poster event tickets, where it has no effect.
+function resolveLogoText(pass: PassConfig): string | undefined {
+	const logoText = pass.apple?.logoText;
+	if (!logoText || isPosterEventTicket(pass)) {
+		return;
+	}
+	return logoText;
+}
+
 function buildSemantics(pass: PassConfig): Record<string, unknown> | undefined {
 	if (pass.type === "flight") {
 		return buildFlightSemantics(pass);
@@ -329,7 +351,7 @@ function buildPassJson(
 		teamIdentifier: credentials.teamId,
 		organizationName: pass.name,
 		description: a?.description ?? pass.name,
-		logoText: a?.logoText ?? pass.name,
+		logoText: resolveLogoText(pass),
 		...buildAppleCommonFields(pass, createConfig),
 		...(pass.type === "event" && buildEventAppleFields(pass)),
 		...(pass.type === "flight" && buildFlightAppleFields(pass)),

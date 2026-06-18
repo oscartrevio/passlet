@@ -348,6 +348,62 @@ describe("pass.json apple-specific fields", () => {
 	});
 });
 
+// ─── logoText ─────────────────────────────────────────────────────────────────
+
+describe("pass.json logoText", () => {
+	it("is omitted when not provided (not defaulted to the pass name)", async () => {
+		const { pass } = await generateApplePass(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Acme Rewards",
+				fields: [],
+				apple: { icon: STUB_ICON },
+			},
+			{ serialNumber: "s1" },
+			credentials
+		);
+		const json = await extractPassJson(pass);
+		expect(json.logoText).toBeUndefined();
+	});
+
+	it("is emitted when explicitly set", async () => {
+		const { pass } = await generateApplePass(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Acme Rewards",
+				fields: [],
+				apple: { icon: STUB_ICON, logoText: "My Brand" },
+			},
+			{ serialNumber: "s1" },
+			credentials
+		);
+		const json = await extractPassJson(pass);
+		expect(json.logoText).toBe("My Brand");
+	});
+
+	it("is omitted for poster event tickets even when set", async () => {
+		const { pass } = await generateApplePass(
+			{
+				type: "event",
+				id: "e1",
+				name: "Festival",
+				fields: [],
+				apple: {
+					icon: STUB_ICON,
+					logoText: "Ignored",
+					eventLogoText: "Festival",
+				},
+			},
+			{ serialNumber: "s1" },
+			credentials
+		);
+		const json = await extractPassJson(pass);
+		expect(json.logoText).toBeUndefined();
+	});
+});
+
 // ─── Semantic tags & relevance ───────────────────────────────────────────────
 
 describe("pass.json semantics and relevantDates", () => {
