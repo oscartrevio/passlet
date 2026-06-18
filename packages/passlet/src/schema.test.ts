@@ -98,6 +98,31 @@ describe("passConfigSchema", () => {
 		expect(invalid.success).toBe(false);
 	});
 
+	it("rejects unsupported google message types", () => {
+		const base = {
+			...BASE_LOYALTY,
+			google: { messages: [{ header: "Hi", body: "There" }] },
+		};
+		expect(
+			passConfigSchema.safeParse({
+				...base,
+				google: {
+					messages: [{ header: "Hi", body: "There", messageType: "TEXT" }],
+				},
+			}).success
+		).toBe(true);
+		expect(
+			passConfigSchema.safeParse({
+				...base,
+				google: {
+					messages: [
+						{ header: "Hi", body: "There", messageType: "expireNotification" },
+					],
+				},
+			}).success
+		).toBe(false);
+	});
+
 	it("accepts both relevantDates shapes and requires endDate with startDate", () => {
 		const single = passConfigSchema.safeParse({
 			...BASE_LOYALTY,

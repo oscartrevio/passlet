@@ -75,11 +75,13 @@ function validateGoogleRequirements(pass: PassConfig): void {
 		);
 	}
 	if (pass.type === "flight") {
-		const { carrier, flightNumber, origin, destination } = pass;
-		if (!(carrier && flightNumber && origin && destination)) {
+		const { carrier, flightNumber, origin, destination, departure } = pass;
+		// Google flightClass requires all of these — localScheduledDepartureDateTime
+		// (departure) is a required scalar the API rejects the class without.
+		if (!(carrier && flightNumber && origin && destination && departure)) {
 			throw new WalletError(
 				"GOOGLE_FLIGHT_MISSING_CLASS_FIELDS",
-				"Flight passes require carrier, flightNumber, origin, and destination"
+				"Flight passes require carrier, flightNumber, origin, destination, and departure"
 			);
 		}
 	}
@@ -297,14 +299,20 @@ function buildFlightObjectFields(
 	};
 }
 
-// GiftCard: balance amount with currency
+// GiftCard: card number (required by Google) plus balance amount with currency
 function buildGiftCardObjectFields(
 	pass: Extract<PassConfig, { type: "giftCard" }>,
 	fields: FieldDef[],
-	values: Record<string, string | null>
+	values: Record<string, string | null>,
+	serialNumber: string
 ): Record<string, unknown> {
 	const raw = resolveValueByKey(fields, values, "balance");
+	// cardNumber is required by giftCardObject — source it from a "cardNumber"
+	// field, otherwise fall back to the serial number so it is always present.
+	const cardNumber =
+		resolveValueByKey(fields, values, "cardNumber") ?? serialNumber;
 	return {
+		cardNumber,
 		balance:
 			raw == null
 				? undefined
@@ -367,6 +375,15 @@ function buildObjectBody(
 	const values = createConfig.values ?? {};
 	const fields = pass.fields;
 
+	const display = buildDisplayFields(
+		fields,
+		values,
+		pass.locales,
+		// Loyalty structured fields (accountName, accountId, loyaltyPoints) are
+		// already rendered by buildLoyaltyObjectFields — exclude them from text modules.
+		pass.type === "loyalty" ? ["member", "memberId", "points"] : []
+	);
+
 	return {
 		id: objectId,
 		classId,
@@ -404,7 +421,12 @@ function buildObjectBody(
 				warnings
 			)),
 		...(pass.type === "giftCard" &&
-			buildGiftCardObjectFields(pass, fields, values)),
+			buildGiftCardObjectFields(
+				pass,
+				fields,
+				values,
+				createConfig.serialNumber
+			)),
 		// genericObject requires cardTitle in the object body (in addition to the class)
 		...(pass.type === "generic" && {
 			cardTitle: localized(
@@ -413,14 +435,18 @@ function buildObjectBody(
 				translationsFor("name", pass.locales)
 			),
 		}),
-		...buildDisplayFields(
-			fields,
-			values,
-			pass.locales,
-			// Loyalty structured fields (accountName, accountId, loyaltyPoints) are
-			// already rendered by buildLoyaltyObjectFields — exclude them from text modules.
-			pass.type === "loyalty" ? ["member", "memberId", "points"] : []
-		),
+		...display,
+		// genericObject also requires header. It is normally derived from the
+		// primary field; fall back to the pass name when there is no primary
+		// field so the object is never rejected for a missing header.
+		...(pass.type === "generic" &&
+			display.header == null && {
+				header: localized(
+					pass.name,
+					"en-US",
+					translationsFor("name", pass.locales)
+				),
+			}),
 	};
 }
 

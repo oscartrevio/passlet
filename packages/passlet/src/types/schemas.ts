@@ -226,10 +226,10 @@ const googleMessageSchema = z.object({
 	header: z.string(),
 	body: z.string(),
 	id: z.string().optional(),
-	// TEXT (default), expireNotification, or TEXT_AND_NOTIFY (push + in-app)
-	messageType: z
-		.enum(["TEXT", "expireNotification", "TEXT_AND_NOTIFY"])
-		.default("TEXT"),
+	// TEXT (default, in-app only) or TEXT_AND_NOTIFY (in-app + Android push).
+	// Google's EXPIRATION_NOTIFICATION value is documented as unsupported, so it
+	// is intentionally not offered here.
+	messageType: z.enum(["TEXT", "TEXT_AND_NOTIFY"]).default("TEXT"),
 	displayInterval: z
 		.object({
 			start: z.object({ date: z.iso.datetime() }).optional(),
@@ -590,7 +590,12 @@ type CouponFieldKey =
 	| "expires"
 	| "terms"
 	| (string & {});
-type GiftCardFieldKey = "balance" | "pin" | "initialValue" | (string & {});
+type GiftCardFieldKey =
+	| "balance"
+	| "cardNumber"
+	| "pin"
+	| "initialValue"
+	| (string & {});
 
 export type LoyaltyPassConfig = Omit<
 	z.infer<typeof loyaltyPassSchema>,

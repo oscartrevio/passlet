@@ -334,10 +334,29 @@ describe("flight pass", () => {
 				flightNumber: "100",
 				origin: "JFK",
 				destination: "LAX",
+				departure: "2026-07-15T08:00:00Z",
 			},
 			{ serialNumber: "s1" }
 		);
 		expect(warnings.some((w) => w.includes("passengerName"))).toBe(true);
+	});
+
+	it("throws when departure is missing (required by flightClass)", async () => {
+		await expect(
+			run(
+				{
+					type: "flight",
+					id: "p1",
+					name: "Flight",
+					fields: [],
+					carrier: "AA",
+					flightNumber: "100",
+					origin: "JFK",
+					destination: "LAX",
+				},
+				{ serialNumber: "s1" }
+			)
+		).rejects.toMatchObject({ code: "GOOGLE_FLIGHT_MISSING_CLASS_FIELDS" });
 	});
 });
 
@@ -431,11 +450,36 @@ describe("giftCard pass", () => {
 			id: `${ISSUER}.gift-001`,
 			classId: `${ISSUER}.test-giftcard`,
 			state: "ACTIVE",
+			// cardNumber is required by giftCardObject — defaults to the serial number
+			cardNumber: "gift-001",
 			balance: { micros: "50000000", currencyCode: "USD" },
 			subheader: { defaultValue: { language: "en-US", value: "Balance" } },
 			header: { defaultValue: { language: "en-US", value: "50.00" } },
 			textModulesData: [{ header: "PIN", body: "1234", id: "pin" }],
 		});
+	});
+
+	it("uses a cardNumber field when provided", async () => {
+		const { pass } = await run(
+			{
+				type: "giftCard",
+				id: "p1",
+				name: "Gift Card",
+				currency: "USD",
+				fields: [
+					{
+						slot: "back",
+						key: "cardNumber",
+						label: "Card Number",
+						value: "1234-5678-9012",
+					},
+				],
+			},
+			{ serialNumber: "gift-002" }
+		);
+
+		const obj = decodeObjectBody(pass, "giftCardObjects");
+		expect(obj.cardNumber).toBe("1234-5678-9012");
 	});
 });
 
@@ -478,6 +522,29 @@ describe("generic pass", () => {
 					{ columns: [{ label: "Member Since", value: "2024" }] },
 				],
 			},
+		});
+	});
+
+	it("falls back header to the pass name when there is no primary field", async () => {
+		const { pass } = await run(
+			{
+				type: "generic",
+				id: "p1",
+				name: "Member Card",
+				fields: [
+					{ slot: "secondary", key: "name", label: "Name", value: "Jane Doe" },
+				],
+			},
+			{ serialNumber: "generic-002" }
+		);
+
+		// genericObject requires both cardTitle and header
+		const obj = decodeObjectBody(pass, "genericObjects");
+		expect(obj.cardTitle).toEqual({
+			defaultValue: { language: "en-US", value: "Member Card" },
+		});
+		expect(obj.header).toEqual({
+			defaultValue: { language: "en-US", value: "Member Card" },
 		});
 	});
 });
