@@ -334,10 +334,29 @@ describe("flight pass", () => {
 				flightNumber: "100",
 				origin: "JFK",
 				destination: "LAX",
+				departure: "2026-07-15T08:00:00Z",
 			},
 			{ serialNumber: "s1" }
 		);
 		expect(warnings.some((w) => w.includes("passengerName"))).toBe(true);
+	});
+
+	it("throws when departure is missing (required by flightClass)", async () => {
+		await expect(
+			run(
+				{
+					type: "flight",
+					id: "p1",
+					name: "Flight",
+					fields: [],
+					carrier: "AA",
+					flightNumber: "100",
+					origin: "JFK",
+					destination: "LAX",
+				},
+				{ serialNumber: "s1" }
+			)
+		).rejects.toMatchObject({ code: "GOOGLE_FLIGHT_MISSING_CLASS_FIELDS" });
 	});
 });
 

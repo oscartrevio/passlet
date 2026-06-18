@@ -75,11 +75,13 @@ function validateGoogleRequirements(pass: PassConfig): void {
 		);
 	}
 	if (pass.type === "flight") {
-		const { carrier, flightNumber, origin, destination } = pass;
-		if (!(carrier && flightNumber && origin && destination)) {
+		const { carrier, flightNumber, origin, destination, departure } = pass;
+		// Google flightClass requires all of these — localScheduledDepartureDateTime
+		// (departure) is a required scalar the API rejects the class without.
+		if (!(carrier && flightNumber && origin && destination && departure)) {
 			throw new WalletError(
 				"GOOGLE_FLIGHT_MISSING_CLASS_FIELDS",
-				"Flight passes require carrier, flightNumber, origin, and destination"
+				"Flight passes require carrier, flightNumber, origin, destination, and departure"
 			);
 		}
 	}
