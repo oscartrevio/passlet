@@ -17,6 +17,8 @@ export const WALLET_ERROR_CODES = {
 		"Apple Wallet does not support this barcode format — use QR, PDF417, or Aztec",
 	APPLE_BOARDING_MISSING_TRANSIT_TYPE:
 		"Apple Wallet boarding passes require a transitType",
+	APPLE_MISSING_AUTH_TOKEN:
+		"Apple webServiceURL requires an authenticationToken (minimum 16 characters)",
 
 	// Google — provider-level constraints the schema cannot enforce
 	GOOGLE_INVALID_PRIVATE_KEY:

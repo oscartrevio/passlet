@@ -440,4 +440,23 @@ describe("generateApplePass validation", () => {
 			)
 		).rejects.toMatchObject({ code: "APPLE_BOARDING_MISSING_TRANSIT_TYPE" });
 	});
+
+	it("throws APPLE_MISSING_AUTH_TOKEN when webServiceURL has no authenticationToken", async () => {
+		await expect(
+			generateApplePass(
+				{
+					type: "loyalty",
+					id: "p1",
+					name: "Test",
+					fields: [],
+					apple: {
+						icon: STUB_ICON,
+						webServiceURL: "https://example.com/passes",
+					},
+				},
+				{ serialNumber: "s1" },
+				credentials
+			)
+		).rejects.toMatchObject({ code: "APPLE_MISSING_AUTH_TOKEN" });
+	});
 });

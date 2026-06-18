@@ -52,6 +52,12 @@ function validateAppleRequirements(pass: PassConfig): void {
 	if (pass.type === "flight" && !pass.transitType) {
 		throw new WalletError("APPLE_BOARDING_MISSING_TRANSIT_TYPE");
 	}
+	// Apple requires an authenticationToken whenever a webServiceURL is set;
+	// without it the pass cannot authenticate update requests. (The schema
+	// enforces the ≥16-char length.)
+	if (pass.apple?.webServiceURL && !pass.apple.authenticationToken) {
+		throw new WalletError("APPLE_MISSING_AUTH_TOKEN");
+	}
 }
 
 interface AppleField {
