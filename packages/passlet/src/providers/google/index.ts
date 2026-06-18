@@ -299,14 +299,20 @@ function buildFlightObjectFields(
 	};
 }
 
-// GiftCard: balance amount with currency
+// GiftCard: card number (required by Google) plus balance amount with currency
 function buildGiftCardObjectFields(
 	pass: Extract<PassConfig, { type: "giftCard" }>,
 	fields: FieldDef[],
-	values: Record<string, string | null>
+	values: Record<string, string | null>,
+	serialNumber: string
 ): Record<string, unknown> {
 	const raw = resolveValueByKey(fields, values, "balance");
+	// cardNumber is required by giftCardObject — source it from a "cardNumber"
+	// field, otherwise fall back to the serial number so it is always present.
+	const cardNumber =
+		resolveValueByKey(fields, values, "cardNumber") ?? serialNumber;
 	return {
+		cardNumber,
 		balance:
 			raw == null
 				? undefined
@@ -406,7 +412,12 @@ function buildObjectBody(
 				warnings
 			)),
 		...(pass.type === "giftCard" &&
-			buildGiftCardObjectFields(pass, fields, values)),
+			buildGiftCardObjectFields(
+				pass,
+				fields,
+				values,
+				createConfig.serialNumber
+			)),
 		// genericObject requires cardTitle in the object body (in addition to the class)
 		...(pass.type === "generic" && {
 			cardTitle: localized(

@@ -450,11 +450,36 @@ describe("giftCard pass", () => {
 			id: `${ISSUER}.gift-001`,
 			classId: `${ISSUER}.test-giftcard`,
 			state: "ACTIVE",
+			// cardNumber is required by giftCardObject — defaults to the serial number
+			cardNumber: "gift-001",
 			balance: { micros: "50000000", currencyCode: "USD" },
 			subheader: { defaultValue: { language: "en-US", value: "Balance" } },
 			header: { defaultValue: { language: "en-US", value: "50.00" } },
 			textModulesData: [{ header: "PIN", body: "1234", id: "pin" }],
 		});
+	});
+
+	it("uses a cardNumber field when provided", async () => {
+		const { pass } = await run(
+			{
+				type: "giftCard",
+				id: "p1",
+				name: "Gift Card",
+				currency: "USD",
+				fields: [
+					{
+						slot: "back",
+						key: "cardNumber",
+						label: "Card Number",
+						value: "1234-5678-9012",
+					},
+				],
+			},
+			{ serialNumber: "gift-002" }
+		);
+
+		const obj = decodeObjectBody(pass, "giftCardObjects");
+		expect(obj.cardNumber).toBe("1234-5678-9012");
 	});
 });
 

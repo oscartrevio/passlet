@@ -581,7 +581,12 @@ type CouponFieldKey =
 	| "expires"
 	| "terms"
 	| (string & {});
-type GiftCardFieldKey = "balance" | "pin" | "initialValue" | (string & {});
+type GiftCardFieldKey =
+	| "balance"
+	| "cardNumber"
+	| "pin"
+	| "initialValue"
+	| (string & {});
 
 export type LoyaltyPassConfig = Omit<
 	z.infer<typeof loyaltyPassSchema>,
