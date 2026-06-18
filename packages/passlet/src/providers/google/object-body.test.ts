@@ -524,4 +524,27 @@ describe("generic pass", () => {
 			},
 		});
 	});
+
+	it("falls back header to the pass name when there is no primary field", async () => {
+		const { pass } = await run(
+			{
+				type: "generic",
+				id: "p1",
+				name: "Member Card",
+				fields: [
+					{ slot: "secondary", key: "name", label: "Name", value: "Jane Doe" },
+				],
+			},
+			{ serialNumber: "generic-002" }
+		);
+
+		// genericObject requires both cardTitle and header
+		const obj = decodeObjectBody(pass, "genericObjects");
+		expect(obj.cardTitle).toEqual({
+			defaultValue: { language: "en-US", value: "Member Card" },
+		});
+		expect(obj.header).toEqual({
+			defaultValue: { language: "en-US", value: "Member Card" },
+		});
+	});
 });

@@ -375,6 +375,15 @@ function buildObjectBody(
 	const values = createConfig.values ?? {};
 	const fields = pass.fields;
 
+	const display = buildDisplayFields(
+		fields,
+		values,
+		pass.locales,
+		// Loyalty structured fields (accountName, accountId, loyaltyPoints) are
+		// already rendered by buildLoyaltyObjectFields — exclude them from text modules.
+		pass.type === "loyalty" ? ["member", "memberId", "points"] : []
+	);
+
 	return {
 		id: objectId,
 		classId,
@@ -426,14 +435,18 @@ function buildObjectBody(
 				translationsFor("name", pass.locales)
 			),
 		}),
-		...buildDisplayFields(
-			fields,
-			values,
-			pass.locales,
-			// Loyalty structured fields (accountName, accountId, loyaltyPoints) are
-			// already rendered by buildLoyaltyObjectFields — exclude them from text modules.
-			pass.type === "loyalty" ? ["member", "memberId", "points"] : []
-		),
+		...display,
+		// genericObject also requires header. It is normally derived from the
+		// primary field; fall back to the pass name when there is no primary
+		// field so the object is never rejected for a missing header.
+		...(pass.type === "generic" &&
+			display.header == null && {
+				header: localized(
+					pass.name,
+					"en-US",
+					translationsFor("name", pass.locales)
+				),
+			}),
 	};
 }
 
