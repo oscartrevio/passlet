@@ -99,17 +99,24 @@ const beaconSchema = z.object({
 	relevantText: z.string().optional(),
 });
 
-// Date interval for relevantDates (replaces the deprecated relevantDate)
-const relevantDateSchema = z.object({
-	startDate: z.iso.datetime({
-		message: 'must be an ISO datetime e.g. "2024-06-01T20:00:00Z"',
+// Entry for relevantDates (replaces the deprecated relevantDate).
+// Apple accepts either a single moment ({ date }) or an interval
+// ({ startDate, endDate }) — and requires endDate whenever startDate is given.
+const relevantDateSchema = z.union([
+	z.object({
+		date: z.iso.datetime({
+			message: 'must be an ISO datetime e.g. "2024-06-01T20:00:00Z"',
+		}),
 	}),
-	endDate: z.iso
-		.datetime({
+	z.object({
+		startDate: z.iso.datetime({
+			message: 'must be an ISO datetime e.g. "2024-06-01T20:00:00Z"',
+		}),
+		endDate: z.iso.datetime({
 			message: 'must be an ISO datetime e.g. "2024-06-01T23:00:00Z"',
-		})
-		.optional(),
-});
+		}),
+	}),
+]);
 
 // Base Apple options — applicable to all pass types
 const appleOptionsSchema = z.object({
@@ -138,8 +145,10 @@ const appleOptionsSchema = z.object({
 	nfc: z
 		.object({
 			message: z.string(),
-			// Public key used to encrypt the NFC payload (Base64-encoded X.509)
-			encryptionPublicKey: z.string().optional(),
+			// Required by Apple: public key used to encrypt the NFC payload
+			// (Base64-encoded X.509 SubjectPublicKeyInfo, ECDH P-256). NFC does
+			// not function without it.
+			encryptionPublicKey: z.string(),
 		})
 		.optional(),
 	// Deep link opened when the user taps "Open" on the pass (requires associatedStoreIdentifiers)

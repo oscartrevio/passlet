@@ -97,6 +97,47 @@ describe("passConfigSchema", () => {
 		});
 		expect(invalid.success).toBe(false);
 	});
+
+	it("accepts both relevantDates shapes and requires endDate with startDate", () => {
+		const single = passConfigSchema.safeParse({
+			...BASE_LOYALTY,
+			apple: { relevantDates: [{ date: "2024-06-01T20:00:00Z" }] },
+		});
+		expect(single.success).toBe(true);
+
+		const interval = passConfigSchema.safeParse({
+			...BASE_LOYALTY,
+			apple: {
+				relevantDates: [
+					{
+						startDate: "2024-06-01T20:00:00Z",
+						endDate: "2024-06-01T23:00:00Z",
+					},
+				],
+			},
+		});
+		expect(interval.success).toBe(true);
+
+		const missingEnd = passConfigSchema.safeParse({
+			...BASE_LOYALTY,
+			apple: { relevantDates: [{ startDate: "2024-06-01T20:00:00Z" }] },
+		});
+		expect(missingEnd.success).toBe(false);
+	});
+
+	it("requires nfc.encryptionPublicKey when nfc is present", () => {
+		const withoutKey = passConfigSchema.safeParse({
+			...BASE_LOYALTY,
+			apple: { nfc: { message: "tap" } },
+		});
+		expect(withoutKey.success).toBe(false);
+
+		const withKey = passConfigSchema.safeParse({
+			...BASE_LOYALTY,
+			apple: { nfc: { message: "tap", encryptionPublicKey: "BASE64KEY==" } },
+		});
+		expect(withKey.success).toBe(true);
+	});
 });
 
 // ─── createConfigSchema ──────────────────────────────────────────────────────
