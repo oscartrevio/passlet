@@ -348,6 +348,116 @@ describe("pass.json apple-specific fields", () => {
 	});
 });
 
+// ─── Semantic tags & relevance ───────────────────────────────────────────────
+
+describe("pass.json semantics and relevantDates", () => {
+	const FLIGHT = {
+		type: "flight" as const,
+		id: "f1",
+		name: "AA 100",
+		transitType: "air" as const,
+		carrier: "AA",
+		flightNumber: "100",
+		origin: "JFK",
+		destination: "LAX",
+		departure: "2026-07-15T08:00:00Z",
+		arrival: "2026-07-15T11:30:00Z",
+		fields: [],
+		apple: { icon: STUB_ICON },
+	};
+
+	it("emits flight semantic tags from structured flight data", async () => {
+		const { pass } = await generateApplePass(
+			FLIGHT,
+			{ serialNumber: "s1" },
+			credentials
+		);
+		const json = await extractPassJson(pass);
+		expect(json.semantics).toEqual({
+			airlineCode: "AA",
+			flightCode: "AA100",
+			flightNumber: 100,
+			departureAirportCode: "JFK",
+			destinationAirportCode: "LAX",
+			originalDepartureDate: "2026-07-15T08:00:00Z",
+			originalArrivalDate: "2026-07-15T11:30:00Z",
+		});
+	});
+
+	it("derives relevantDates from flight departure/arrival", async () => {
+		const { pass } = await generateApplePass(
+			FLIGHT,
+			{ serialNumber: "s1" },
+			credentials
+		);
+		const json = await extractPassJson(pass);
+		expect(json.relevantDates).toEqual([
+			{ startDate: "2026-07-15T08:00:00Z", endDate: "2026-07-15T11:30:00Z" },
+		]);
+	});
+
+	it("emits event semantic tags and derives relevantDates", async () => {
+		const { pass } = await generateApplePass(
+			{
+				type: "event",
+				id: "e1",
+				name: "Summer Festival",
+				startsAt: "2026-07-15T20:00:00Z",
+				endsAt: "2026-07-15T23:00:00Z",
+				fields: [],
+				apple: { icon: STUB_ICON },
+			},
+			{ serialNumber: "s1" },
+			credentials
+		);
+		const json = await extractPassJson(pass);
+		expect(json.semantics).toEqual({
+			eventName: "Summer Festival",
+			eventStartDate: "2026-07-15T20:00:00Z",
+			eventEndDate: "2026-07-15T23:00:00Z",
+		});
+		expect(json.relevantDates).toEqual([
+			{ startDate: "2026-07-15T20:00:00Z", endDate: "2026-07-15T23:00:00Z" },
+		]);
+	});
+
+	it("lets an explicit apple.relevantDates override the derived value", async () => {
+		const { pass } = await generateApplePass(
+			{
+				type: "event",
+				id: "e1",
+				name: "Show",
+				startsAt: "2026-07-15T20:00:00Z",
+				fields: [],
+				apple: {
+					icon: STUB_ICON,
+					relevantDates: [{ date: "2026-07-14T20:00:00Z" }],
+				},
+			},
+			{ serialNumber: "s1" },
+			credentials
+		);
+		const json = await extractPassJson(pass);
+		expect(json.relevantDates).toEqual([{ date: "2026-07-14T20:00:00Z" }]);
+	});
+
+	it("omits semantics for pass types without structured data", async () => {
+		const { pass } = await generateApplePass(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Card",
+				fields: [],
+				apple: { icon: STUB_ICON },
+			},
+			{ serialNumber: "s1" },
+			credentials
+		);
+		const json = await extractPassJson(pass);
+		expect(json.semantics).toBeUndefined();
+	});
+});
+
 // ─── .pkpass zip structure ───────────────────────────────────────────────────
 
 describe(".pkpass zip contents", () => {
