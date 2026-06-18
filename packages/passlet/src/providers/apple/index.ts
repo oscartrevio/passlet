@@ -52,6 +52,12 @@ function validateAppleRequirements(pass: PassConfig): void {
 	if (pass.type === "flight" && !pass.transitType) {
 		throw new WalletError("APPLE_BOARDING_MISSING_TRANSIT_TYPE");
 	}
+	// Apple requires an authenticationToken whenever a webServiceURL is set;
+	// without it the pass cannot authenticate update requests. (The schema
+	// enforces the ≥16-char length.)
+	if (pass.apple?.webServiceURL && !pass.apple.authenticationToken) {
+		throw new WalletError("APPLE_MISSING_AUTH_TOKEN");
+	}
 }
 
 interface AppleField {
@@ -174,6 +180,107 @@ function buildFlightAppleFields(pass: FlightPass): Record<string, unknown> {
 	};
 }
 
+// Semantic tags let Wallet offer live features (flight tracking, event
+// relevance, Siri/lock-screen suggestions). They live at the top level of
+// pass.json. Without them the structured flight/event data never reaches Apple.
+function buildFlightSemantics(
+	pass: FlightPass
+): Record<string, unknown> | undefined {
+	const { carrier, flightNumber, origin, destination, departure, arrival } =
+		pass;
+	const semantics: Record<string, unknown> = {};
+	if (carrier) {
+		semantics.airlineCode = carrier;
+	}
+	if (carrier && flightNumber) {
+		semantics.flightCode = `${carrier}${flightNumber}`;
+	}
+	if (flightNumber) {
+		// SemanticTagType.flightNumber is the numeric portion, as a JSON number
+		const numeric = Number.parseInt(flightNumber, 10);
+		if (!Number.isNaN(numeric)) {
+			semantics.flightNumber = numeric;
+		}
+	}
+	if (origin) {
+		semantics.departureAirportCode = origin;
+	}
+	if (destination) {
+		semantics.destinationAirportCode = destination;
+	}
+	if (departure) {
+		semantics.originalDepartureDate = departure;
+	}
+	if (arrival) {
+		semantics.originalArrivalDate = arrival;
+	}
+	return Object.keys(semantics).length > 0 ? semantics : undefined;
+}
+
+function buildEventSemantics(pass: EventPass): Record<string, unknown> {
+	const semantics: Record<string, unknown> = { eventName: pass.name };
+	if (pass.startsAt) {
+		semantics.eventStartDate = pass.startsAt;
+	}
+	if (pass.endsAt) {
+		semantics.eventEndDate = pass.endsAt;
+	}
+	return semantics;
+}
+
+// A poster event ticket uses eventLogoText, not logoText. We treat the pass as
+// a poster when it opts into the poster style scheme or sets eventLogoText.
+function isPosterEventTicket(pass: PassConfig): boolean {
+	if (pass.type !== "event") {
+		return false;
+	}
+	const a = pass.apple;
+	return Boolean(
+		a?.eventLogoText || a?.preferredStyleSchemes?.includes("posterEventTicket")
+	);
+}
+
+// logoText is only emitted when the caller sets it — never defaulted to the
+// pass name — and is omitted for poster event tickets, where it has no effect.
+function resolveLogoText(pass: PassConfig): string | undefined {
+	const logoText = pass.apple?.logoText;
+	if (!logoText || isPosterEventTicket(pass)) {
+		return;
+	}
+	return logoText;
+}
+
+function buildSemantics(pass: PassConfig): Record<string, unknown> | undefined {
+	if (pass.type === "flight") {
+		return buildFlightSemantics(pass);
+	}
+	if (pass.type === "event") {
+		return buildEventSemantics(pass);
+	}
+	return;
+}
+
+type RelevantDate = { date: string } | { startDate: string; endDate: string };
+
+// Lock-screen relevance. An explicit apple.relevantDates always wins; otherwise
+// derive it from the event/flight times so those passes surface at the right time.
+function deriveRelevantDates(pass: PassConfig): RelevantDate[] | undefined {
+	if (pass.apple?.relevantDates) {
+		return pass.apple.relevantDates;
+	}
+	if (pass.type === "event" && pass.startsAt) {
+		return pass.endsAt
+			? [{ startDate: pass.startsAt, endDate: pass.endsAt }]
+			: [{ date: pass.startsAt }];
+	}
+	if (pass.type === "flight" && pass.departure) {
+		return pass.arrival
+			? [{ startDate: pass.departure, endDate: pass.arrival }]
+			: [{ date: pass.departure }];
+	}
+	return;
+}
+
 function buildAppleCommonFields(
 	pass: PassConfig,
 	createConfig: CreateConfig
@@ -208,7 +315,7 @@ function buildAppleCommonFields(
 			})
 		),
 		beacons: a?.beacons,
-		relevantDates: a?.relevantDates,
+		relevantDates: deriveRelevantDates(pass),
 		groupingIdentifier: a?.groupingIdentifier,
 		suppressStripShine: a?.suppressStripShine,
 		sharingProhibited: a?.sharingProhibited,
@@ -235,6 +342,7 @@ function buildPassJson(
 	const passTypeKey = PASS_TYPE_KEY[pass.type];
 	const slots = buildSlots(pass.fields, createConfig.values ?? {});
 	const a = pass.apple;
+	const semantics = buildSemantics(pass);
 
 	return {
 		formatVersion: 1,
@@ -243,10 +351,11 @@ function buildPassJson(
 		teamIdentifier: credentials.teamId,
 		organizationName: pass.name,
 		description: a?.description ?? pass.name,
-		logoText: a?.logoText ?? pass.name,
+		logoText: resolveLogoText(pass),
 		...buildAppleCommonFields(pass, createConfig),
 		...(pass.type === "event" && buildEventAppleFields(pass)),
 		...(pass.type === "flight" && buildFlightAppleFields(pass)),
+		...(semantics && { semantics }),
 		[passTypeKey]: buildPassTypeContent(pass, slots),
 	};
 }
