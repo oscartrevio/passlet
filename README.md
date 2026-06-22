@@ -4,10 +4,12 @@
 </picture>
 
 <p align="center">
-  <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/group/npm/passlet+npm/passlet/downloads+github/license/oscartrevio/passlet.svg?variant=secondary&size=xs&mode=dark">
-  <img src="https://shieldcn.dev/group/npm/passlet+npm/passlet/downloads+github/license/oscartrevio/passlet.svg?variant=secondary&size=xs&mode=light" alt="badges">
-</picture>
+  <a href="https://www.npmjs.com/package/passlet">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/group/npm/passlet+npm/passlet/downloads+github/license/oscartrevio/passlet.svg?variant=secondary&size=xs&mode=dark">
+      <img src="https://shieldcn.dev/group/npm/passlet+npm/passlet/downloads+github/license/oscartrevio/passlet.svg?variant=secondary&size=xs&mode=light" alt="npm">
+    </picture>
+  </a>
 </p>
 
 **[Passlet](https://github.com/oscartrevio/passlet)** is a library for generating Apple Wallet and Google Wallet passes from a single API.
