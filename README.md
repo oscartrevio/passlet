@@ -22,9 +22,6 @@ If your app supports both, you're building two separate systems.
 
 Passlet fixes that. One API that handles the signing, formatting, and platform translation for you — whether you need one wallet or both.
 
-> [!WARNING]
-> **Early release** — API may change between minor versions.
-
 ## Install
 
 ```bash
