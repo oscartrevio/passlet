@@ -1,5 +1,11 @@
 # passlet
 
+## 1.1.1
+
+### Patch Changes
+
+- 7333ae5: Publish the latest README (corrected examples, expanded usage guides, updated badges, removed early-release warning).
+
 ## 1.1.0
 
 ### Minor Changes
