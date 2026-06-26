@@ -73,7 +73,14 @@ export const fieldDefSchema = z.object({
 	key: z.string(),
 	label: z.string(),
 	value: z.string().optional(),
-	changeMessage: z.string().optional(),
+	// Apple shows a change notification only if the message contains the "%@"
+	// placeholder, which it replaces with the new value.
+	changeMessage: z
+		.string()
+		.refine((v) => v.includes("%@"), {
+			message: 'changeMessage must contain the "%@" placeholder',
+		})
+		.optional(),
 	dateStyle: dateStyleSchema.optional(),
 	timeStyle: dateStyleSchema.optional(),
 	numberStyle: numberStyleSchema.optional(),

@@ -171,6 +171,34 @@ describe("passConfigSchema", () => {
 		expect(missingEnd.success).toBe(false);
 	});
 
+	it("requires the %@ placeholder in a field changeMessage", () => {
+		const withPlaceholder = passConfigSchema.safeParse({
+			...BASE_LOYALTY,
+			fields: [
+				{
+					slot: "secondary",
+					key: "gate",
+					label: "Gate",
+					changeMessage: "Gate changed to %@",
+				},
+			],
+		});
+		expect(withPlaceholder.success).toBe(true);
+
+		const withoutPlaceholder = passConfigSchema.safeParse({
+			...BASE_LOYALTY,
+			fields: [
+				{
+					slot: "secondary",
+					key: "gate",
+					label: "Gate",
+					changeMessage: "Gate changed",
+				},
+			],
+		});
+		expect(withoutPlaceholder.success).toBe(false);
+	});
+
 	it("requires nfc.encryptionPublicKey when nfc is present", () => {
 		const withoutKey = passConfigSchema.safeParse({
 			...BASE_LOYALTY,

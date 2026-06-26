@@ -14,6 +14,7 @@ import {
 	resolveImageSet,
 	resolveRequiredImageSet,
 	toAppleBarcodeFormat,
+	toAppleMessageEncoding,
 } from "./utils";
 
 // Apple pass type → pass.json key
@@ -57,6 +58,14 @@ function validateAppleRequirements(pass: PassConfig): void {
 	// enforces the ≥16-char length.)
 	if (pass.apple?.webServiceURL && !pass.apple.authenticationToken) {
 		throw new WalletError("APPLE_MISSING_AUTH_TOKEN");
+	}
+	// appLaunchURL is passed to the associated app, identified by its App Store
+	// IDs — Apple ignores the URL without associatedStoreIdentifiers.
+	if (
+		pass.apple?.appLaunchURL &&
+		!pass.apple.associatedStoreIdentifiers?.length
+	) {
+		throw new WalletError("APPLE_APP_LAUNCH_URL_REQUIRES_STORE_IDS");
 	}
 }
 
@@ -109,8 +118,12 @@ function buildSlots(
 			...(f.timeStyle && { timeStyle: f.timeStyle }),
 			...(f.numberStyle && { numberStyle: f.numberStyle }),
 			...(f.currencyCode && { currencyCode: f.currencyCode }),
-			...(f.textAlignment && { textAlignment: f.textAlignment }),
-			...(f.row !== undefined && { row: f.row }),
+			// Apple ignores textAlignment on primary and back fields
+			...(f.textAlignment &&
+				f.slot !== "primary" &&
+				f.slot !== "back" && { textAlignment: f.textAlignment }),
+			// Apple only supports `row` on auxiliary fields (event tickets)
+			...(f.row !== undefined && f.slot === "auxiliary" && { row: f.row }),
 		});
 	}
 
@@ -356,6 +369,14 @@ function buildAppleCommonFields(
 	createConfig: CreateConfig
 ): Record<string, unknown> {
 	const a = pass.apple;
+	const appleBarcode = createConfig.barcode
+		? {
+				message: createConfig.barcode.value,
+				format: toAppleBarcodeFormat(createConfig.barcode.format),
+				messageEncoding: toAppleMessageEncoding(createConfig.barcode.format),
+				altText: createConfig.barcode.altText,
+			}
+		: undefined;
 	return {
 		backgroundColor: pass.color ? hexToRgb(pass.color) : undefined,
 		foregroundColor: a?.foregroundColor
@@ -364,17 +385,11 @@ function buildAppleCommonFields(
 		labelColor: a?.labelColor ? hexToRgb(a.labelColor) : undefined,
 		expirationDate: createConfig.expiresAt,
 		voided: createConfig.apple?.voided,
-		// Barcode — Apple supports up to 10 but we expose one per recipient
-		barcodes: createConfig.barcode
-			? [
-					{
-						message: createConfig.barcode.value,
-						format: toAppleBarcodeFormat(createConfig.barcode.format),
-						messageEncoding: "iso-8859-1",
-						altText: createConfig.barcode.altText,
-					},
-				]
-			: undefined,
+		// Barcode — `barcodes` (array) is the modern key; `barcode` (singular) is
+		// the deprecated fallback older OS versions read. Emit both for the widest
+		// device compatibility.
+		barcodes: appleBarcode ? [appleBarcode] : undefined,
+		barcode: appleBarcode,
 		// Locations — altitude and relevantText are Apple-only
 		locations: pass.locations?.map(
 			({ latitude, longitude, altitude, relevantText }) => ({
@@ -445,6 +460,15 @@ async function collectImages(
 	const iconFiles = await resolveRequiredImageSet("icon", icon);
 	Object.assign(images, iconFiles);
 
+	// icon@2x is strongly recommended for Retina displays
+	const hasRetinaIcon =
+		typeof icon === "object" && !(icon instanceof Uint8Array) && !!icon.retina;
+	if (!hasRetinaIcon) {
+		warnings.push(
+			"icon@2x is recommended for Retina displays — provide icon as { base, retina }"
+		);
+	}
+
 	// All other images are optional — adds warnings on failure
 	const optional = await Promise.all([
 		resolveImageSet("logo", pass.apple?.logo, warnings),
@@ -455,6 +479,17 @@ async function collectImages(
 	]);
 	for (const set of optional) {
 		Object.assign(images, set);
+	}
+
+	// Event tickets render either a strip OR a background/thumbnail, not both.
+	if (
+		pass.type === "event" &&
+		pass.apple?.strip &&
+		(pass.apple.background || pass.apple.thumbnail)
+	) {
+		warnings.push(
+			"Apple event tickets ignore background/thumbnail when a strip image is set"
+		);
 	}
 
 	return images;

@@ -199,10 +199,54 @@ describe("pass.json barcode", () => {
 		expect(barcodes).toHaveLength(1);
 		expect(barcodes.at(0)?.format).toBe("PKBarcodeFormatQR");
 		expect(barcodes.at(0)?.message).toBe("ABC-123");
-		expect(barcodes.at(0)?.messageEncoding).toBe("iso-8859-1");
+		// QR uses UTF-8 so non-Latin-1 payloads are not mangled
+		expect(barcodes.at(0)?.messageEncoding).toBe("utf-8");
 	});
 
-	it("omits barcodes when no barcode is set", async () => {
+	it("uses iso-8859-1 for PDF417 and utf-8 for QR/Aztec", async () => {
+		const encodingFor = async (
+			format: "QR" | "Aztec" | "PDF417" | "Code128"
+		) => {
+			const { pass } = await generateApplePass(
+				{
+					type: "loyalty",
+					id: "p1",
+					name: "Test",
+					fields: [],
+					apple: { icon: STUB_ICON },
+				},
+				{ serialNumber: "s1", barcode: { value: "X", format } },
+				credentials
+			);
+			const json = await extractPassJson(pass);
+			return (json.barcode as { messageEncoding: string }).messageEncoding;
+		};
+		expect(await encodingFor("QR")).toBe("utf-8");
+		expect(await encodingFor("Aztec")).toBe("utf-8");
+		expect(await encodingFor("PDF417")).toBe("iso-8859-1");
+		expect(await encodingFor("Code128")).toBe("iso-8859-1");
+	});
+
+	it("also emits the deprecated singular barcode for old-OS fallback", async () => {
+		const { pass } = await generateApplePass(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Test",
+				fields: [],
+				apple: { icon: STUB_ICON },
+			},
+			{ serialNumber: "s1", barcode: { value: "ABC-123", format: "QR" } },
+			credentials
+		);
+		const json = await extractPassJson(pass);
+		expect(json.barcode).toEqual((json.barcodes as unknown[])[0]);
+		expect((json.barcode as { format: string }).format).toBe(
+			"PKBarcodeFormatQR"
+		);
+	});
+
+	it("omits barcodes and barcode when no barcode is set", async () => {
 		const { pass } = await generateApplePass(
 			{
 				type: "loyalty",
@@ -216,6 +260,7 @@ describe("pass.json barcode", () => {
 		);
 		const json = await extractPassJson(pass);
 		expect(json.barcodes).toBeUndefined();
+		expect(json.barcode).toBeUndefined();
 	});
 });
 
@@ -698,5 +743,81 @@ describe("generateApplePass validation", () => {
 				credentials
 			)
 		).rejects.toMatchObject({ code: "APPLE_MISSING_AUTH_TOKEN" });
+	});
+
+	it("throws APPLE_APP_LAUNCH_URL_REQUIRES_STORE_IDS without store identifiers", async () => {
+		await expect(
+			generateApplePass(
+				{
+					type: "loyalty",
+					id: "p1",
+					name: "Test",
+					fields: [],
+					apple: {
+						icon: STUB_ICON,
+						appLaunchURL: "https://example.com/app",
+					},
+				},
+				{ serialNumber: "s1" },
+				credentials
+			)
+		).rejects.toMatchObject({
+			code: "APPLE_APP_LAUNCH_URL_REQUIRES_STORE_IDS",
+		});
+	});
+});
+
+// ─── Image warnings ───────────────────────────────────────────────────────────
+
+describe("generateApplePass image warnings", () => {
+	it("warns when the icon has no @2x variant", async () => {
+		const { warnings } = await generateApplePass(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Test",
+				fields: [],
+				apple: { icon: STUB_ICON },
+			},
+			{ serialNumber: "s1" },
+			credentials
+		);
+		expect(warnings.some((w) => w.includes("icon@2x"))).toBe(true);
+	});
+
+	it("does not warn when the icon includes a retina variant", async () => {
+		const { warnings } = await generateApplePass(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Test",
+				fields: [],
+				apple: { icon: { base: STUB_ICON, retina: STUB_ICON } },
+			},
+			{ serialNumber: "s1" },
+			credentials
+		);
+		expect(warnings.some((w) => w.includes("icon@2x"))).toBe(false);
+	});
+});
+
+describe("generateApplePass event image exclusivity", () => {
+	it("warns when an event ticket sets both strip and background", async () => {
+		const { warnings } = await generateApplePass(
+			{
+				type: "event",
+				id: "e1",
+				name: "Festival",
+				fields: [],
+				apple: {
+					icon: { base: STUB_ICON, retina: STUB_ICON },
+					strip: STUB_ICON,
+					background: STUB_ICON,
+				},
+			},
+			{ serialNumber: "s1" },
+			credentials
+		);
+		expect(warnings.some((w) => w.includes("strip"))).toBe(true);
 	});
 });

@@ -19,6 +19,8 @@ export const WALLET_ERROR_CODES = {
 		"Apple Wallet boarding passes require a transitType",
 	APPLE_MISSING_AUTH_TOKEN:
 		"Apple webServiceURL requires an authenticationToken (minimum 16 characters)",
+	APPLE_APP_LAUNCH_URL_REQUIRES_STORE_IDS:
+		"Apple appLaunchURL requires associatedStoreIdentifiers",
 
 	// Google — provider-level constraints the schema cannot enforce
 	GOOGLE_INVALID_PRIVATE_KEY:
