@@ -745,3 +745,37 @@ describe("generateApplePass validation", () => {
 		).rejects.toMatchObject({ code: "APPLE_MISSING_AUTH_TOKEN" });
 	});
 });
+
+// ─── Image warnings ───────────────────────────────────────────────────────────
+
+describe("generateApplePass image warnings", () => {
+	it("warns when the icon has no @2x variant", async () => {
+		const { warnings } = await generateApplePass(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Test",
+				fields: [],
+				apple: { icon: STUB_ICON },
+			},
+			{ serialNumber: "s1" },
+			credentials
+		);
+		expect(warnings.some((w) => w.includes("icon@2x"))).toBe(true);
+	});
+
+	it("does not warn when the icon includes a retina variant", async () => {
+		const { warnings } = await generateApplePass(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Test",
+				fields: [],
+				apple: { icon: { base: STUB_ICON, retina: STUB_ICON } },
+			},
+			{ serialNumber: "s1" },
+			credentials
+		);
+		expect(warnings.some((w) => w.includes("icon@2x"))).toBe(false);
+	});
+});

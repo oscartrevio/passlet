@@ -452,6 +452,15 @@ async function collectImages(
 	const iconFiles = await resolveRequiredImageSet("icon", icon);
 	Object.assign(images, iconFiles);
 
+	// icon@2x is strongly recommended for Retina displays
+	const hasRetinaIcon =
+		typeof icon === "object" && !(icon instanceof Uint8Array) && !!icon.retina;
+	if (!hasRetinaIcon) {
+		warnings.push(
+			"icon@2x is recommended for Retina displays — provide icon as { base, retina }"
+		);
+	}
+
 	// All other images are optional — adds warnings on failure
 	const optional = await Promise.all([
 		resolveImageSet("logo", pass.apple?.logo, warnings),
