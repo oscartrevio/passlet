@@ -1,5 +1,55 @@
 # passlet
 
+## 1.2.0
+
+### Minor Changes
+
+- affb2d9: Expand Apple Wallet semantic tags: well-known display fields are now mapped to
+  additional semantic tags — flight `gate`/`terminal`/`boardingZone`/`seat` to
+  `departureGate`/`departureTerminal`/`boardingGroup`/`seats`, and event
+  `venue`/`section`/`row`/`seat` to `venueName`/`seats` — so Wallet can render
+  structured boarding and event details.
+- 707869b: Map Google event fields to structured slots: `seat`/`row`/`section`/`gate` now
+  populate `eventTicketObject.seatInfo` (rendered in Google's dedicated ticket UI
+  instead of generic text modules), and a new structured event `venue`
+  (`{ name, address }`) populates `eventTicketClass.venue`.
+- 3d45efa: Add an optional `origins` field to `GoogleCredentials`. When set, it is included
+  as the `origins` claim in the "Add to Google Wallet" JWT — required for the
+  embeddable web save button to render.
+
+### Patch Changes
+
+- e4efdec: Apple Wallet correctness hardening:
+
+  - Emit the deprecated singular `barcode` alongside `barcodes` for older-OS
+    fallback (L-1).
+  - Encode QR/Aztec barcode payloads as UTF-8 so non-Latin-1 characters are not
+    mangled; PDF417/Code128 stay on iso-8859-1 (L-9).
+  - Reject a field `changeMessage` that lacks the required `%@` placeholder (L-2).
+  - Only emit `row` on auxiliary fields, and drop `textAlignment` on primary/back
+    fields, matching Apple's field rules (L-4, L-5).
+  - Warn when the icon has no `@2x` variant, and when an event ticket sets both a
+    `strip` and a `background`/`thumbnail` (L-7, L-6).
+  - Throw `APPLE_APP_LAUNCH_URL_REQUIRES_STORE_IDS` when `appLaunchURL` is set
+    without `associatedStoreIdentifiers` (L-8).
+
+- 84830ba: Cleanup and flight passenger handling:
+
+  - Validate a static field `value` against its style: numeric for `numberStyle`,
+    a parseable datetime for `dateStyle`/`timeStyle` (L-3).
+  - Google flight passes now throw `GOOGLE_FLIGHT_MISSING_PASSENGER_NAME` when
+    `passengerName` is absent instead of sending an empty (and rejected) value
+    (L-11).
+  - Remove dead code: the unreachable `transitType` default and the never-thrown
+    `APPLE_UNSUPPORTED_BARCODE_FORMAT` error code (L-10).
+
+- a8b2b22: Treat event and flight display datetimes as local venue/airport wall-clock
+  time. `startsAt`/`endsAt`/`departure`/`arrival` now accept ISO datetimes with or
+  without a UTC offset; any offset is preserved for Apple semantics and stripped
+  for Google (which derives the timezone from the venue/airport and rejects an
+  offset on flight times). This fixes flight class creation when an offset was
+  provided and removes the previous UTC-relabelling ambiguity.
+
 ## 1.1.1
 
 ### Patch Changes
