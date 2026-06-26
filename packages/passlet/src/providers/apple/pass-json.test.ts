@@ -744,6 +744,27 @@ describe("generateApplePass validation", () => {
 			)
 		).rejects.toMatchObject({ code: "APPLE_MISSING_AUTH_TOKEN" });
 	});
+
+	it("throws APPLE_APP_LAUNCH_URL_REQUIRES_STORE_IDS without store identifiers", async () => {
+		await expect(
+			generateApplePass(
+				{
+					type: "loyalty",
+					id: "p1",
+					name: "Test",
+					fields: [],
+					apple: {
+						icon: STUB_ICON,
+						appLaunchURL: "https://example.com/app",
+					},
+				},
+				{ serialNumber: "s1" },
+				credentials
+			)
+		).rejects.toMatchObject({
+			code: "APPLE_APP_LAUNCH_URL_REQUIRES_STORE_IDS",
+		});
+	});
 });
 
 // ─── Image warnings ───────────────────────────────────────────────────────────

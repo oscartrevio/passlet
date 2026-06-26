@@ -59,6 +59,14 @@ function validateAppleRequirements(pass: PassConfig): void {
 	if (pass.apple?.webServiceURL && !pass.apple.authenticationToken) {
 		throw new WalletError("APPLE_MISSING_AUTH_TOKEN");
 	}
+	// appLaunchURL is passed to the associated app, identified by its App Store
+	// IDs — Apple ignores the URL without associatedStoreIdentifiers.
+	if (
+		pass.apple?.appLaunchURL &&
+		!pass.apple.associatedStoreIdentifiers?.length
+	) {
+		throw new WalletError("APPLE_APP_LAUNCH_URL_REQUIRES_STORE_IDS");
+	}
 }
 
 interface AppleField {
