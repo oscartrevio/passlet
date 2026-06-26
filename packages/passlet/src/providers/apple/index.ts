@@ -180,11 +180,48 @@ function buildFlightAppleFields(pass: FlightPass): Record<string, unknown> {
 	};
 }
 
+// Resolve a display field's value (per-recipient override or static default).
+function fieldValue(
+	fields: FieldDef[],
+	values: Record<string, string | null>,
+	key: string
+): string | undefined {
+	const f = fields.find((field) => field.key === key);
+	if (!f) {
+		return;
+	}
+	const v = f.key in values ? values[f.key] : f.value;
+	return v == null ? undefined : v;
+}
+
+// Build a SemanticTagType.Seat array from well-known seat field keys. Returns
+// undefined when none are present so we never emit an empty seat.
+function buildSeats(
+	fields: FieldDef[],
+	values: Record<string, string | null>
+): Record<string, string>[] | undefined {
+	const seat: Record<string, string> = {};
+	const number = fieldValue(fields, values, "seat");
+	const row = fieldValue(fields, values, "row");
+	const section = fieldValue(fields, values, "section");
+	if (number) {
+		seat.seatNumber = number;
+	}
+	if (row) {
+		seat.seatRow = row;
+	}
+	if (section) {
+		seat.seatSection = section;
+	}
+	return Object.keys(seat).length > 0 ? [seat] : undefined;
+}
+
 // Semantic tags let Wallet offer live features (flight tracking, event
 // relevance, Siri/lock-screen suggestions). They live at the top level of
 // pass.json. Without them the structured flight/event data never reaches Apple.
 function buildFlightSemantics(
-	pass: FlightPass
+	pass: FlightPass,
+	values: Record<string, string | null>
 ): Record<string, unknown> | undefined {
 	const { carrier, flightNumber, origin, destination, departure, arrival } =
 		pass;
@@ -214,16 +251,46 @@ function buildFlightSemantics(
 	if (arrival) {
 		semantics.originalArrivalDate = arrival;
 	}
+	// Map well-known display fields to gate/terminal/boarding/seat semantics
+	const gate = fieldValue(pass.fields, values, "gate");
+	const terminal = fieldValue(pass.fields, values, "terminal");
+	const boardingGroup =
+		fieldValue(pass.fields, values, "boardingZone") ??
+		fieldValue(pass.fields, values, "boardingGroup");
+	if (gate) {
+		semantics.departureGate = gate;
+	}
+	if (terminal) {
+		semantics.departureTerminal = terminal;
+	}
+	if (boardingGroup) {
+		semantics.boardingGroup = boardingGroup;
+	}
+	const seats = buildSeats(pass.fields, values);
+	if (seats) {
+		semantics.seats = seats;
+	}
 	return Object.keys(semantics).length > 0 ? semantics : undefined;
 }
 
-function buildEventSemantics(pass: EventPass): Record<string, unknown> {
+function buildEventSemantics(
+	pass: EventPass,
+	values: Record<string, string | null>
+): Record<string, unknown> {
 	const semantics: Record<string, unknown> = { eventName: pass.name };
 	if (pass.startsAt) {
 		semantics.eventStartDate = pass.startsAt;
 	}
 	if (pass.endsAt) {
 		semantics.eventEndDate = pass.endsAt;
+	}
+	const venue = fieldValue(pass.fields, values, "venue");
+	if (venue) {
+		semantics.venueName = venue;
+	}
+	const seats = buildSeats(pass.fields, values);
+	if (seats) {
+		semantics.seats = seats;
 	}
 	return semantics;
 }
@@ -250,12 +317,15 @@ function resolveLogoText(pass: PassConfig): string | undefined {
 	return logoText;
 }
 
-function buildSemantics(pass: PassConfig): Record<string, unknown> | undefined {
+function buildSemantics(
+	pass: PassConfig,
+	values: Record<string, string | null>
+): Record<string, unknown> | undefined {
 	if (pass.type === "flight") {
-		return buildFlightSemantics(pass);
+		return buildFlightSemantics(pass, values);
 	}
 	if (pass.type === "event") {
-		return buildEventSemantics(pass);
+		return buildEventSemantics(pass, values);
 	}
 	return;
 }
@@ -340,9 +410,10 @@ function buildPassJson(
 	credentials: AppleCredentials
 ): Record<string, unknown> {
 	const passTypeKey = PASS_TYPE_KEY[pass.type];
-	const slots = buildSlots(pass.fields, createConfig.values ?? {});
+	const values = createConfig.values ?? {};
+	const slots = buildSlots(pass.fields, values);
 	const a = pass.apple;
-	const semantics = buildSemantics(pass);
+	const semantics = buildSemantics(pass, values);
 
 	return {
 		formatVersion: 1,

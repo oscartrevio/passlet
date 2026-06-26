@@ -468,6 +468,64 @@ describe("pass.json semantics and relevantDates", () => {
 		]);
 	});
 
+	it("maps gate/terminal/boarding/seat fields to flight semantics", async () => {
+		const { pass } = await generateApplePass(
+			{
+				...FLIGHT,
+				fields: [
+					{ slot: "secondary", key: "gate", label: "Gate", value: "B22" },
+					{ slot: "secondary", key: "terminal", label: "Terminal", value: "4" },
+					{
+						slot: "auxiliary",
+						key: "boardingZone",
+						label: "Zone",
+						value: "Group 2",
+					},
+					{ slot: "auxiliary", key: "seat", label: "Seat", value: "14A" },
+				],
+			},
+			{ serialNumber: "s1" },
+			credentials
+		);
+		const json = await extractPassJson(pass);
+		const semantics = json.semantics as Record<string, unknown>;
+		expect(semantics.departureGate).toBe("B22");
+		expect(semantics.departureTerminal).toBe("4");
+		expect(semantics.boardingGroup).toBe("Group 2");
+		expect(semantics.seats).toEqual([{ seatNumber: "14A" }]);
+	});
+
+	it("maps venue and seat/row/section fields to event semantics", async () => {
+		const { pass } = await generateApplePass(
+			{
+				type: "event",
+				id: "e1",
+				name: "Summer Festival",
+				startsAt: "2026-07-15T20:00:00Z",
+				fields: [
+					{
+						slot: "primary",
+						key: "venue",
+						label: "Venue",
+						value: "Central Park",
+					},
+					{ slot: "auxiliary", key: "section", label: "Section", value: "A" },
+					{ slot: "auxiliary", key: "row", label: "Row", value: "12" },
+					{ slot: "auxiliary", key: "seat", label: "Seat", value: "5" },
+				],
+				apple: { icon: STUB_ICON },
+			},
+			{ serialNumber: "s1" },
+			credentials
+		);
+		const json = await extractPassJson(pass);
+		const semantics = json.semantics as Record<string, unknown>;
+		expect(semantics.venueName).toBe("Central Park");
+		expect(semantics.seats).toEqual([
+			{ seatNumber: "5", seatRow: "12", seatSection: "A" },
+		]);
+	});
+
 	it("emits event semantic tags and derives relevantDates", async () => {
 		const { pass } = await generateApplePass(
 			{
