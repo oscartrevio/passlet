@@ -374,6 +374,14 @@ export const eventPassSchema = basePassSchema
 		endsAt: localDateTime(
 			'must be an ISO datetime e.g. "2024-06-01T23:00:00Z" or "2024-06-01T23:00:00"'
 		).optional(),
+		// Google: eventTicketClass.venue — requires BOTH name and address.
+		// Apple: name feeds the venueName semantic tag.
+		venue: z
+			.object({
+				name: z.string().min(1),
+				address: z.string().min(1),
+			})
+			.optional(),
 	})
 	.extend({ apple: appleEventOptionsSchema.optional() });
 

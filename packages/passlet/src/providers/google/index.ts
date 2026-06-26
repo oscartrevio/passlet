@@ -158,6 +158,13 @@ function buildClassTypeFields(
 						end: pass.endsAt ? toLocalDateTime(pass.endsAt) : undefined,
 					}
 				: undefined,
+			// Google requires both name and address when venue is present
+			venue: pass.venue
+				? {
+						name: localized(pass.venue.name),
+						address: localized(pass.venue.address),
+					}
+				: undefined,
 		};
 	}
 	if (pass.type === "flight") {
@@ -328,6 +335,39 @@ function buildGiftCardObjectFields(
 	};
 }
 
+// Event: structured seatInfo from well-known seat/row/section/gate field keys.
+// Google renders these in dedicated ticket slots rather than as text modules.
+function buildEventObjectFields(
+	fields: FieldDef[],
+	values: Record<string, string | null>
+): Record<string, unknown> {
+	const seatInfo: Record<string, unknown> = {};
+	const seat = resolveValueByKey(fields, values, "seat");
+	const row = resolveValueByKey(fields, values, "row");
+	const section = resolveValueByKey(fields, values, "section");
+	const gate = resolveValueByKey(fields, values, "gate");
+	if (seat != null) {
+		seatInfo.seat = localized(seat);
+	}
+	if (row != null) {
+		seatInfo.row = localized(row);
+	}
+	if (section != null) {
+		seatInfo.section = localized(section);
+	}
+	if (gate != null) {
+		seatInfo.gate = localized(gate);
+	}
+	return Object.keys(seatInfo).length > 0 ? { seatInfo } : {};
+}
+
+// Well-known field keys that map to structured object fields and so must be
+// excluded from the generic textModulesData for that pass type.
+const STRUCTURED_FIELD_KEYS: Partial<Record<PassType, string[]>> = {
+	loyalty: ["member", "memberId", "points"],
+	event: ["seat", "row", "section", "gate"],
+};
+
 // Display fields: primary → subheader+header, others → textModulesData, back → infoModuleData
 function buildDisplayFields(
 	fields: FieldDef[],
@@ -380,13 +420,13 @@ function buildObjectBody(
 	const values = createConfig.values ?? {};
 	const fields = pass.fields;
 
+	// Keys rendered as structured object fields are excluded from text modules
+	// (loyalty points/account, event seat/row/section/gate).
 	const display = buildDisplayFields(
 		fields,
 		values,
 		pass.locales,
-		// Loyalty structured fields (accountName, accountId, loyaltyPoints) are
-		// already rendered by buildLoyaltyObjectFields — exclude them from text modules.
-		pass.type === "loyalty" ? ["member", "memberId", "points"] : []
+		STRUCTURED_FIELD_KEYS[pass.type] ?? []
 	);
 
 	return {
@@ -418,6 +458,7 @@ function buildObjectBody(
 		// Per-recipient messages
 		messages: createConfig.google?.messages,
 		...(pass.type === "loyalty" && buildLoyaltyObjectFields(fields, values)),
+		...(pass.type === "event" && buildEventObjectFields(fields, values)),
 		...(pass.type === "flight" &&
 			buildFlightObjectFields(
 				pass,
