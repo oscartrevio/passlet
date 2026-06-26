@@ -17,6 +17,13 @@ const localeCodeSchema = z
 		'must be a BCP 47 language tag (e.g. "en-US", "es", "zh-Hans")'
 	);
 
+// Event/flight display datetimes are venue/airport LOCAL wall-clock times.
+// Accept an ISO datetime with or without a UTC offset: an offset (if given) is
+// preserved for Apple semantics but stripped for Google, which derives the zone
+// from the airport/venue and rejects an offset on flight times.
+const localDateTime = (message: string) =>
+	z.iso.datetime({ offset: true, local: true, message });
+
 const imageValue = z.union([
 	z.url(),
 	z.custom<Uint8Array>((v) => v instanceof Uint8Array),
@@ -359,18 +366,14 @@ export const loyaltyPassSchema = basePassSchema.extend({
 export const eventPassSchema = basePassSchema
 	.extend({
 		type: z.literal("event"),
-		// Apple: relevant date for lock screen suggestion
-		// Google: dateTime.start on eventTicketClass (EventDateTime)
-		startsAt: z.iso
-			.datetime({
-				message: 'must be an ISO datetime e.g. "2024-06-01T20:00:00Z"',
-			})
-			.optional(),
-		endsAt: z.iso
-			.datetime({
-				message: 'must be an ISO datetime e.g. "2024-06-01T23:00:00Z"',
-			})
-			.optional(),
+		// Local venue wall-clock time. Apple: relevant date / eventStartDate
+		// semantic. Google: dateTime.start on eventTicketClass (EventDateTime).
+		startsAt: localDateTime(
+			'must be an ISO datetime e.g. "2024-06-01T20:00:00Z" or "2024-06-01T20:00:00"'
+		).optional(),
+		endsAt: localDateTime(
+			'must be an ISO datetime e.g. "2024-06-01T23:00:00Z" or "2024-06-01T23:00:00"'
+		).optional(),
 	})
 	.extend({ apple: appleEventOptionsSchema.optional() });
 
@@ -402,16 +405,15 @@ export const flightPassSchema = basePassSchema
 			.string()
 			.regex(/^[A-Z]{3}$/, 'must be a 3-letter IATA airport code e.g. "LAX"')
 			.optional(),
-		departure: z.iso
-			.datetime({
-				message: 'must be an ISO datetime e.g. "2024-06-01T08:00:00Z"',
-			})
-			.optional(),
-		arrival: z.iso
-			.datetime({
-				message: 'must be an ISO datetime e.g. "2024-06-01T11:30:00Z"',
-			})
-			.optional(),
+		// Local airport wall-clock time. Google rejects a UTC offset here (it
+		// derives the zone from the airport); an offset, if given, is kept for
+		// Apple semantics and stripped for Google.
+		departure: localDateTime(
+			'must be an ISO datetime e.g. "2024-06-01T08:00:00Z" or "2024-06-01T08:00:00"'
+		).optional(),
+		arrival: localDateTime(
+			'must be an ISO datetime e.g. "2024-06-01T11:30:00Z" or "2024-06-01T11:30:00"'
+		).optional(),
 		// passengerName is per-recipient — pass in values at create() time
 	})
 	.extend({ apple: appleFlightOptionsSchema.optional() });

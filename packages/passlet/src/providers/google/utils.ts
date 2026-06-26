@@ -11,6 +11,16 @@ export function toGoogleBarcodeType(format: BarcodeFormat): string {
 	return GOOGLE_BARCODE_TYPE[format];
 }
 
+// Matches a trailing UTC designator (Z) or numeric offset (±HH:MM).
+const UTC_OFFSET_RE = /(Z|[+-]\d{2}:\d{2})$/;
+
+// Google event/flight datetimes are local venue/airport wall-clock times and
+// must not carry a UTC offset (Google derives the zone and rejects an offset on
+// flight times). Strip a trailing Z or ±HH:MM, leaving the local date/time.
+export function toLocalDateTime(iso: string): string {
+	return iso.replace(UTC_OFFSET_RE, "");
+}
+
 interface TranslatedValue {
 	language: string;
 	value: string;
