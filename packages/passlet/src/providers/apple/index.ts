@@ -473,6 +473,17 @@ async function collectImages(
 		Object.assign(images, set);
 	}
 
+	// Event tickets render either a strip OR a background/thumbnail, not both.
+	if (
+		pass.type === "event" &&
+		pass.apple?.strip &&
+		(pass.apple.background || pass.apple.thumbnail)
+	) {
+		warnings.push(
+			"Apple event tickets ignore background/thumbnail when a strip image is set"
+		);
+	}
+
 	return images;
 }
 

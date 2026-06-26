@@ -779,3 +779,24 @@ describe("generateApplePass image warnings", () => {
 		expect(warnings.some((w) => w.includes("icon@2x"))).toBe(false);
 	});
 });
+
+describe("generateApplePass event image exclusivity", () => {
+	it("warns when an event ticket sets both strip and background", async () => {
+		const { warnings } = await generateApplePass(
+			{
+				type: "event",
+				id: "e1",
+				name: "Festival",
+				fields: [],
+				apple: {
+					icon: { base: STUB_ICON, retina: STUB_ICON },
+					strip: STUB_ICON,
+					background: STUB_ICON,
+				},
+			},
+			{ serialNumber: "s1" },
+			credentials
+		);
+		expect(warnings.some((w) => w.includes("strip"))).toBe(true);
+	});
+});
