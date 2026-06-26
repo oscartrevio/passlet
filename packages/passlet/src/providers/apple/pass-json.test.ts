@@ -440,6 +440,22 @@ describe("pass.json semantics and relevantDates", () => {
 		});
 	});
 
+	it("preserves a UTC offset on flight semantic dates (Apple keeps it)", async () => {
+		const { pass } = await generateApplePass(
+			{
+				...FLIGHT,
+				departure: "2026-07-15T08:00:00+04:00",
+				arrival: "2026-07-15T11:30:00+04:00",
+			},
+			{ serialNumber: "s1" },
+			credentials
+		);
+		const json = await extractPassJson(pass);
+		const semantics = json.semantics as Record<string, unknown>;
+		expect(semantics.originalDepartureDate).toBe("2026-07-15T08:00:00+04:00");
+		expect(semantics.originalArrivalDate).toBe("2026-07-15T11:30:00+04:00");
+	});
+
 	it("derives relevantDates from flight departure/arrival", async () => {
 		const { pass } = await generateApplePass(
 			FLIGHT,

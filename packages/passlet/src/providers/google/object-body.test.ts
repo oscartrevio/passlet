@@ -341,6 +341,30 @@ describe("flight pass", () => {
 		expect(warnings.some((w) => w.includes("passengerName"))).toBe(true);
 	});
 
+	it("strips a UTC offset from flight datetimes (Google derives the zone)", async () => {
+		await run(
+			{
+				type: "flight",
+				id: "p1",
+				name: "Flight",
+				fields: [],
+				carrier: "AA",
+				flightNumber: "100",
+				origin: "JFK",
+				destination: "LAX",
+				departure: "2026-07-15T08:00:00+04:00",
+				arrival: "2026-07-15T11:30:00+04:00",
+			},
+			{ serialNumber: "s1", values: { passengerName: "Jane" } }
+		);
+		const cls = captureClassBody("flightClass");
+		expect(cls.localScheduledDepartureDateTime).toBe("2026-07-15T08:00:00");
+		expect(
+			(cls.destination as { localScheduledArrivalDateTime: string })
+				.localScheduledArrivalDateTime
+		).toBe("2026-07-15T11:30:00");
+	});
+
 	it("throws when departure is missing (required by flightClass)", async () => {
 		await expect(
 			run(

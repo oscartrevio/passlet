@@ -1,5 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { imageUri, localized, toGoogleBarcodeType } from "./utils";
+import {
+	imageUri,
+	localized,
+	toGoogleBarcodeType,
+	toLocalDateTime,
+} from "./utils";
+
+describe("toLocalDateTime", () => {
+	it.each([
+		["2024-06-01T08:00:00Z", "2024-06-01T08:00:00"],
+		["2024-06-01T08:00:00+04:00", "2024-06-01T08:00:00"],
+		["2024-06-01T08:00:00-05:00", "2024-06-01T08:00:00"],
+		["2024-06-01T08:00:00", "2024-06-01T08:00:00"],
+	])("strips the offset from %s", (input, expected) => {
+		expect(toLocalDateTime(input)).toBe(expected);
+	});
+});
 
 describe("toGoogleBarcodeType", () => {
 	it.each([

@@ -12,6 +12,7 @@ import {
 	imageUri,
 	localized,
 	toGoogleBarcodeType,
+	toLocalDateTime,
 	translationsFor,
 } from "./utils";
 
@@ -153,8 +154,8 @@ function buildClassTypeFields(
 			eventName: localized(pass.name, "en-US", nameTranslations),
 			dateTime: pass.startsAt
 				? {
-						start: pass.startsAt.replace("Z", ""),
-						end: pass.endsAt?.replace("Z", ""),
+						start: toLocalDateTime(pass.startsAt),
+						end: pass.endsAt ? toLocalDateTime(pass.endsAt) : undefined,
 					}
 				: undefined,
 		};
@@ -168,12 +169,16 @@ function buildClassTypeFields(
 				operatingCarrier: { carrierIataCode: pass.carrier },
 				operatingFlightNumber: pass.flightNumber,
 			},
-			localScheduledDepartureDateTime: pass.departure?.replace("Z", ""),
+			localScheduledDepartureDateTime: pass.departure
+				? toLocalDateTime(pass.departure)
+				: undefined,
 			origin: pass.origin ? { airportIataCode: pass.origin } : undefined,
 			destination: pass.destination
 				? {
 						airportIataCode: pass.destination,
-						localScheduledArrivalDateTime: pass.arrival?.replace("Z", ""),
+						localScheduledArrivalDateTime: pass.arrival
+							? toLocalDateTime(pass.arrival)
+							: undefined,
 					}
 				: undefined,
 		};

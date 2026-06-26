@@ -98,6 +98,27 @@ describe("passConfigSchema", () => {
 		expect(invalid.success).toBe(false);
 	});
 
+	it("accepts offset-less local datetimes on event/flight display times", () => {
+		expect(
+			passConfigSchema.safeParse({
+				type: "event",
+				id: "e1",
+				name: "Event",
+				fields: [],
+				startsAt: "2024-06-01T20:00:00",
+			}).success
+		).toBe(true);
+		expect(
+			passConfigSchema.safeParse({
+				type: "flight",
+				id: "f1",
+				name: "Flight",
+				fields: [],
+				departure: "2024-06-01T08:00:00+04:00",
+			}).success
+		).toBe(true);
+	});
+
 	it("rejects unsupported google message types", () => {
 		const base = {
 			...BASE_LOYALTY,
