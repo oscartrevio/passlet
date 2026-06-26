@@ -18,6 +18,11 @@ export interface GoogleCredentials {
 	clientEmail: string;
 	/** Issuer ID from the Google Pay & Wallet Console. */
 	issuerId: string;
+	/**
+	 * Approved domains where the "Add to Google Wallet" button is embedded.
+	 * Required for the web save button to render (e.g. `["https://example.com"]`).
+	 */
+	origins?: string[];
 	/** `private_key` from your Google Cloud service account JSON key (PKCS#8 PEM). */
 	privateKey: string;
 }
