@@ -66,28 +66,58 @@ export const textAlignmentSchema = z.enum([
 
 // FieldDef — a single display field on a pass.
 // slot maps to Apple's field areas; Google uses primary → subheader+header, rest → textModulesData.
-export const fieldDefSchema = z.object({
-	// Apple: headerFields / primaryFields / secondaryFields / auxiliaryFields / backFields
-	// Google: primary → subheader (label) + header (value), others → textModulesData
-	slot: z.enum(["header", "primary", "secondary", "auxiliary", "back"]),
-	key: z.string(),
-	label: z.string(),
-	value: z.string().optional(),
-	// Apple shows a change notification only if the message contains the "%@"
-	// placeholder, which it replaces with the new value.
-	changeMessage: z
-		.string()
-		.refine((v) => v.includes("%@"), {
-			message: 'changeMessage must contain the "%@" placeholder',
-		})
-		.optional(),
-	dateStyle: dateStyleSchema.optional(),
-	timeStyle: dateStyleSchema.optional(),
-	numberStyle: numberStyleSchema.optional(),
-	currencyCode: z.string().optional(),
-	textAlignment: textAlignmentSchema.optional(),
-	row: z.union([z.literal(0), z.literal(1)]).optional(),
-});
+export const fieldDefSchema = z
+	.object({
+		// Apple: headerFields / primaryFields / secondaryFields / auxiliaryFields / backFields
+		// Google: primary → subheader (label) + header (value), others → textModulesData
+		slot: z.enum(["header", "primary", "secondary", "auxiliary", "back"]),
+		key: z.string(),
+		label: z.string(),
+		value: z.string().optional(),
+		// Apple shows a change notification only if the message contains the "%@"
+		// placeholder, which it replaces with the new value.
+		changeMessage: z
+			.string()
+			.refine((v) => v.includes("%@"), {
+				message: 'changeMessage must contain the "%@" placeholder',
+			})
+			.optional(),
+		dateStyle: dateStyleSchema.optional(),
+		timeStyle: dateStyleSchema.optional(),
+		numberStyle: numberStyleSchema.optional(),
+		currencyCode: z.string().optional(),
+		textAlignment: textAlignmentSchema.optional(),
+		row: z.union([z.literal(0), z.literal(1)]).optional(),
+	})
+	.check((ctx) => {
+		// When a static value is given, Apple needs it in the right shape for the
+		// chosen style: a number for numberStyle, a parseable datetime for
+		// dateStyle/timeStyle. (Values supplied at create() time aren't checked here.)
+		const f = ctx.value;
+		if (f.value == null) {
+			return;
+		}
+		if (f.numberStyle && Number.isNaN(Number(f.value))) {
+			ctx.issues.push({
+				code: "custom",
+				message: "value must be numeric when numberStyle is set",
+				input: f.value,
+				path: ["value"],
+			});
+		}
+		const hasDateStyle =
+			(f.dateStyle && f.dateStyle !== "none") ||
+			(f.timeStyle && f.timeStyle !== "none");
+		if (hasDateStyle && Number.isNaN(Date.parse(f.value))) {
+			ctx.issues.push({
+				code: "custom",
+				message:
+					"value must be an ISO 8601 datetime when dateStyle/timeStyle is set",
+				input: f.value,
+				path: ["value"],
+			});
+		}
+	});
 
 // Barcode
 // Google supports AZTEC, CODE_39, CODE_128, CODABAR, DATA_MATRIX, EAN_8, EAN_13, ITF_14, PDF_417, QR_CODE, UPC_A and TEXT_ONLY barcodes. Apple only supports PKBarcodeFormatQR, PKBarcodeFormatPDF417, PKBarcodeFormatAztec, and PKBarcodeFormatCode128 formats, but we exclude that since it's not widely supported by barcode scanners.

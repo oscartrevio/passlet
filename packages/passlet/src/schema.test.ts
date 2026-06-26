@@ -171,6 +171,50 @@ describe("passConfigSchema", () => {
 		expect(missingEnd.success).toBe(false);
 	});
 
+	it("validates a static field value against its dateStyle/numberStyle", () => {
+		const okNumber = passConfigSchema.safeParse({
+			...BASE_LOYALTY,
+			fields: [
+				{
+					slot: "primary",
+					key: "points",
+					label: "Points",
+					value: "1250",
+					numberStyle: "decimal",
+				},
+			],
+		});
+		expect(okNumber.success).toBe(true);
+
+		const badNumber = passConfigSchema.safeParse({
+			...BASE_LOYALTY,
+			fields: [
+				{
+					slot: "primary",
+					key: "points",
+					label: "Points",
+					value: "lots",
+					numberStyle: "decimal",
+				},
+			],
+		});
+		expect(badNumber.success).toBe(false);
+
+		const badDate = passConfigSchema.safeParse({
+			...BASE_LOYALTY,
+			fields: [
+				{
+					slot: "secondary",
+					key: "expires",
+					label: "Expires",
+					value: "soon",
+					dateStyle: "medium",
+				},
+			],
+		});
+		expect(badDate.success).toBe(false);
+	});
+
 	it("requires the %@ placeholder in a field changeMessage", () => {
 		const withPlaceholder = passConfigSchema.safeParse({
 			...BASE_LOYALTY,
