@@ -531,6 +531,9 @@ export async function generateGooglePass(
 		aud: "google",
 		typ: "savetowallet",
 		iat: Math.floor(Date.now() / 1000),
+		// Approved domains for the embeddable "Add to Google Wallet" button.
+		// The web button does not render unless origins is present.
+		...(credentials.origins?.length && { origins: credentials.origins }),
 		payload: {
 			[objectsKey]: [objectBody],
 		},

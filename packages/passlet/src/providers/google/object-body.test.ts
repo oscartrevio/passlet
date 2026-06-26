@@ -111,7 +111,48 @@ function decodeObjectBody(
 	return obj;
 }
 
+/** Decode the outer JWT claims (iss, aud, typ, origins, payload). */
+function decodeJwtClaims(jwt: string): Record<string, unknown> {
+	const [, segment] = jwt.split(".");
+	if (!segment) {
+		throw new Error("invalid JWT");
+	}
+	const padded = segment.replace(/-/g, "+").replace(/_/g, "/");
+	return JSON.parse(Buffer.from(padded, "base64").toString("utf-8")) as Record<
+		string,
+		unknown
+	>;
+}
+
 const ISSUER = "3388000000022801234";
+
+describe("JWT origins", () => {
+	const base = {
+		type: "loyalty" as const,
+		id: "p1",
+		name: "Card",
+		google: { logo: "https://example.com/logo.png" },
+		fields: [],
+	};
+
+	it("includes origins when set on credentials", async () => {
+		stubFetch();
+		const { pass } = await generateGooglePass(
+			base,
+			{ serialNumber: "s1" },
+			{ ...credentials, origins: ["https://example.com"] }
+		);
+		if (!pass) {
+			throw new Error("expected a JWT");
+		}
+		expect(decodeJwtClaims(pass).origins).toEqual(["https://example.com"]);
+	});
+
+	it("omits origins when not set", async () => {
+		const { pass } = await run(base, { serialNumber: "s2" });
+		expect(decodeJwtClaims(pass).origins).toBeUndefined();
+	});
+});
 
 // ─── Complete pass fixtures ───────────────────────────────────────────────────
 //
