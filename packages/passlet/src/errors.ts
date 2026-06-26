@@ -13,8 +13,6 @@ export const WALLET_ERROR_CODES = {
 	APPLE_SIGNING_FAILED:
 		"Apple signing failed: could not create PKCS#7 signature",
 	APPLE_MISSING_ICON: "Apple Wallet requires an icon image for every pass",
-	APPLE_UNSUPPORTED_BARCODE_FORMAT:
-		"Apple Wallet does not support this barcode format — use QR, PDF417, or Aztec",
 	APPLE_BOARDING_MISSING_TRANSIT_TYPE:
 		"Apple Wallet boarding passes require a transitType",
 	APPLE_MISSING_AUTH_TOKEN:
