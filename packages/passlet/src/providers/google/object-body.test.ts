@@ -260,13 +260,49 @@ describe("event pass", () => {
 			id: `${ISSUER}.event-001`,
 			classId: `${ISSUER}.test-event`,
 			state: "ACTIVE",
+			// seat is rendered as structured seatInfo, not a text module
+			seatInfo: {
+				seat: { defaultValue: { language: "en-US", value: "A12" } },
+			},
 			subheader: { defaultValue: { language: "en-US", value: "Venue" } },
 			header: { defaultValue: { language: "en-US", value: "Central Park" } },
-			textModulesData: [
-				{ header: "Date", body: "Jul 15, 2026", id: "date" },
-				{ header: "Seat", body: "A12", id: "seat" },
-			],
+			textModulesData: [{ header: "Date", body: "Jul 15, 2026", id: "date" }],
 		});
+	});
+
+	it("maps seat/row/section/gate to seatInfo and venue to the class", async () => {
+		const { pass } = await run(
+			{
+				type: "event",
+				id: "e2",
+				name: "Show",
+				startsAt: "2026-07-15T20:00:00Z",
+				venue: { name: "Arena", address: "1 Main St" },
+				fields: [
+					{ slot: "auxiliary", key: "section", label: "Section", value: "A" },
+					{ slot: "auxiliary", key: "row", label: "Row", value: "12" },
+					{ slot: "auxiliary", key: "seat", label: "Seat", value: "5" },
+					{ slot: "auxiliary", key: "gate", label: "Gate", value: "3" },
+				],
+			},
+			{ serialNumber: "event-002" }
+		);
+
+		const cls = captureClassBody("eventTicketClass");
+		expect(cls.venue).toEqual({
+			name: { defaultValue: { language: "en-US", value: "Arena" } },
+			address: { defaultValue: { language: "en-US", value: "1 Main St" } },
+		});
+
+		const obj = decodeObjectBody(pass, "eventTicketObjects");
+		expect(obj.seatInfo).toEqual({
+			seat: { defaultValue: { language: "en-US", value: "5" } },
+			row: { defaultValue: { language: "en-US", value: "12" } },
+			section: { defaultValue: { language: "en-US", value: "A" } },
+			gate: { defaultValue: { language: "en-US", value: "3" } },
+		});
+		// none of the structured keys leak into textModulesData
+		expect(obj.textModulesData).toBeUndefined();
 	});
 });
 
