@@ -110,7 +110,10 @@ function buildSlots(
 			...(f.timeStyle && { timeStyle: f.timeStyle }),
 			...(f.numberStyle && { numberStyle: f.numberStyle }),
 			...(f.currencyCode && { currencyCode: f.currencyCode }),
-			...(f.textAlignment && { textAlignment: f.textAlignment }),
+			// Apple ignores textAlignment on primary and back fields
+			...(f.textAlignment &&
+				f.slot !== "primary" &&
+				f.slot !== "back" && { textAlignment: f.textAlignment }),
 			// Apple only supports `row` on auxiliary fields (event tickets)
 			...(f.row !== undefined && f.slot === "auxiliary" && { row: f.row }),
 		});
