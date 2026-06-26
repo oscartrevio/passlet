@@ -356,6 +356,14 @@ function buildAppleCommonFields(
 	createConfig: CreateConfig
 ): Record<string, unknown> {
 	const a = pass.apple;
+	const appleBarcode = createConfig.barcode
+		? {
+				message: createConfig.barcode.value,
+				format: toAppleBarcodeFormat(createConfig.barcode.format),
+				messageEncoding: "iso-8859-1",
+				altText: createConfig.barcode.altText,
+			}
+		: undefined;
 	return {
 		backgroundColor: pass.color ? hexToRgb(pass.color) : undefined,
 		foregroundColor: a?.foregroundColor
@@ -364,17 +372,11 @@ function buildAppleCommonFields(
 		labelColor: a?.labelColor ? hexToRgb(a.labelColor) : undefined,
 		expirationDate: createConfig.expiresAt,
 		voided: createConfig.apple?.voided,
-		// Barcode — Apple supports up to 10 but we expose one per recipient
-		barcodes: createConfig.barcode
-			? [
-					{
-						message: createConfig.barcode.value,
-						format: toAppleBarcodeFormat(createConfig.barcode.format),
-						messageEncoding: "iso-8859-1",
-						altText: createConfig.barcode.altText,
-					},
-				]
-			: undefined,
+		// Barcode — `barcodes` (array) is the modern key; `barcode` (singular) is
+		// the deprecated fallback older OS versions read. Emit both for the widest
+		// device compatibility.
+		barcodes: appleBarcode ? [appleBarcode] : undefined,
+		barcode: appleBarcode,
 		// Locations — altitude and relevantText are Apple-only
 		locations: pass.locations?.map(
 			({ latitude, longitude, altitude, relevantText }) => ({

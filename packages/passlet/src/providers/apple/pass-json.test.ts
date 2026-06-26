@@ -202,7 +202,26 @@ describe("pass.json barcode", () => {
 		expect(barcodes.at(0)?.messageEncoding).toBe("iso-8859-1");
 	});
 
-	it("omits barcodes when no barcode is set", async () => {
+	it("also emits the deprecated singular barcode for old-OS fallback", async () => {
+		const { pass } = await generateApplePass(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Test",
+				fields: [],
+				apple: { icon: STUB_ICON },
+			},
+			{ serialNumber: "s1", barcode: { value: "ABC-123", format: "QR" } },
+			credentials
+		);
+		const json = await extractPassJson(pass);
+		expect(json.barcode).toEqual((json.barcodes as unknown[])[0]);
+		expect((json.barcode as { format: string }).format).toBe(
+			"PKBarcodeFormatQR"
+		);
+	});
+
+	it("omits barcodes and barcode when no barcode is set", async () => {
 		const { pass } = await generateApplePass(
 			{
 				type: "loyalty",
@@ -216,6 +235,7 @@ describe("pass.json barcode", () => {
 		);
 		const json = await extractPassJson(pass);
 		expect(json.barcodes).toBeUndefined();
+		expect(json.barcode).toBeUndefined();
 	});
 });
 
