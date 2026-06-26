@@ -135,9 +135,9 @@ function buildPassTypeContent(
 	slots: AppleSlots
 ): Record<string, unknown> {
 	const content: Record<string, unknown> = { ...slots };
-	if (pass.type === "flight") {
-		const transitType = pass.transitType ?? "air";
-		content.transitType = TRANSIT_TYPE[transitType];
+	// transitType is guaranteed for flights by validateAppleRequirements()
+	if (pass.type === "flight" && pass.transitType) {
+		content.transitType = TRANSIT_TYPE[pass.transitType];
 	}
 	return content;
 }
