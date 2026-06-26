@@ -22,6 +22,12 @@ export function toAppleBarcodeFormat(format: BarcodeFormat): string {
 	return APPLE_BARCODE_FORMAT[format];
 }
 
+// QR and Aztec support a UTF-8 byte mode, so encode their payloads as UTF-8 to
+// avoid mangling non-Latin-1 characters. PDF417 and Code128 stay on iso-8859-1.
+export function toAppleMessageEncoding(format: BarcodeFormat): string {
+	return format === "QR" || format === "Aztec" ? "utf-8" : "iso-8859-1";
+}
+
 async function fetchAsBytes(url: string): Promise<Uint8Array> {
 	let response: Response;
 	try {

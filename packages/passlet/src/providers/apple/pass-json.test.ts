@@ -199,7 +199,32 @@ describe("pass.json barcode", () => {
 		expect(barcodes).toHaveLength(1);
 		expect(barcodes.at(0)?.format).toBe("PKBarcodeFormatQR");
 		expect(barcodes.at(0)?.message).toBe("ABC-123");
-		expect(barcodes.at(0)?.messageEncoding).toBe("iso-8859-1");
+		// QR uses UTF-8 so non-Latin-1 payloads are not mangled
+		expect(barcodes.at(0)?.messageEncoding).toBe("utf-8");
+	});
+
+	it("uses iso-8859-1 for PDF417 and utf-8 for QR/Aztec", async () => {
+		const encodingFor = async (
+			format: "QR" | "Aztec" | "PDF417" | "Code128"
+		) => {
+			const { pass } = await generateApplePass(
+				{
+					type: "loyalty",
+					id: "p1",
+					name: "Test",
+					fields: [],
+					apple: { icon: STUB_ICON },
+				},
+				{ serialNumber: "s1", barcode: { value: "X", format } },
+				credentials
+			);
+			const json = await extractPassJson(pass);
+			return (json.barcode as { messageEncoding: string }).messageEncoding;
+		};
+		expect(await encodingFor("QR")).toBe("utf-8");
+		expect(await encodingFor("Aztec")).toBe("utf-8");
+		expect(await encodingFor("PDF417")).toBe("iso-8859-1");
+		expect(await encodingFor("Code128")).toBe("iso-8859-1");
 	});
 
 	it("also emits the deprecated singular barcode for old-OS fallback", async () => {

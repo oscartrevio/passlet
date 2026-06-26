@@ -14,6 +14,7 @@ import {
 	resolveImageSet,
 	resolveRequiredImageSet,
 	toAppleBarcodeFormat,
+	toAppleMessageEncoding,
 } from "./utils";
 
 // Apple pass type → pass.json key
@@ -360,7 +361,7 @@ function buildAppleCommonFields(
 		? {
 				message: createConfig.barcode.value,
 				format: toAppleBarcodeFormat(createConfig.barcode.format),
-				messageEncoding: "iso-8859-1",
+				messageEncoding: toAppleMessageEncoding(createConfig.barcode.format),
 				altText: createConfig.barcode.altText,
 			}
 		: undefined;
