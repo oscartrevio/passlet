@@ -296,17 +296,16 @@ function buildLoyaltyObjectFields(
 function buildFlightObjectFields(
 	_pass: Extract<PassConfig, { type: "flight" }>,
 	serialNumber: string,
-	values: Record<string, string | null>,
-	warnings: string[]
+	values: Record<string, string | null>
 ): Record<string, unknown> {
 	const passengerName = values.passengerName;
+	// passengerName is required by flightObject — Google rejects an empty value,
+	// so fail fast rather than sending a blank string.
 	if (!passengerName) {
-		warnings.push(
-			"Google flight pass: passengerName not set in values — passenger name will be blank"
-		);
+		throw new WalletError("GOOGLE_FLIGHT_MISSING_PASSENGER_NAME");
 	}
 	return {
-		passengerName: passengerName ?? "",
+		passengerName,
 		reservationInfo: { confirmationCode: serialNumber },
 	};
 }
@@ -414,8 +413,7 @@ function buildObjectBody(
 	pass: PassConfig,
 	createConfig: CreateConfig,
 	classId: string,
-	objectId: string,
-	warnings: string[]
+	objectId: string
 ): Record<string, unknown> {
 	const values = createConfig.values ?? {};
 	const fields = pass.fields;
@@ -460,12 +458,7 @@ function buildObjectBody(
 		...(pass.type === "loyalty" && buildLoyaltyObjectFields(fields, values)),
 		...(pass.type === "event" && buildEventObjectFields(fields, values)),
 		...(pass.type === "flight" &&
-			buildFlightObjectFields(
-				pass,
-				createConfig.serialNumber,
-				values,
-				warnings
-			)),
+			buildFlightObjectFields(pass, createConfig.serialNumber, values)),
 		...(pass.type === "giftCard" &&
 			buildGiftCardObjectFields(
 				pass,
@@ -515,13 +508,7 @@ export async function generateGooglePass(
 	const classBody = buildClassBody(pass);
 	await ensureClass(classType, classId, classBody, credentials, privateKey);
 
-	const objectBody = buildObjectBody(
-		pass,
-		createConfig,
-		classId,
-		objectId,
-		warnings
-	);
+	const objectBody = buildObjectBody(pass, createConfig, classId, objectId);
 
 	// Pluralise the object type key for the JWT payload (e.g. "loyaltyObject" → "loyaltyObjects")
 	const objectsKey = objectType.replace("Object", "Objects");
@@ -561,7 +548,7 @@ export async function updateGooglePass(
 	);
 	const classId = `${credentials.issuerId}.${pass.id}`;
 
-	const patch = buildObjectBody(pass, createConfig, classId, objectId, []);
+	const patch = buildObjectBody(pass, createConfig, classId, objectId);
 
 	await patchObject(objectType, objectId, patch, credentials, privateKey);
 }

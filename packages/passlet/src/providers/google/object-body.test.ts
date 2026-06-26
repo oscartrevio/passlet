@@ -400,22 +400,23 @@ describe("flight pass", () => {
 		});
 	});
 
-	it("warns when passengerName is missing", async () => {
-		const { warnings } = await run(
-			{
-				type: "flight",
-				id: "p1",
-				name: "Flight",
-				fields: [],
-				carrier: "AA",
-				flightNumber: "100",
-				origin: "JFK",
-				destination: "LAX",
-				departure: "2026-07-15T08:00:00Z",
-			},
-			{ serialNumber: "s1" }
-		);
-		expect(warnings.some((w) => w.includes("passengerName"))).toBe(true);
+	it("throws when passengerName is missing (required by flightObject)", async () => {
+		await expect(
+			run(
+				{
+					type: "flight",
+					id: "p1",
+					name: "Flight",
+					fields: [],
+					carrier: "AA",
+					flightNumber: "100",
+					origin: "JFK",
+					destination: "LAX",
+					departure: "2026-07-15T08:00:00Z",
+				},
+				{ serialNumber: "s1" }
+			)
+		).rejects.toMatchObject({ code: "GOOGLE_FLIGHT_MISSING_PASSENGER_NAME" });
 	});
 
 	it("strips a UTC offset from flight datetimes (Google derives the zone)", async () => {
