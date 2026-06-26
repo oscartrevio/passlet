@@ -111,7 +111,8 @@ function buildSlots(
 			...(f.numberStyle && { numberStyle: f.numberStyle }),
 			...(f.currencyCode && { currencyCode: f.currencyCode }),
 			...(f.textAlignment && { textAlignment: f.textAlignment }),
-			...(f.row !== undefined && { row: f.row }),
+			// Apple only supports `row` on auxiliary fields (event tickets)
+			...(f.row !== undefined && f.slot === "auxiliary" && { row: f.row }),
 		});
 	}
 
