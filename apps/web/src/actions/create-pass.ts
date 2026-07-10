@@ -63,6 +63,7 @@ export async function createPassAction(
 			field.secondary("since", "Since"),
 		],
 		apple: {
+			logoText: "Passlet",
 			icon: Buffer.from(APPLE_ICON_BASE64, "base64"),
 			strip: input.banner ? Buffer.from(input.banner, "base64") : undefined,
 			foregroundColor: input.textColor,
