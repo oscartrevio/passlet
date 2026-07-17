@@ -10,6 +10,8 @@
   "dependencies": {
     "@passlet/env": "workspace:*",
     "@passlet/ui": "workspace:*",
+    "@upstash/ratelimit": "^2.0.5",
+    "@upstash/redis": "^1.35.0",
     "@vercel/analytics": "^2.0.1",
     "@web-kits/audio": "^0.1.0",
     "babel-plugin-react-compiler": "^1.0.0",
