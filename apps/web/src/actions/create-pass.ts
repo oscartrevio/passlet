@@ -1,6 +1,8 @@
 "use server";
 
+import { headers } from "next/headers";
 import { field, Wallet } from "passlet";
+import { checkRateLimit, recordPassCreated } from "@/lib/rate-limit";
 import type { WalletProvider } from "@/types/pass";
 
 function requiredEnv(name: string): string {
@@ -47,6 +49,18 @@ const googleCredentials = {
 export async function createPassAction(
 	input: CreatePassInput
 ): Promise<CreatePassResult> {
+	// Throttle by client IP so the public playground can't be scripted to spam
+	// Apple signing (CPU) or the Google Wallet API (writes to the real issuer).
+	const headerList = await headers();
+	const ip =
+		headerList.get("x-forwarded-for")?.split(",")[0]?.trim() || "anonymous";
+	const allowed = await checkRateLimit(ip);
+	if (!allowed) {
+		throw new Error(
+			"You're creating passes too quickly. Please wait a minute and try again."
+		);
+	}
+
 	const wallet = new Wallet(
 		input.provider === "apple"
 			? { apple: appleCredentials }
@@ -87,6 +101,9 @@ export async function createPassAction(
 			altText: "",
 		},
 	});
+
+	// Count this creation by member name and provider (viewable in Upstash).
+	await recordPassCreated(input.memberName, input.provider);
 
 	return {
 		appleBytes:
