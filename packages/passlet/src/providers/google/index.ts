@@ -179,14 +179,14 @@ function buildClassTypeFields(
 			localScheduledDepartureDateTime: pass.departure
 				? toLocalDateTime(pass.departure)
 				: undefined,
+			// localScheduledArrivalDateTime is a top-level flightClass field, not
+			// part of the destination AirportInfo (which only carries airport data).
+			localScheduledArrivalDateTime: pass.arrival
+				? toLocalDateTime(pass.arrival)
+				: undefined,
 			origin: pass.origin ? { airportIataCode: pass.origin } : undefined,
 			destination: pass.destination
-				? {
-						airportIataCode: pass.destination,
-						localScheduledArrivalDateTime: pass.arrival
-							? toLocalDateTime(pass.arrival)
-							: undefined,
-					}
+				? { airportIataCode: pass.destination }
 				: undefined,
 		};
 	}
@@ -198,8 +198,13 @@ function buildClassTypeFields(
 			redemptionChannel: pass.redemptionChannel.toUpperCase(),
 		};
 	}
-	// giftCard + generic
-	return { cardTitle: localized(pass.name, "en-US", nameTranslations) };
+	if (pass.type === "giftCard") {
+		// giftCardClass has no cardTitle — the merchant/title slot is merchantName
+		return { merchantName: localized(pass.name, "en-US", nameTranslations) };
+	}
+	// generic: genericClass has no title/branding fields at all — cardTitle,
+	// colors, and images all live on genericObject (see buildObjectBody).
+	return {};
 }
 
 // Build a Google Wallet AppLinkInfo sub-object from our simplified schema shape.
@@ -225,6 +230,61 @@ function buildAppLinkData(d: AppLinkData): Record<string, unknown> {
 	};
 }
 
+// Place the logo/wide-logo images on the field names each class type defines.
+// Every class type names its images differently; a wrong name is silently
+// dropped by the API, so the image never renders.
+function applyClassImages(
+	body: Record<string, unknown>,
+	pass: PassConfig,
+	logo: unknown,
+	wideLogo: unknown
+): void {
+	switch (pass.type) {
+		case "loyalty":
+		case "giftCard":
+			if (logo) {
+				body.programLogo = logo;
+			}
+			if (wideLogo) {
+				body.wideProgramLogo = wideLogo;
+			}
+			return;
+		case "event":
+			if (logo) {
+				body.logo = logo;
+			}
+			if (wideLogo) {
+				body.wideLogo = wideLogo;
+			}
+			return;
+		case "coupon":
+			if (logo) {
+				body.titleImage = logo;
+			}
+			if (wideLogo) {
+				body.wideTitleImage = wideLogo;
+			}
+			return;
+		case "flight": {
+			// flightClass carries the airline logo inside flightHeader.carrier
+			const header = (body.flightHeader ?? {}) as Record<string, unknown>;
+			const carrier = (header.carrier ?? {}) as Record<string, unknown>;
+			if (logo) {
+				carrier.airlineLogo = logo;
+			}
+			if (wideLogo) {
+				carrier.wideAirlineLogo = wideLogo;
+			}
+			header.carrier = carrier;
+			body.flightHeader = header;
+			return;
+		}
+		default:
+			// generic: genericClass has no image fields — images go on the object
+			return;
+	}
+}
+
 // Build the class body — defines the pass template (shared across all recipients)
 function buildClassBody(pass: PassConfig): Record<string, unknown> {
 	const logo = imageUri(pass.google?.logo);
@@ -233,39 +293,31 @@ function buildClassBody(pass: PassConfig): Record<string, unknown> {
 
 	const body: Record<string, unknown> = {
 		...buildClassTypeFields(pass, pass.locales),
-		hexBackgroundColor: pass.color,
-		issuerName: pass.google?.issuerName ?? pass.name,
 	};
 
-	// loyalty uses programLogo; all other types use logo
-	if (pass.type === "loyalty") {
-		if (logo) {
-			body.programLogo = logo;
-		}
-	} else if (logo) {
-		body.logo = logo;
-	}
-	if (wideLogo) {
-		body.wideProgramBanner = wideLogo;
-	}
-	if (hero) {
-		body.heroImage = hero;
-	}
-	// Required for loyalty, event, flight, coupon, giftCard classes. Ignored by genericClass.
+	// genericClass defines none of the branding fields — colors, issuer name,
+	// hero image, review status, and messages are rejected or ignored there.
+	// For generic passes those all live on genericObject (see buildObjectBody).
 	if (pass.type !== "generic") {
+		body.hexBackgroundColor = pass.color;
+		body.issuerName = pass.google?.issuerName ?? pass.name;
+		if (hero) {
+			body.heroImage = hero;
+		}
 		body.reviewStatus = pass.google?.reviewStatus ?? "UNDER_REVIEW";
+		if (pass.google?.messages) {
+			body.messages = pass.google.messages;
+		}
+		if (pass.google?.appLinkData) {
+			body.appLinkData = buildAppLinkData(pass.google.appLinkData);
+		}
 	}
+	applyClassImages(body, pass, logo, wideLogo);
 	if (pass.google?.enableSmartTap) {
 		body.enableSmartTap = pass.google.enableSmartTap;
 	}
 	if (pass.google?.redemptionIssuers) {
 		body.redemptionIssuers = pass.google.redemptionIssuers;
-	}
-	if (pass.google?.messages) {
-		body.messages = pass.google.messages;
-	}
-	if (pass.google?.appLinkData) {
-		body.appLinkData = buildAppLinkData(pass.google.appLinkData);
 	}
 	if (pass.locations?.length) {
 		body.locations = pass.locations.map(({ latitude, longitude }) => ({
@@ -466,13 +518,21 @@ function buildObjectBody(
 				values,
 				createConfig.serialNumber
 			)),
-		// genericObject requires cardTitle in the object body (in addition to the class)
+		// genericObject carries all branding: genericClass has no cardTitle, color,
+		// logo, or hero fields, so they must be set here or the pass renders bare.
 		...(pass.type === "generic" && {
 			cardTitle: localized(
 				pass.name,
 				"en-US",
 				translationsFor("name", pass.locales)
 			),
+			hexBackgroundColor: pass.color,
+			logo: imageUri(pass.google?.logo),
+			wideLogo: imageUri(pass.google?.wideLogo),
+			heroImage: imageUri(pass.google?.hero),
+			...(pass.google?.appLinkData && {
+				appLinkData: buildAppLinkData(pass.google.appLinkData),
+			}),
 		}),
 		...display,
 		// genericObject also requires header. It is normally derived from the

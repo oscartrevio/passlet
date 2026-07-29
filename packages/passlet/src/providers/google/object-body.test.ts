@@ -378,11 +378,11 @@ describe("flight pass", () => {
 				operatingFlightNumber: "100",
 			},
 			localScheduledDepartureDateTime: "2026-07-15T08:00:00",
+			// arrival time is a top-level flightClass field; destination AirportInfo
+			// only carries airport data
+			localScheduledArrivalDateTime: "2026-07-15T11:30:00",
 			origin: { airportIataCode: "JFK" },
-			destination: {
-				airportIataCode: "LAX",
-				localScheduledArrivalDateTime: "2026-07-15T11:30:00",
-			},
+			destination: { airportIataCode: "LAX" },
 			hexBackgroundColor: "#003087",
 			issuerName: "AA 100",
 			reviewStatus: "UNDER_REVIEW",
@@ -437,10 +437,7 @@ describe("flight pass", () => {
 		);
 		const cls = captureClassBody("flightClass");
 		expect(cls.localScheduledDepartureDateTime).toBe("2026-07-15T08:00:00");
-		expect(
-			(cls.destination as { localScheduledArrivalDateTime: string })
-				.localScheduledArrivalDateTime
-		).toBe("2026-07-15T11:30:00");
+		expect(cls.localScheduledArrivalDateTime).toBe("2026-07-15T11:30:00");
 	});
 
 	it("throws when departure is missing (required by flightClass)", async () => {
@@ -540,7 +537,8 @@ describe("giftCard pass", () => {
 
 		expect(captureClassBody("giftCardClass")).toEqual({
 			id: `${ISSUER}.test-giftcard`,
-			cardTitle: {
+			// giftCardClass has no cardTitle — the merchant/title slot is merchantName
+			merchantName: {
 				defaultValue: { language: "en-US", value: "Store Gift Card" },
 			},
 			hexBackgroundColor: "#2a9d8f",
@@ -602,20 +600,19 @@ describe("generic pass", () => {
 			{ serialNumber: "generic-001" }
 		);
 
-		// genericClass has no reviewStatus — Google rejects the field on this type
+		// genericClass has no branding fields at all — cardTitle, color, images,
+		// issuerName, and reviewStatus are object-level (or nonexistent) for generic
 		expect(captureClassBody("genericClass")).toEqual({
 			id: `${ISSUER}.test-generic`,
-			cardTitle: { defaultValue: { language: "en-US", value: "Member Card" } },
-			hexBackgroundColor: "#264653",
-			issuerName: "Member Card",
 		});
 
-		// genericObject requires cardTitle — this was missing before and caused a smoke test failure
+		// genericObject carries all branding: cardTitle, color, logo, hero
 		expect(decodeObjectBody(pass, "genericObjects")).toEqual({
 			id: `${ISSUER}.generic-001`,
 			classId: `${ISSUER}.test-generic`,
 			state: "ACTIVE",
 			cardTitle: { defaultValue: { language: "en-US", value: "Member Card" } },
+			hexBackgroundColor: "#264653",
 			subheader: { defaultValue: { language: "en-US", value: "Member ID" } },
 			header: { defaultValue: { language: "en-US", value: "M-98765" } },
 			textModulesData: [{ header: "Name", body: "Jane Doe", id: "name" }],
