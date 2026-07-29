@@ -459,11 +459,14 @@ export function PassPlayground({
 
 				<Button
 					aria-busy={creating}
-					aria-disabled={creating}
+					// The empty-name state is announced as disabled but stays clickable
+					// (no native `disabled`), so a click can still answer with the error
+					// sound and the name-field wiggle instead of dying silently.
+					aria-disabled={creating || !name.trim()}
 					// `pointer-events-auto` re-enables hit testing that the base variant
 					// disables, so the not-allowed cursor is actually visible; the click
 					// handler still bails out on `creating`, so nothing fires.
-					className="mt-auto cursor-pointer rounded-full bg-(--gray-a12) font-medium font-sans! text-white tracking-tight not-disabled:hover:bg-(--gray-a11) not-disabled:active:scale-95 disabled:pointer-events-auto disabled:cursor-not-allowed disabled:opacity-50"
+					className="mt-auto cursor-pointer rounded-full bg-(--gray-a12) font-medium font-sans! text-white tracking-tight transition-opacity duration-200 disabled:pointer-events-auto aria-disabled:cursor-not-allowed aria-disabled:opacity-50 not-disabled:aria-[disabled=false]:active:scale-95 not-disabled:aria-[disabled=false]:hover:bg-(--gray-a11)"
 					disabled={creating}
 					onClick={handleCreatePass}
 				>
