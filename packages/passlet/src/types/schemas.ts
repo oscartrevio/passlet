@@ -17,10 +17,12 @@ const localeCodeSchema = z
 		'must be a BCP 47 language tag (e.g. "en-US", "es", "zh-Hans")'
 	);
 
-// Event/flight display datetimes are venue/airport LOCAL wall-clock times.
-// Accept an ISO datetime with or without a UTC offset: an offset (if given) is
-// preserved for Apple semantics but stripped for Google, which derives the zone
-// from the airport/venue and rejects an offset on flight times.
+// Event/flight display datetimes. Accept an ISO datetime with or without a UTC
+// offset. Google's EventDateTime is documented as "ISO 8601 extended format
+// date/time, with or without an offset", so event datetimes are forwarded
+// verbatim. Flight times are airport-local by definition
+// (localScheduledDepartureDateTime), so an offset is stripped for Google there
+// while still being preserved for Apple semantics.
 const localDateTime = (message: string) =>
 	z.iso.datetime({ offset: true, local: true, message });
 
@@ -285,7 +287,9 @@ const googleMessageSchema = z.object({
 // TOTP-based rotating barcode — generates a new barcode value every periodMillis ms.
 // valuePattern uses {totp_value_hex} or {totp_value_decimal} as the rotating placeholder.
 const googleRotatingBarcodeSchema = z.object({
-	type: z.enum(["QR_CODE", "PDF_417", "AZTEC", "CODE_128"]).default("QR_CODE"),
+	// Only QR_CODE and PDF_417 support rotation — the other BarcodeType values
+	// (AZTEC, CODE_128, …) are rejected for a RotatingBarcode.
+	type: z.enum(["QR_CODE", "PDF_417"]).default("QR_CODE"),
 	// Pattern containing the TOTP placeholder, e.g. "https://example.com/redeem/{totp_value_hex}"
 	valuePattern: z
 		.string()
@@ -318,6 +322,52 @@ const googleAppLinkDataSchema = z.object({
 	web: googleAppLinkInfoSchema.optional(),
 });
 
+// A single row of Google's linksModuleData. The URI must carry a scheme —
+// Google accepts web (https:), map (geo:), telephone (tel:) and email (mailto:).
+const googleLinkSchema = z.object({
+	uri: z.string().min(1, "google.links[].uri must not be empty"),
+	// Shown as the link's title. Google recommends 20 characters or fewer so the
+	// whole string fits on smaller screens.
+	description: z.string().optional(),
+	id: z.string().optional(),
+});
+
+// A single entry of Google's imageModulesData — a 100%-width image in the pass
+// detail view. Google displays at most one from the class and one from the object.
+const googleImageModuleSchema = z.object({
+	// URL only — Google Wallet does not accept binary uploads
+	url: z.url(),
+	id: z.string().optional(),
+});
+
+// A single entry of Google's valueAddedModuleData — a tappable card linking to a
+// related service (parking, merchandise, food ordering). header and uri are required.
+const googleValueAddedSchema = z.object({
+	// Google truncates past 60 characters
+	header: z.string().min(1, "google.valueAdded[].header must not be empty"),
+	// Web link or Android deep link opened when the module is tapped
+	uri: z.string().min(1, "google.valueAdded[].uri must not be empty"),
+	// Google truncates past 50 characters
+	body: z.string().optional(),
+	// Recommended ratio is 1:1 — Google resizes to fit
+	imageUrl: z.url().optional(),
+	// Lower values render first; unset sorts last
+	sortIndex: z.number().int().optional(),
+});
+
+// Module data shared by every Google class and object.
+const googleModulesSchema = z.object({
+	// Google: linksModuleData.uris
+	links: z.array(googleLinkSchema).optional(),
+	// Google: imageModulesData
+	images: z.array(googleImageModuleSchema).optional(),
+	// Google: valueAddedModuleData — a maximum of ten per class and per object
+	valueAdded: z
+		.array(googleValueAddedSchema)
+		.max(10, "google.valueAdded accepts at most 10 modules")
+		.optional(),
+});
+
 // Google-specific options — no cross-platform equivalent
 
 const googleOptionsSchema = z.object({
@@ -341,11 +391,42 @@ const googleOptionsSchema = z.object({
 	messages: z.array(googleMessageSchema).optional(),
 	// App link shown on the pass to open a companion app
 	appLinkData: googleAppLinkDataSchema.optional(),
+	// Class-level links, images, and value-added modules (shared by all holders)
+	...googleModulesSchema.shape,
+});
+
+// Transit vertical options. Their presence switches a flight pass from the air
+// vertical (flightClass/flightObject, which requires IATA carrier/airport codes)
+// to Google's transitClass/transitObject.
+const googleTransitOptionsSchema = z.object({
+	// Required by Google transitClass. Defaults from the pass-level transitType
+	// ("train" → rail, "bus" → bus, "boat" → ferry) when omitted.
+	transitType: z.enum(["bus", "rail", "tram", "ferry", "other"]).optional(),
+	// Required by Google transitObject — defaults to one-way.
+	tripType: z.enum(["oneWay", "roundTrip"]).optional(),
+	// Station names for the ticket leg. Google requires originName whenever
+	// destinationName is given. Falls back to the pass-level origin/destination
+	// codes when omitted.
+	originName: z.string().optional(),
+	destinationName: z.string().optional(),
+	// Google: transitObject.ticketNumber
+	ticketNumber: z.string().optional(),
+	// Google: transitClass.transitOperatorName
+	operatorName: z.string().optional(),
+});
+
+// Flight-specific Google options — adds the transit vertical opt-in
+const googleFlightOptionsSchema = googleOptionsSchema.extend({
+	// Set to issue the pass as transitClass/transitObject (train, bus, tram,
+	// ferry) instead of the default flightClass/flightObject (air).
+	transit: googleTransitOptionsSchema.optional(),
 });
 
 // Location — geo-relevance for lock screen suggestions.
 // Apple: locations[] with longitude, latitude, altitude?, relevantText?
-// Google: locations[] with latitude, longitude (altitude and relevantText ignored)
+// Google: emitted as merchantLocations[] (latitude, longitude only). Google's
+// own locations[] field is deprecated and documented as "currently not supported
+// to trigger geo notifications", so altitude and relevantText have no effect.
 export const locationSchema = z.object({
 	latitude: z.number(),
 	longitude: z.number(),
@@ -370,7 +451,8 @@ const basePassSchema = z.object({
 
 	// Geo-relevance — show pass on lock screen when near these coordinates.
 	// Apple: locations[] — up to 10 entries
-	// Google: locations[] — up to 20 entries
+	// Google: merchantLocations[] — up to 10 entries per class (the older
+	// locations[] field is deprecated and silently triggers nothing)
 	locations: z.array(locationSchema).optional(),
 
 	// Display fields — use field.primary(), field.secondary(), etc.
@@ -403,8 +485,10 @@ export const loyaltyPassSchema = basePassSchema.extend({
 export const eventPassSchema = basePassSchema
 	.extend({
 		type: z.literal("event"),
-		// Local venue wall-clock time. Apple: relevant date / eventStartDate
-		// semantic. Google: dateTime.start on eventTicketClass (EventDateTime).
+		// Venue wall-clock time. Apple: relevant date / eventStartDate semantic.
+		// Google: dateTime.start on eventTicketClass (EventDateTime), which accepts
+		// an ISO 8601 datetime "with or without an offset" — the value is forwarded
+		// verbatim so an offset, when given, reaches Google intact.
 		startsAt: localDateTime(
 			'must be an ISO datetime e.g. "2024-06-01T20:00:00Z" or "2024-06-01T20:00:00"'
 		).optional(),
@@ -461,7 +545,10 @@ export const flightPassSchema = basePassSchema
 		).optional(),
 		// passengerName is per-recipient — pass in values at create() time
 	})
-	.extend({ apple: appleFlightOptionsSchema.optional() });
+	.extend({
+		apple: appleFlightOptionsSchema.optional(),
+		google: googleFlightOptionsSchema.optional(),
+	});
 
 export const couponPassSchema = basePassSchema.extend({
 	type: z.literal("coupon"),
@@ -533,8 +620,22 @@ export const createConfigSchema = z.object({
 			rotatingBarcode: googleRotatingBarcodeSchema.optional(),
 			// Per-recipient info messages shown inside the pass view
 			messages: z.array(googleMessageSchema).optional(),
+			// Per-recipient links, images, and value-added modules. Google merges
+			// these with the class-level modules of the same name.
+			...googleModulesSchema.shape,
+			// Google transitObject requires tripType — per-recipient override of
+			// google.transit.tripType (ignored outside the transit vertical).
+			tripType: z.enum(["oneWay", "roundTrip"]).optional(),
 		})
 		.optional(),
+});
+
+// Options for pass.update() / updateGooglePass().
+export const updateOptionsSchema = z.object({
+	// Sets notifyPreference: "NOTIFY_ON_UPDATE" on the PATCH body, asking Google
+	// to push a field-update notification. Google only notifies for allowlisted
+	// fields, and the setting is ephemeral — it must be sent on every request.
+	notify: z.boolean().optional(),
 });
 
 // Inferred types
@@ -671,3 +772,9 @@ export type CreateConfig = z.infer<typeof createConfigSchema>;
 export type GooglePassMessage = z.infer<typeof googleMessageSchema>;
 export type RotatingBarcode = z.infer<typeof googleRotatingBarcodeSchema>;
 export type AppLinkData = z.infer<typeof googleAppLinkDataSchema>;
+export type GoogleLink = z.infer<typeof googleLinkSchema>;
+export type GoogleImageModule = z.infer<typeof googleImageModuleSchema>;
+export type GoogleValueAddedModule = z.infer<typeof googleValueAddedSchema>;
+export type GoogleModules = z.infer<typeof googleModulesSchema>;
+export type GoogleTransitOptions = z.infer<typeof googleTransitOptionsSchema>;
+export type UpdateOptions = z.infer<typeof updateOptionsSchema>;

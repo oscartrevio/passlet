@@ -310,6 +310,49 @@ describe("createConfigSchema", () => {
 			expect(result.data.barcode?.format).toBe("QR");
 		}
 	});
+
+	// Google supports rotation for QR_CODE and PDF_417 only — the remaining
+	// BarcodeType values are rejected for a RotatingBarcode.
+	const rotating = (type: string) => ({
+		...BASE_CREATE,
+		google: {
+			rotatingBarcode: {
+				type,
+				valuePattern: "https://example.com/{totp_value_hex}",
+				totpDetails: { parameters: [{ key: "K1", valueLength: 8 }] },
+			},
+		},
+	});
+
+	it.each([
+		"QR_CODE",
+		"PDF_417",
+	])("accepts %s as a rotating barcode type", (type) => {
+		expect(createConfigSchema.safeParse(rotating(type)).success).toBe(true);
+	});
+
+	it.each([
+		"AZTEC",
+		"CODE_128",
+	])("rejects %s as a rotating barcode type", (type) => {
+		expect(createConfigSchema.safeParse(rotating(type)).success).toBe(false);
+	});
+
+	it("rejects more than 10 valueAdded modules", () => {
+		const module = { header: "Perk", uri: "https://example.com" };
+		expect(
+			createConfigSchema.safeParse({
+				...BASE_CREATE,
+				google: { valueAdded: Array.from({ length: 10 }, () => module) },
+			}).success
+		).toBe(true);
+		expect(
+			createConfigSchema.safeParse({
+				...BASE_CREATE,
+				google: { valueAdded: Array.from({ length: 11 }, () => module) },
+			}).success
+		).toBe(false);
+	});
 });
 
 // ─── Pass constructor validation ─────────────────────────────────────────────

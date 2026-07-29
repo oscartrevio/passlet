@@ -8,7 +8,7 @@ import type {
 	PassConfig,
 	PassType,
 } from "../../types/schemas";
-import { signManifest } from "./signer";
+import { signManifestAsync } from "./signer";
 import {
 	hexToRgb,
 	resolveImageSet,
@@ -541,10 +541,11 @@ export async function generateApplePass(
 	const manifestBytes = encoder.encode(JSON.stringify(manifest));
 
 	// signature — PKCS#7 detached signature of manifest.json
-	const signature = signManifest({
+	const signature = await signManifestAsync({
 		manifest: manifestBytes,
 		signerCert: credentials.signerCert,
 		signerKey: credentials.signerKey,
+		signer: credentials.signer,
 		wwdr: credentials.wwdr,
 	});
 

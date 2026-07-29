@@ -28,6 +28,7 @@ const GOOGLE_CLASS_TYPE = {
 	COUPON: "offerClass",
 	GIFTCARD: "giftCardClass",
 	GENERIC: "genericClass",
+	TRANSIT: "transitClass",
 } as const;
 
 const GOOGLE_OBJECT_TYPE = {
@@ -37,12 +38,13 @@ const GOOGLE_OBJECT_TYPE = {
 	COUPON: "offerObject",
 	GIFTCARD: "giftCardObject",
 	GENERIC: "genericObject",
+	TRANSIT: "transitObject",
 } as const;
 
 type WalletMethod = (typeof WALLET_METHOD)[keyof typeof WALLET_METHOD];
-type GoogleClassType =
+export type GoogleClassType =
 	(typeof GOOGLE_CLASS_TYPE)[keyof typeof GOOGLE_CLASS_TYPE];
-type GoogleObjectType =
+export type GoogleObjectType =
 	(typeof GOOGLE_OBJECT_TYPE)[keyof typeof GOOGLE_OBJECT_TYPE];
 
 // Cache access tokens for 55 minutes (tokens expire in 60).
@@ -244,14 +246,18 @@ export async function patchObject(
 	objectId: string,
 	patch: Record<string, unknown>,
 	credentials: GoogleCredentials,
-	privateKey: CryptoKey
+	privateKey: CryptoKey,
+	options?: { notify?: boolean }
 ): Promise<void> {
 	const response = await walletRequest(
 		WALLET_METHOD.PATCH,
 		`/${objectType}/${objectId}`,
 		credentials,
 		privateKey,
-		patch
+		// notifyPreference is a request-body field on the object, not a query
+		// parameter. It is ephemeral: Google requires it on every PATCH/UPDATE
+		// that should trigger a field-update notification.
+		options?.notify ? { ...patch, notifyPreference: "NOTIFY_ON_UPDATE" } : patch
 	);
 	await assertOk(response);
 }

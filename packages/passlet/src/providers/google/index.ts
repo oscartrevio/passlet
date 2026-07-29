@@ -4,9 +4,13 @@ import type {
 	AppLinkData,
 	CreateConfig,
 	FieldDef,
+	GoogleModules,
+	GoogleTransitOptions,
 	PassConfig,
 	PassType,
+	UpdateOptions,
 } from "../../types/schemas";
+import type { GoogleClassType, GoogleObjectType } from "./api";
 import { deleteObject, ensureClass, importGoogleKey, patchObject } from "./api";
 import {
 	imageUri,
@@ -36,6 +40,38 @@ const OBJECT_TYPE = {
 	generic: "genericObject",
 } as const satisfies Record<PassType, string>;
 
+// Transit vertical. A flight pass carrying google.transit is issued as
+// transitClass/transitObject instead of flightClass/flightObject, which is
+// air-only (it requires IATA carrier and airport codes).
+const GOOGLE_TRANSIT_TYPE = {
+	bus: "BUS",
+	rail: "RAIL",
+	tram: "TRAM",
+	ferry: "FERRY",
+	other: "OTHER",
+} as const;
+
+// Fallback mapping from the cross-platform transitType when google.transit does
+// not name one. Google has no air TransitType — flightClass covers that vertical.
+const TRANSIT_TYPE_FROM_PASS = {
+	train: "RAIL",
+	bus: "BUS",
+	boat: "FERRY",
+	air: "OTHER",
+} as const;
+
+function transitOptions(pass: PassConfig): GoogleTransitOptions | undefined {
+	return pass.type === "flight" ? pass.google?.transit : undefined;
+}
+
+function googleClassType(pass: PassConfig): GoogleClassType {
+	return transitOptions(pass) ? "transitClass" : CLASS_TYPE[pass.type];
+}
+
+function googleObjectType(pass: PassConfig): GoogleObjectType {
+	return transitOptions(pass) ? "transitObject" : OBJECT_TYPE[pass.type];
+}
+
 function resolveFieldValue(
 	field: FieldDef,
 	values: Record<string, string | null>
@@ -62,7 +98,7 @@ function googleObjectRef(
 	serialNumber: string
 ) {
 	return {
-		objectType: OBJECT_TYPE[pass.type],
+		objectType: googleObjectType(pass),
 		objectId: `${credentials.issuerId}.${serialNumber}`,
 	};
 }
@@ -76,6 +112,18 @@ function validateGoogleRequirements(pass: PassConfig): void {
 		);
 	}
 	if (pass.type === "flight") {
+		if (pass.google?.transit) {
+			// transitClass requires logo, transitType, issuerName, and reviewStatus.
+			// transitType is always derived, the other two are always emitted — only
+			// the logo can be missing. The IATA flightClass fields do not apply.
+			if (!pass.google.logo) {
+				throw new WalletError(
+					"GOOGLE_MISSING_LOGO",
+					"Google Wallet transit passes require a logo URL in google.logo"
+				);
+			}
+			return;
+		}
 		const { carrier, flightNumber, origin, destination, departure } = pass;
 		// Google flightClass requires all of these — localScheduledDepartureDateTime
 		// (departure) is a required scalar the API rejects the class without.
@@ -112,32 +160,75 @@ function buildTextModules(
 	return modules;
 }
 
-// Build infoModuleData from back fields
-function buildInfoModuleData(
-	fields: FieldDef[],
-	values: Record<string, string | null>
-):
-	| {
-			labelValueRows: Array<{
-				columns: Array<{ label: string; value: string }>;
-			}>;
-	  }
-	| undefined {
-	const rows: Array<{ label: string; value: string }> = [];
-	for (const f of fields) {
-		if (f.slot !== "back") {
-			continue;
-		}
-		const value = resolveFieldValue(f, values);
-		if (value === undefined) {
-			continue;
-		}
-		rows.push({ label: f.label, value });
+// Build the linksModuleData / imageModulesData / valueAddedModuleData block.
+// These modules exist on every Google class and object with identical shapes,
+// so the same builder serves both levels.
+function buildModuleData(modules: GoogleModules): Record<string, unknown> {
+	const body: Record<string, unknown> = {};
+	if (modules.links?.length) {
+		body.linksModuleData = {
+			uris: modules.links.map((link) => ({
+				uri: link.uri,
+				description: link.description,
+				id: link.id,
+			})),
+		};
 	}
-	if (rows.length === 0) {
-		return;
+	if (modules.images?.length) {
+		body.imageModulesData = modules.images.map((image) => ({
+			mainImage: imageUri(image.url),
+			id: image.id,
+		}));
 	}
-	return { labelValueRows: rows.map((r) => ({ columns: [r] })) };
+	if (modules.valueAdded?.length) {
+		body.valueAddedModuleData = modules.valueAdded.map((module) => ({
+			header: localized(module.header),
+			body: module.body ? localized(module.body) : undefined,
+			uri: module.uri,
+			image: imageUri(module.imageUrl),
+			sortIndex: module.sortIndex,
+		}));
+	}
+	return body;
+}
+
+// Flight vertical: transitClass (train, bus, tram, ferry) or the air-only
+// flightClass, which represents a single flight and so carries its schedule.
+function buildFlightClassFields(
+	pass: Extract<PassConfig, { type: "flight" }>
+): Record<string, unknown> {
+	const transit = pass.google?.transit;
+	if (transit) {
+		return {
+			// transitType is required by transitClass
+			transitType: transit.transitType
+				? GOOGLE_TRANSIT_TYPE[transit.transitType]
+				: TRANSIT_TYPE_FROM_PASS[pass.transitType ?? "air"],
+			transitOperatorName: transit.operatorName
+				? localized(transit.operatorName)
+				: undefined,
+		};
+	}
+	return {
+		flightHeader: {
+			carrier: { carrierIataCode: pass.carrier },
+			flightNumber: pass.flightNumber,
+			operatingCarrier: { carrierIataCode: pass.carrier },
+			operatingFlightNumber: pass.flightNumber,
+		},
+		localScheduledDepartureDateTime: pass.departure
+			? toLocalDateTime(pass.departure)
+			: undefined,
+		// localScheduledArrivalDateTime is a top-level flightClass field, not
+		// part of the destination AirportInfo (which only carries airport data).
+		localScheduledArrivalDateTime: pass.arrival
+			? toLocalDateTime(pass.arrival)
+			: undefined,
+		origin: pass.origin ? { airportIataCode: pass.origin } : undefined,
+		destination: pass.destination
+			? { airportIataCode: pass.destination }
+			: undefined,
+	};
 }
 
 // Per-type class name fields
@@ -152,11 +243,11 @@ function buildClassTypeFields(
 	if (pass.type === "event") {
 		return {
 			eventName: localized(pass.name, "en-US", nameTranslations),
+			// EventDateTime accepts an ISO 8601 datetime "with or without an
+			// offset" and uses the offset to resolve the instant, so the original
+			// string is forwarded verbatim rather than stripped to local time.
 			dateTime: pass.startsAt
-				? {
-						start: toLocalDateTime(pass.startsAt),
-						end: pass.endsAt ? toLocalDateTime(pass.endsAt) : undefined,
-					}
+				? { start: pass.startsAt, end: pass.endsAt }
 				: undefined,
 			// Google requires both name and address when venue is present
 			venue: pass.venue
@@ -168,27 +259,7 @@ function buildClassTypeFields(
 		};
 	}
 	if (pass.type === "flight") {
-		return {
-			// flightClass represents a single flight — departure time is class-level
-			flightHeader: {
-				carrier: { carrierIataCode: pass.carrier },
-				flightNumber: pass.flightNumber,
-				operatingCarrier: { carrierIataCode: pass.carrier },
-				operatingFlightNumber: pass.flightNumber,
-			},
-			localScheduledDepartureDateTime: pass.departure
-				? toLocalDateTime(pass.departure)
-				: undefined,
-			// localScheduledArrivalDateTime is a top-level flightClass field, not
-			// part of the destination AirportInfo (which only carries airport data).
-			localScheduledArrivalDateTime: pass.arrival
-				? toLocalDateTime(pass.arrival)
-				: undefined,
-			origin: pass.origin ? { airportIataCode: pass.origin } : undefined,
-			destination: pass.destination
-				? { airportIataCode: pass.destination }
-				: undefined,
-		};
+		return buildFlightClassFields(pass);
 	}
 	if (pass.type === "coupon") {
 		return {
@@ -230,6 +301,35 @@ function buildAppLinkData(d: AppLinkData): Record<string, unknown> {
 	};
 }
 
+// Assign a logo/wide-logo pair onto the two field names a class type uses.
+function assignImages(
+	target: Record<string, unknown>,
+	logoKey: string,
+	wideLogoKey: string,
+	logo: unknown,
+	wideLogo: unknown
+): void {
+	if (logo) {
+		target[logoKey] = logo;
+	}
+	if (wideLogo) {
+		target[wideLogoKey] = wideLogo;
+	}
+}
+
+// flightClass is the one class that hides its images inside flightHeader.carrier
+function applyFlightCarrierImages(
+	body: Record<string, unknown>,
+	logo: unknown,
+	wideLogo: unknown
+): void {
+	const header = (body.flightHeader ?? {}) as Record<string, unknown>;
+	const carrier = (header.carrier ?? {}) as Record<string, unknown>;
+	assignImages(carrier, "airlineLogo", "wideAirlineLogo", logo, wideLogo);
+	header.carrier = carrier;
+	body.flightHeader = header;
+}
+
 // Place the logo/wide-logo images on the field names each class type defines.
 // Every class type names its images differently; a wrong name is silently
 // dropped by the API, so the image never renders.
@@ -242,43 +342,23 @@ function applyClassImages(
 	switch (pass.type) {
 		case "loyalty":
 		case "giftCard":
-			if (logo) {
-				body.programLogo = logo;
-			}
-			if (wideLogo) {
-				body.wideProgramLogo = wideLogo;
-			}
+			assignImages(body, "programLogo", "wideProgramLogo", logo, wideLogo);
 			return;
 		case "event":
-			if (logo) {
-				body.logo = logo;
-			}
-			if (wideLogo) {
-				body.wideLogo = wideLogo;
-			}
+			assignImages(body, "logo", "wideLogo", logo, wideLogo);
 			return;
 		case "coupon":
-			if (logo) {
-				body.titleImage = logo;
-			}
-			if (wideLogo) {
-				body.wideTitleImage = wideLogo;
+			assignImages(body, "titleImage", "wideTitleImage", logo, wideLogo);
+			return;
+		case "flight":
+			// transitClass names its images logo/wideLogo like most other classes;
+			// only flightClass hides them inside flightHeader.carrier.
+			if (transitOptions(pass)) {
+				assignImages(body, "logo", "wideLogo", logo, wideLogo);
+			} else {
+				applyFlightCarrierImages(body, logo, wideLogo);
 			}
 			return;
-		case "flight": {
-			// flightClass carries the airline logo inside flightHeader.carrier
-			const header = (body.flightHeader ?? {}) as Record<string, unknown>;
-			const carrier = (header.carrier ?? {}) as Record<string, unknown>;
-			if (logo) {
-				carrier.airlineLogo = logo;
-			}
-			if (wideLogo) {
-				carrier.wideAirlineLogo = wideLogo;
-			}
-			header.carrier = carrier;
-			body.flightHeader = header;
-			return;
-		}
 		default:
 			// generic: genericClass has no image fields — images go on the object
 			return;
@@ -319,12 +399,25 @@ function buildClassBody(pass: PassConfig): Record<string, unknown> {
 	if (pass.google?.redemptionIssuers) {
 		body.redemptionIssuers = pass.google.redemptionIssuers;
 	}
+	// merchantLocations replaces the deprecated locations[]: Google documents the
+	// old field as "currently not supported to trigger geo notifications", so
+	// sending it is a silent no-op. Max ten per class.
 	if (pass.locations?.length) {
-		body.locations = pass.locations.map(({ latitude, longitude }) => ({
+		body.merchantLocations = pass.locations.map(({ latitude, longitude }) => ({
 			latitude,
 			longitude,
 		}));
 	}
+
+	// Class-level links, images, and value-added modules
+	Object.assign(
+		body,
+		buildModuleData({
+			links: pass.google?.links,
+			images: pass.google?.images,
+			valueAdded: pass.google?.valueAdded,
+		})
+	);
 
 	return body;
 }
@@ -359,6 +452,36 @@ function buildFlightObjectFields(
 	return {
 		passengerName,
 		reservationInfo: { confirmationCode: serialNumber },
+	};
+}
+
+// Transit: transitObject requires tripType. Origin/destination and times are
+// carried by ticketLeg rather than the class, unlike the flight vertical.
+function buildTransitObjectFields(
+	pass: Extract<PassConfig, { type: "flight" }>,
+	transit: GoogleTransitOptions,
+	createConfig: CreateConfig,
+	values: Record<string, string | null>
+): Record<string, unknown> {
+	const originName = transit.originName ?? pass.origin;
+	const destinationName = transit.destinationName ?? pass.destination;
+	// TicketLeg times are documented as ISO 8601 "with or without an offset" —
+	// unlike flightClass local times, so they are forwarded verbatim.
+	const ticketLeg: Record<string, unknown> = {
+		originName: originName ? localized(originName) : undefined,
+		destinationName: destinationName ? localized(destinationName) : undefined,
+		departureDateTime: pass.departure,
+		arrivalDateTime: pass.arrival,
+	};
+	const hasLeg = Object.values(ticketLeg).some((v) => v !== undefined);
+	// A per-recipient tripType wins over the class-level default.
+	const tripType =
+		createConfig.google?.tripType ?? transit.tripType ?? "oneWay";
+	return {
+		tripType: tripType === "roundTrip" ? "ROUND_TRIP" : "ONE_WAY",
+		ticketNumber: transit.ticketNumber,
+		passengerNames: values.passengerName ?? undefined,
+		ticketLeg: hasLeg ? ticketLeg : undefined,
 	};
 }
 
@@ -419,7 +542,9 @@ const STRUCTURED_FIELD_KEYS: Partial<Record<PassType, string[]>> = {
 	event: ["seat", "row", "section", "gate"],
 };
 
-// Display fields: primary → subheader+header, others → textModulesData, back → infoModuleData
+// Display fields: primary → subheader+header, everything else (including back
+// fields) → textModulesData. Google deprecated infoModuleData in favour of
+// textModulesData, which holds up to ten entries on the object.
 function buildDisplayFields(
 	fields: FieldDef[],
 	values: Record<string, string | null>,
@@ -434,7 +559,7 @@ function buildDisplayFields(
 	const textModules = buildTextModules(
 		fields,
 		values,
-		["primary", "back"],
+		["primary"],
 		excludeKeys
 	);
 
@@ -456,7 +581,6 @@ function buildDisplayFields(
 					)
 				: undefined,
 		textModulesData: textModules.length > 0 ? textModules : undefined,
-		infoModuleData: buildInfoModuleData(fields, values),
 	};
 }
 
@@ -469,6 +593,7 @@ function buildObjectBody(
 ): Record<string, unknown> {
 	const values = createConfig.values ?? {};
 	const fields = pass.fields;
+	const transit = transitOptions(pass);
 
 	// Keys rendered as structured object fields are excluded from text modules
 	// (loyalty points/account, event seat/row/section/gate).
@@ -507,10 +632,19 @@ function buildObjectBody(
 		rotatingBarcode: createConfig.google?.rotatingBarcode,
 		// Per-recipient messages
 		messages: createConfig.google?.messages,
+		// Per-recipient links, images, and value-added modules. Google merges
+		// these with the class-level modules of the same name.
+		...buildModuleData({
+			links: createConfig.google?.links,
+			images: createConfig.google?.images,
+			valueAdded: createConfig.google?.valueAdded,
+		}),
 		...(pass.type === "loyalty" && buildLoyaltyObjectFields(fields, values)),
 		...(pass.type === "event" && buildEventObjectFields(fields, values)),
 		...(pass.type === "flight" &&
-			buildFlightObjectFields(pass, createConfig.serialNumber, values)),
+			(transit
+				? buildTransitObjectFields(pass, transit, createConfig, values)
+				: buildFlightObjectFields(pass, createConfig.serialNumber, values))),
 		...(pass.type === "giftCard" &&
 			buildGiftCardObjectFields(
 				pass,
@@ -560,8 +694,8 @@ export async function generateGooglePass(
 
 	const privateKey = await importGoogleKey(credentials);
 
-	const classType = CLASS_TYPE[pass.type];
-	const objectType = OBJECT_TYPE[pass.type];
+	const classType = googleClassType(pass);
+	const objectType = googleObjectType(pass);
 	const classId = `${credentials.issuerId}.${pass.id}`;
 	const objectId = `${credentials.issuerId}.${createConfig.serialNumber}`;
 
@@ -598,7 +732,8 @@ export async function generateGooglePass(
 export async function updateGooglePass(
 	pass: PassConfig,
 	createConfig: CreateConfig,
-	credentials: GoogleCredentials
+	credentials: GoogleCredentials,
+	options?: UpdateOptions
 ): Promise<void> {
 	const privateKey = await importGoogleKey(credentials);
 	const { objectType, objectId } = googleObjectRef(
@@ -610,7 +745,9 @@ export async function updateGooglePass(
 
 	const patch = buildObjectBody(pass, createConfig, classId, objectId);
 
-	await patchObject(objectType, objectId, patch, credentials, privateKey);
+	await patchObject(objectType, objectId, patch, credentials, privateKey, {
+		notify: options?.notify,
+	});
 }
 
 export async function deleteGooglePass(

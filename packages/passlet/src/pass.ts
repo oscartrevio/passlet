@@ -7,7 +7,12 @@ import {
 	updateGooglePass,
 } from "./providers/google/index";
 import type { IssuedPass, WalletCredentials } from "./types/credentials";
-import type { CreateConfig, FieldDef, PassConfig } from "./types/schemas";
+import type {
+	CreateConfig,
+	FieldDef,
+	PassConfig,
+	UpdateOptions,
+} from "./types/schemas";
 import { createConfigSchema, passConfigSchema } from "./types/schemas";
 
 // Field builder — use these to define display fields on any pass type.
@@ -89,7 +94,7 @@ export const field = {
 	 * Back of the pass — visible only when the user flips it over.
 	 * Good for terms, redemption instructions, or contact info.
 	 *
-	 * Apple → `backFields`. Google → `infoModuleData`.
+	 * Apple → `backFields`. Google → `textModulesData`.
 	 */
 	back: (key: string, label: string, arg?: FieldArg): FieldDef => ({
 		slot: "back",
@@ -185,14 +190,22 @@ export class Pass {
 	 * Google: PATCHes the object via the Wallet REST API (the pass must have been
 	 * saved to a wallet first). Apple: no-op — Apple passes update when the holder
 	 * re-downloads the pass via your web service.
+	 *
+	 * Pass `{ notify: true }` to ask Google to push a field-update notification
+	 * to the holder. Google only notifies for allowlisted fields, and the flag is
+	 * ephemeral — it must be set on every update that should notify.
 	 */
-	async update(createConfig: CreateConfig): Promise<void> {
+	async update(
+		createConfig: CreateConfig,
+		options?: UpdateOptions
+	): Promise<void> {
 		validateCreateConfig(createConfig);
 		if (this.credentials.google) {
 			await updateGooglePass(
 				this.config,
 				createConfig,
-				this.credentials.google
+				this.credentials.google,
+				options
 			);
 		}
 	}
