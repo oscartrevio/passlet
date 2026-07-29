@@ -58,6 +58,9 @@ const TRANSIT_TYPE_FROM_PASS = {
 	bus: "BUS",
 	boat: "FERRY",
 	air: "OTHER",
+	// Apple's PKTransitTypeGeneric has no Google counterpart — OTHER is the
+	// catch-all transitType
+	generic: "OTHER",
 } as const;
 
 function transitOptions(pass: PassConfig): GoogleTransitOptions | undefined {
@@ -155,7 +158,9 @@ function buildTextModules(
 		if (value === undefined) {
 			continue;
 		}
-		modules.push({ header: f.label, body: value, id: f.key });
+		// label is optional on Apple; Google's textModulesData needs a header, so
+		// fall back to the field key.
+		modules.push({ header: f.label ?? f.key, body: value, id: f.key });
 	}
 	return modules;
 }
@@ -567,7 +572,7 @@ function buildDisplayFields(
 		subheader:
 			primaryField && primaryValue != null
 				? localized(
-						primaryField.label,
+						primaryField.label ?? primaryField.key,
 						"en-US",
 						translationsFor(primaryField.key, locales)
 					)
@@ -594,6 +599,7 @@ function buildObjectBody(
 	const values = createConfig.values ?? {};
 	const fields = pass.fields;
 	const transit = transitOptions(pass);
+	const googleBarcode = createConfig.barcodes?.[0] ?? createConfig.barcode;
 
 	// Keys rendered as structured object fields are excluded from text modules
 	// (loyalty points/account, event seat/row/section/gate).
@@ -608,11 +614,13 @@ function buildObjectBody(
 		id: objectId,
 		classId,
 		state: "ACTIVE",
-		barcode: createConfig.barcode
+		// A Google object holds a single barcode — when several are supplied it
+		// takes the first entry.
+		barcode: googleBarcode
 			? {
-					type: toGoogleBarcodeType(createConfig.barcode.format),
-					value: createConfig.barcode.value,
-					alternateText: createConfig.barcode.altText,
+					type: toGoogleBarcodeType(googleBarcode.format),
+					value: googleBarcode.value,
+					alternateText: googleBarcode.altText,
 				}
 			: undefined,
 		validTimeInterval:

@@ -5,6 +5,10 @@ const GOOGLE_BARCODE_TYPE: Record<BarcodeFormat, string> = {
 	PDF417: "PDF_417",
 	Aztec: "AZTEC",
 	Code128: "CODE_128",
+	Code39: "CODE_39",
+	Codabar: "CODABAR",
+	EAN13: "EAN_13",
+	ITF: "ITF_14",
 };
 
 export function toGoogleBarcodeType(format: BarcodeFormat): string {

@@ -109,9 +109,19 @@ export interface WalletCredentials {
 
 /** Result of {@link Pass.create}. */
 export interface IssuedPass {
-	/** Signed `.pkpass` archive ready to serve, or `null` if Apple credentials were omitted. */
+	/**
+	 * Signed `.pkpass` archive ready to serve, or `null` if Apple credentials were omitted.
+	 *
+	 * Serve it under the `APPLE_PASS_CONTENT_TYPE` content type — iOS refuses passes
+	 * sent under any other type. On Node HTTP servers wrap it with `Buffer.from(apple)`.
+	 */
 	apple: Uint8Array | null;
-	/** Signed JWT for a Google Wallet save link (`pay.google.com/gp/v/save/<jwt>`), or `null` if Google credentials were omitted. */
+	/**
+	 * Signed JWT for a Google Wallet save link, or `null` if Google credentials were omitted.
+	 *
+	 * Pass it to the exported `googleSaveUrl(jwt)` helper to get the
+	 * `https://pay.google.com/gp/v/save/<jwt>` URL to link or redirect to.
+	 */
 	google: string | null;
 	/** Non-fatal notices — e.g. a missing optional image or an unset recommended field. */
 	warnings: string[];

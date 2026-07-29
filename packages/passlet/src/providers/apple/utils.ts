@@ -1,5 +1,9 @@
 import { WalletError } from "../../errors";
-import type { BarcodeFormat, ImageSet } from "../../types/schemas";
+import type {
+	BarcodeFormat,
+	DataDetectorType,
+	ImageSet,
+} from "../../types/schemas";
 
 // Convert a 6-digit hex color to Apple's rgb() format.
 // Apple pass.json requires colors as "rgb(r, g, b)" strings.
@@ -16,16 +20,56 @@ const APPLE_BARCODE_FORMAT: Record<BarcodeFormat, string> = {
 	PDF417: "PKBarcodeFormatPDF417",
 	Aztec: "PKBarcodeFormatAztec",
 	Code128: "PKBarcodeFormatCode128",
+	// iOS 27 and later — valid in `barcodes` only
+	Code39: "PKBarcodeFormatCode39",
+	Codabar: "PKBarcodeFormatCodabar",
+	EAN13: "PKBarcodeFormatEAN13",
+	ITF: "PKBarcodeFormatI2of5",
 };
 
 export function toAppleBarcodeFormat(format: BarcodeFormat): string {
 	return APPLE_BARCODE_FORMAT[format];
 }
 
+// The deprecated singular `barcode` key documents only QR, PDF417 and Aztec as
+// legal formats, so anything else must be emitted in `barcodes` alone.
+const LEGACY_BARCODE_FORMATS = new Set<BarcodeFormat>([
+	"QR",
+	"PDF417",
+	"Aztec",
+]);
+
+export function isLegacyBarcodeFormat(format: BarcodeFormat): boolean {
+	return LEGACY_BARCODE_FORMATS.has(format);
+}
+
 // QR and Aztec support a UTF-8 byte mode, so encode their payloads as UTF-8 to
-// avoid mangling non-Latin-1 characters. PDF417 and Code128 stay on iso-8859-1.
+// avoid mangling non-Latin-1 characters. The linear formats (PDF417, Code128,
+// Code39, Codabar, EAN13, ITF) stay on iso-8859-1.
 export function toAppleMessageEncoding(format: BarcodeFormat): string {
 	return format === "QR" || format === "Aztec" ? "utf-8" : "iso-8859-1";
+}
+
+const APPLE_DATA_DETECTOR_TYPE: Record<DataDetectorType, string> = {
+	phoneNumber: "PKDataDetectorTypePhoneNumber",
+	link: "PKDataDetectorTypeLink",
+	address: "PKDataDetectorTypeAddress",
+	calendarEvent: "PKDataDetectorTypeCalendarEvent",
+};
+
+export function toAppleDataDetectorTypes(types: DataDetectorType[]): string[] {
+	return types.map((t) => APPLE_DATA_DETECTOR_TYPE[t]);
+}
+
+// Escape a string for Apple's pass.strings format, which follows the
+// NeXTSTEP/plist strings syntax: backslashes, double quotes and literal
+// newlines must be escaped or the file fails to parse.
+export function escapeStringsValue(value: string): string {
+	return value
+		.replace(/\\/g, "\\\\")
+		.replace(/"/g, '\\"')
+		.replace(/\n/g, "\\n")
+		.replace(/\r/g, "\\r");
 }
 
 async function fetchAsBytes(url: string): Promise<Uint8Array> {

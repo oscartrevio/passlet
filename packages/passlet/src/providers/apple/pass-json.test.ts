@@ -219,7 +219,8 @@ describe("pass.json barcode", () => {
 				credentials
 			);
 			const json = await extractPassJson(pass);
-			return (json.barcode as { messageEncoding: string }).messageEncoding;
+			return (json.barcodes as { messageEncoding: string }[])[0]
+				?.messageEncoding;
 		};
 		expect(await encodingFor("QR")).toBe("utf-8");
 		expect(await encodingFor("Aztec")).toBe("utf-8");
@@ -261,6 +262,122 @@ describe("pass.json barcode", () => {
 		const json = await extractPassJson(pass);
 		expect(json.barcodes).toBeUndefined();
 		expect(json.barcode).toBeUndefined();
+	});
+
+	// The deprecated singular key only accepts QR, PDF417 and Aztec
+	it("omits the singular barcode for Code128", async () => {
+		const { pass } = await generateApplePass(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Test",
+				fields: [],
+				apple: { icon: STUB_ICON },
+			},
+			{ serialNumber: "s1", barcode: { value: "ABC", format: "Code128" } },
+			credentials
+		);
+		const json = await extractPassJson(pass);
+		expect(json.barcode).toBeUndefined();
+		expect(json.barcodes).toHaveLength(1);
+		expect((json.barcodes as { format: string }[])[0]?.format).toBe(
+			"PKBarcodeFormatCode128"
+		);
+	});
+
+	it.each([
+		["Code39", "PKBarcodeFormatCode39"],
+		["Codabar", "PKBarcodeFormatCodabar"],
+		["EAN13", "PKBarcodeFormatEAN13"],
+		["ITF", "PKBarcodeFormatI2of5"],
+	] as const)("emits %s as %s in barcodes only (iOS 27+)", async (format, appleFormat) => {
+		const { pass } = await generateApplePass(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Test",
+				fields: [],
+				apple: { icon: STUB_ICON },
+			},
+			{ serialNumber: "s1", barcode: { value: "12345", format } },
+			credentials
+		);
+		const json = await extractPassJson(pass);
+		expect((json.barcodes as { format: string }[])[0]?.format).toBe(
+			appleFormat
+		);
+		// Never legal in the deprecated singular key
+		expect(json.barcode).toBeUndefined();
+	});
+
+	it.each([
+		["QR", "PKBarcodeFormatQR"],
+		["PDF417", "PKBarcodeFormatPDF417"],
+		["Aztec", "PKBarcodeFormatAztec"],
+	] as const)("keeps the singular barcode for %s", async (format, expected) => {
+		const { pass } = await generateApplePass(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Test",
+				fields: [],
+				apple: { icon: STUB_ICON },
+			},
+			{ serialNumber: "s1", barcode: { value: "ABC", format } },
+			credentials
+		);
+		const json = await extractPassJson(pass);
+		expect((json.barcode as { format: string }).format).toBe(expected);
+	});
+
+	it("emits every entry of the barcodes array", async () => {
+		const { pass } = await generateApplePass(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Test",
+				fields: [],
+				apple: { icon: STUB_ICON },
+			},
+			{
+				serialNumber: "s1",
+				barcodes: [
+					{ value: "12345", format: "EAN13" },
+					{ value: "ABC-123", format: "QR" },
+				],
+			},
+			credentials
+		);
+		const json = await extractPassJson(pass);
+		const barcodes = json.barcodes as { format: string; message: string }[];
+		expect(barcodes.map((b) => b.format)).toEqual([
+			"PKBarcodeFormatEAN13",
+			"PKBarcodeFormatQR",
+		]);
+		// The singular fallback skips EAN13 and uses the first legacy-legal entry
+		expect(json.barcode).toEqual(barcodes[1]);
+	});
+
+	it("prefers barcodes over the singular barcode when both are given", async () => {
+		const { pass } = await generateApplePass(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Test",
+				fields: [],
+				apple: { icon: STUB_ICON },
+			},
+			{
+				serialNumber: "s1",
+				barcode: { value: "OLD", format: "QR" },
+				barcodes: [{ value: "NEW", format: "QR" }],
+			},
+			credentials
+		);
+		const json = await extractPassJson(pass);
+		const barcodes = json.barcodes as { message: string }[];
+		expect(barcodes).toHaveLength(1);
+		expect(barcodes[0]?.message).toBe("NEW");
 	});
 });
 
@@ -337,6 +454,215 @@ describe("pass.json field slots", () => {
 			.primaryFields;
 		expect(primary).toHaveLength(0);
 	});
+
+	it("omits label when the field has none", async () => {
+		const { pass } = await generateApplePass(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Test",
+				fields: [{ slot: "primary", key: "points", value: "500" }],
+				apple: { icon: STUB_ICON },
+			},
+			{ serialNumber: "s1" },
+			credentials
+		);
+		const json = await extractPassJson(pass);
+		const primary = (json.storeCard as { primaryFields: object[] })
+			.primaryFields;
+		expect(primary.at(0)).toEqual({ key: "points", value: "500" });
+	});
+});
+
+// ─── PassFieldContent keys ───────────────────────────────────────────────────
+
+describe("pass.json field content keys", () => {
+	it("emits attributedValue, ignoresTimeZone and isRelative", async () => {
+		const { pass } = await generateApplePass(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Test",
+				fields: [
+					{
+						slot: "secondary",
+						key: "expires",
+						label: "Expires",
+						value: "2024-06-01T20:00:00Z",
+						dateStyle: "short",
+						attributedValue: '<a href="https://example.com">Renew</a>',
+						ignoresTimeZone: true,
+						isRelative: true,
+					},
+				],
+				apple: { icon: STUB_ICON },
+			},
+			{ serialNumber: "s1" },
+			credentials
+		);
+		const json = await extractPassJson(pass);
+		const field = (
+			json.storeCard as {
+				secondaryFields: {
+					attributedValue: string;
+					ignoresTimeZone: boolean;
+					isRelative: boolean;
+				}[];
+			}
+		).secondaryFields.at(0);
+		expect(field?.attributedValue).toBe(
+			'<a href="https://example.com">Renew</a>'
+		);
+		expect(field?.ignoresTimeZone).toBe(true);
+		expect(field?.isRelative).toBe(true);
+	});
+
+	it("emits false values for ignoresTimeZone and isRelative", async () => {
+		const { pass } = await generateApplePass(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Test",
+				fields: [
+					{
+						slot: "secondary",
+						key: "expires",
+						label: "Expires",
+						value: "x",
+						ignoresTimeZone: false,
+						isRelative: false,
+					},
+				],
+				apple: { icon: STUB_ICON },
+			},
+			{ serialNumber: "s1" },
+			credentials
+		);
+		const json = await extractPassJson(pass);
+		const field = (
+			json.storeCard as {
+				secondaryFields: { ignoresTimeZone: boolean; isRelative: boolean }[];
+			}
+		).secondaryFields.at(0);
+		expect(field?.ignoresTimeZone).toBe(false);
+		expect(field?.isRelative).toBe(false);
+	});
+
+	it("maps dataDetectorTypes to PKDataDetectorType values on back fields", async () => {
+		const { pass } = await generateApplePass(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Test",
+				fields: [
+					{
+						slot: "back",
+						key: "contact",
+						label: "Contact",
+						value: "Call 555-0100",
+						dataDetectorTypes: ["phoneNumber", "link"],
+					},
+				],
+				apple: { icon: STUB_ICON },
+			},
+			{ serialNumber: "s1" },
+			credentials
+		);
+		const json = await extractPassJson(pass);
+		const field = (
+			json.storeCard as { backFields: { dataDetectorTypes: string[] }[] }
+		).backFields.at(0);
+		expect(field?.dataDetectorTypes).toEqual([
+			"PKDataDetectorTypePhoneNumber",
+			"PKDataDetectorTypeLink",
+		]);
+	});
+
+	it("emits an empty dataDetectorTypes array to disable detectors", async () => {
+		const { pass } = await generateApplePass(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Test",
+				fields: [
+					{
+						slot: "back",
+						key: "terms",
+						label: "Terms",
+						value: "See example.com",
+						dataDetectorTypes: [],
+					},
+				],
+				apple: { icon: STUB_ICON },
+			},
+			{ serialNumber: "s1" },
+			credentials
+		);
+		const json = await extractPassJson(pass);
+		const field = (
+			json.storeCard as { backFields: { dataDetectorTypes: string[] }[] }
+		).backFields.at(0);
+		expect(field?.dataDetectorTypes).toEqual([]);
+	});
+
+	// Apple applies data detectors to back fields only
+	it("drops dataDetectorTypes on non-back fields", async () => {
+		const { pass } = await generateApplePass(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Test",
+				fields: [
+					{
+						slot: "secondary",
+						key: "contact",
+						label: "Contact",
+						value: "Call 555-0100",
+						dataDetectorTypes: ["phoneNumber"],
+					},
+				],
+				apple: { icon: STUB_ICON },
+			},
+			{ serialNumber: "s1" },
+			credentials
+		);
+		const json = await extractPassJson(pass);
+		const field = (
+			json.storeCard as { secondaryFields: Record<string, unknown>[] }
+		).secondaryFields.at(0);
+		expect(field).not.toHaveProperty("dataDetectorTypes");
+	});
+
+	it("emits field-level semantics on the field dictionary", async () => {
+		const { pass } = await generateApplePass(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Test",
+				fields: [
+					{
+						slot: "primary",
+						key: "balance",
+						label: "Balance",
+						value: "25.00",
+						semantics: {
+							balance: { amount: "25.00", currencyCode: "USD" },
+						},
+					},
+				],
+				apple: { icon: STUB_ICON },
+			},
+			{ serialNumber: "s1" },
+			credentials
+		);
+		const json = await extractPassJson(pass);
+		const field = (
+			json.storeCard as { primaryFields: { semantics: unknown }[] }
+		).primaryFields.at(0);
+		expect(field?.semantics).toEqual({
+			balance: { amount: "25.00", currencyCode: "USD" },
+		});
+	});
 });
 
 // ─── Apple-specific fields ───────────────────────────────────────────────────
@@ -390,6 +716,76 @@ describe("pass.json apple-specific fields", () => {
 		const json = await extractPassJson(pass);
 		const boardingPass = json.boardingPass as { transitType: string };
 		expect(boardingPass.transitType).toBe("PKTransitTypeAir");
+	});
+
+	it.each([
+		["train", "PKTransitTypeTrain"],
+		["bus", "PKTransitTypeBus"],
+		["boat", "PKTransitTypeBoat"],
+		["generic", "PKTransitTypeGeneric"],
+	] as const)("maps transitType %s to %s", async (transitType, expected) => {
+		const { pass } = await generateApplePass(
+			{
+				type: "flight",
+				id: "p1",
+				name: "Test",
+				fields: [],
+				transitType,
+				apple: { icon: STUB_ICON },
+			},
+			{ serialNumber: "s1" },
+			credentials
+		);
+		const json = await extractPassJson(pass);
+		expect((json.boardingPass as { transitType: string }).transitType).toBe(
+			expected
+		);
+	});
+
+	it("emits nfc.requiresAuthentication when set", async () => {
+		const { pass } = await generateApplePass(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Test",
+				fields: [],
+				apple: {
+					icon: STUB_ICON,
+					nfc: {
+						message: "tap-payload",
+						encryptionPublicKey: "BASE64KEY",
+						requiresAuthentication: true,
+					},
+				},
+			},
+			{ serialNumber: "s1" },
+			credentials
+		);
+		const json = await extractPassJson(pass);
+		expect(json.nfc).toEqual({
+			message: "tap-payload",
+			encryptionPublicKey: "BASE64KEY",
+			requiresAuthentication: true,
+		});
+	});
+
+	it("omits nfc.requiresAuthentication when unset", async () => {
+		const { pass } = await generateApplePass(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Test",
+				fields: [],
+				apple: {
+					icon: STUB_ICON,
+					nfc: { message: "tap-payload", encryptionPublicKey: "BASE64KEY" },
+				},
+			},
+			{ serialNumber: "s1" },
+			credentials
+		);
+		const json = await extractPassJson(pass);
+		expect(json.nfc).not.toHaveProperty("requiresAuthentication");
 	});
 });
 
@@ -630,6 +1026,57 @@ describe("pass.json semantics and relevantDates", () => {
 		);
 		const json = await extractPassJson(pass);
 		expect(json.semantics).toBeUndefined();
+	});
+
+	it("emits user-supplied semantics for a pass type with no derived tags", async () => {
+		const { pass } = await generateApplePass(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Card",
+				fields: [],
+				apple: {
+					icon: STUB_ICON,
+					semantics: {
+						balance: { amount: "25.00", currencyCode: "USD" },
+						membershipProgramName: "Acme Rewards",
+					},
+				},
+			},
+			{ serialNumber: "s1" },
+			credentials
+		);
+		const json = await extractPassJson(pass);
+		expect(json.semantics).toEqual({
+			balance: { amount: "25.00", currencyCode: "USD" },
+			membershipProgramName: "Acme Rewards",
+		});
+	});
+
+	it("merges user semantics over derived ones — the user wins", async () => {
+		const { pass } = await generateApplePass(
+			{
+				...FLIGHT,
+				apple: {
+					icon: STUB_ICON,
+					semantics: {
+						airlineCode: "ZZ",
+						silenceRequested: true,
+					},
+				},
+			},
+			{ serialNumber: "s1" },
+			credentials
+		);
+		const json = await extractPassJson(pass);
+		const semantics = json.semantics as Record<string, unknown>;
+		// Overridden
+		expect(semantics.airlineCode).toBe("ZZ");
+		// Added
+		expect(semantics.silenceRequested).toBe(true);
+		// Derived tags are kept
+		expect(semantics.departureAirportCode).toBe("JFK");
+		expect(semantics.flightCode).toBe("AA100");
 	});
 });
 

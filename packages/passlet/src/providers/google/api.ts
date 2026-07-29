@@ -53,8 +53,14 @@ const tokenCache = new Map<string, { token: string; expiresAt: number }>();
 export async function importGoogleKey(
 	credentials: GoogleCredentials
 ): Promise<CryptoKey> {
+	// Service-account keys are usually copied out of the JSON file into an env
+	// var, which keeps the JSON escaping: the PEM arrives with literal "\n"
+	// two-character sequences where the newlines should be, and importPKCS8
+	// rejects it. A PEM can never legitimately contain a backslash, so
+	// unescaping is always safe and leaves well-formed keys untouched.
+	const privateKey = credentials.privateKey.replace(/\\n/g, "\n");
 	try {
-		return await importPKCS8(credentials.privateKey, "RS256");
+		return await importPKCS8(privateKey, "RS256");
 	} catch (cause) {
 		throw new WalletError("GOOGLE_INVALID_PRIVATE_KEY", undefined, { cause });
 	}

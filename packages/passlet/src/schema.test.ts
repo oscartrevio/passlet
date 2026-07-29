@@ -215,6 +215,101 @@ describe("passConfigSchema", () => {
 		expect(badDate.success).toBe(false);
 	});
 
+	// Apple: "A date or time value needs to include a time zone."
+	it("requires a time zone on a field value styled as a date/time", () => {
+		const dateField = (value: string) => ({
+			...BASE_LOYALTY,
+			fields: [
+				{
+					slot: "secondary",
+					key: "expires",
+					label: "Expires",
+					value,
+					dateStyle: "medium",
+				},
+			],
+		});
+
+		expect(
+			passConfigSchema.safeParse(dateField("2024-06-01T20:00:00Z")).success
+		).toBe(true);
+		expect(
+			passConfigSchema.safeParse(dateField("2024-06-01T20:00:00-07:00")).success
+		).toBe(true);
+
+		const zoneless = passConfigSchema.safeParse(
+			dateField("2024-06-01T20:00:00")
+		);
+		expect(zoneless.success).toBe(false);
+		expect(zoneless.error?.issues[0]?.message).toContain("time zone");
+	});
+
+	it("skips the time zone check when dateStyle/timeStyle is none", () => {
+		const result = passConfigSchema.safeParse({
+			...BASE_LOYALTY,
+			fields: [
+				{
+					slot: "secondary",
+					key: "expires",
+					label: "Expires",
+					value: "2024-06-01T20:00:00",
+					dateStyle: "none",
+				},
+			],
+		});
+		expect(result.success).toBe(true);
+	});
+
+	it("makes the field label optional", () => {
+		const result = passConfigSchema.safeParse({
+			...BASE_LOYALTY,
+			fields: [{ slot: "primary", key: "points", value: "500" }],
+		});
+		expect(result.success).toBe(true);
+	});
+
+	// Apple: "An array of up to 10 objects that represent geographic locations"
+	it("caps locations at 10 entries", () => {
+		const locations = (count: number) =>
+			Array.from({ length: count }, (_, i) => ({
+				latitude: i,
+				longitude: i,
+			}));
+
+		expect(
+			passConfigSchema.safeParse({ ...BASE_LOYALTY, locations: locations(10) })
+				.success
+		).toBe(true);
+		expect(
+			passConfigSchema.safeParse({ ...BASE_LOYALTY, locations: locations(11) })
+				.success
+		).toBe(false);
+	});
+
+	it("accepts the iOS 27 barcode formats and generic transitType", () => {
+		expect(
+			createConfigSchema.safeParse({
+				...BASE_CREATE,
+				barcodes: [
+					{ value: "12345", format: "EAN13" },
+					{ value: "12345", format: "ITF" },
+					{ value: "12345", format: "Code39" },
+					{ value: "12345", format: "Codabar" },
+				],
+			}).success
+		).toBe(true);
+
+		expect(
+			passConfigSchema.safeParse({
+				type: "flight",
+				id: "f1",
+				name: "Trip",
+				fields: [],
+				transitType: "generic",
+			}).success
+		).toBe(true);
+	});
+
 	it("requires the %@ placeholder in a field changeMessage", () => {
 		const withPlaceholder = passConfigSchema.safeParse({
 			...BASE_LOYALTY,

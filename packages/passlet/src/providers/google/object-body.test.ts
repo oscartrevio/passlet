@@ -289,6 +289,53 @@ describe("loyalty pass", () => {
 		const obj = decodeObjectBody(pass, "loyaltyObjects");
 		expect(obj.textModulesData).toBeUndefined();
 	});
+
+	// Apple documents label as optional, so Google needs a header fallback
+	it("falls back to the field key when a field has no label", async () => {
+		const { pass } = await run(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Rewards",
+				google: { logo: "https://example.com/logo.png" },
+				fields: [
+					{ slot: "primary", key: "points", value: "1250" },
+					{ slot: "secondary", key: "tier", value: "Gold" },
+				],
+			},
+			{ serialNumber: "s1" }
+		);
+
+		const obj = decodeObjectBody(pass, "loyaltyObjects");
+		expect(obj.textModulesData).toEqual([
+			{ header: "tier", body: "Gold", id: "tier" },
+		]);
+		expect(obj.subheader).toEqual({
+			defaultValue: { language: "en-US", value: "points" },
+		});
+	});
+
+	it("uses the first entry of createConfig.barcodes", async () => {
+		const { pass } = await run(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Rewards",
+				google: { logo: "https://example.com/logo.png" },
+				fields: [],
+			},
+			{
+				serialNumber: "s1",
+				barcodes: [
+					{ value: "12345", format: "EAN13" },
+					{ value: "ABC-123", format: "QR" },
+				],
+			}
+		);
+
+		const obj = decodeObjectBody(pass, "loyaltyObjects");
+		expect(obj.barcode).toEqual({ type: "EAN_13", value: "12345" });
+	});
 });
 
 describe("event pass", () => {
@@ -919,6 +966,23 @@ describe("transit pass", () => {
 		const obj = decodeObjectBody(pass, "transitObjects");
 		expect(obj.tripType).toBe("ONE_WAY");
 		expect(captureClassBody("transitClass").transitType).toBe("BUS");
+	});
+
+	// Apple's PKTransitTypeGeneric has no Google counterpart
+	it("maps the generic transitType to OTHER", async () => {
+		await run(
+			{
+				type: "flight",
+				id: "p1",
+				name: "Shuttle",
+				transitType: "generic",
+				google: { logo: "https://example.com/shuttle.png", transit: {} },
+				fields: [],
+			},
+			{ serialNumber: "s1" }
+		);
+
+		expect(captureClassBody("transitClass").transitType).toBe("OTHER");
 	});
 
 	it("lets createConfig override tripType per recipient", async () => {

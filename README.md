@@ -183,6 +183,27 @@ Other types with structured props:
 - **`coupon`** — `redemptionChannel: "online" | "instore" | "both"`
 - **`giftCard`** — `currency: "USD"` (ISO 4217) to format the balance
 
+### Well-known field keys
+
+Google Wallet renders certain data in dedicated slots rather than as generic text rows. Passlet routes a display field there automatically when its **key** matches one of the names below — so `field.secondary("seat", "Seat", "14C")` becomes real `seatInfo.seat` on Google while staying an ordinary secondary field on Apple. No extra API: just name the key.
+
+| Pass type      | Field key                          | Google destination                              |
+| -------------- | ---------------------------------- | ----------------------------------------------- |
+| **`loyalty`**  | `points`                           | `loyaltyPoints.balance`                          |
+|                | `member`                           | `accountName`                                    |
+|                | `memberId`                         | `accountId`                                      |
+| **`event`**    | `seat`, `row`, `section`, `gate`   | `seatInfo.*`                                     |
+| **`giftCard`** | `balance`                          | `balance` (with the pass's `currency`)           |
+|                | `cardNumber`                       | `cardNumber` (falls back to `serialNumber`)      |
+| **`flight`**   | `passengerName`                    | `passengerName` / transit `passengerNames`       |
+
+Two caveats:
+
+- For `loyalty`, `event`, and `giftCard` these are **field keys** — they must appear in the template's `fields` array, and the value can come from the field's default or from `values` at `create()` time.
+- `passengerName` is read straight from `values` at `create()` time and does **not** need a matching field. Google requires it on every flight pass, so `create()` throws `GOOGLE_FLIGHT_MISSING_PASSENGER_NAME` without it.
+
+For `loyalty` and `event`, a key claimed by a structured slot is not duplicated into Google's `textModulesData`; every other field key becomes a text module. Apple is unaffected either way — all fields render in the slot you assigned them.
+
 ## Visual customization
 
 ```ts
@@ -211,11 +232,26 @@ Top-level `color` sets the background on both platforms. Apple image slots (`ico
 
 ## Serving passes
 
-`apple` is raw `.pkpass` bytes; `google` is a JWT for a save link. A Next.js route handler can serve either:
+`apple` is raw `.pkpass` bytes; `google` is a JWT for a save link. Passlet exports two helpers so you never have to retype either detail:
+
+```ts
+import { APPLE_PASS_CONTENT_TYPE, googleSaveUrl } from "passlet";
+
+APPLE_PASS_CONTENT_TYPE; // "application/vnd.apple.pkpass"
+googleSaveUrl(google); // "https://pay.google.com/gp/v/save/<jwt>"
+```
+
+**Two rules cover almost every serving bug:**
+
+- Serve the Apple pass as `application/vnd.apple.pkpass`. iOS silently refuses to open a pass sent as `application/octet-stream` or `application/zip` — it just downloads a dead file.
+- `apple` is a `Uint8Array`. Web-standard responses (`Response`, `NextResponse`) accept it directly; Node's `http`/Express `res.end()` does not, so wrap it: `res.end(Buffer.from(apple))`.
+
+A Next.js route handler:
 
 ```ts
 // app/api/passes/[id]/route.ts
 import { NextResponse } from "next/server";
+import { APPLE_PASS_CONTENT_TYPE, googleSaveUrl } from "passlet";
 import { wallet } from "@/lib/wallet"; // your configured Wallet instance
 
 export async function GET(
@@ -229,15 +265,38 @@ export async function GET(
   // Apple: stream the .pkpass file
   return new NextResponse(apple, {
     headers: {
-      "Content-Type": "application/vnd.apple.pkpass",
+      "Content-Type": APPLE_PASS_CONTENT_TYPE,
       "Content-Disposition": `attachment; filename="${params.id}.pkpass"`,
     },
   });
 
   // Google: redirect to the save link instead
-  // return NextResponse.redirect(`https://pay.google.com/gp/v/save/${google}`);
+  // return NextResponse.redirect(googleSaveUrl(google));
 }
 ```
+
+The same thing on Express, where the `Buffer.from` wrap matters:
+
+```ts
+import { APPLE_PASS_CONTENT_TYPE, googleSaveUrl } from "passlet";
+
+app.get("/passes/:id.pkpass", async (req, res) => {
+  const { apple } = await card.create({ serialNumber: req.params.id });
+  res.setHeader("Content-Type", APPLE_PASS_CONTENT_TYPE);
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="${req.params.id}.pkpass"`
+  );
+  res.end(Buffer.from(apple)); // Uint8Array → Buffer
+});
+
+app.get("/passes/:id/google", async (req, res) => {
+  const { google } = await card.create({ serialNumber: req.params.id });
+  res.redirect(googleSaveUrl(google));
+});
+```
+
+Runnable Express, Hono, and Next.js servers live in [`examples/`](https://github.com/oscartrevio/passlet/tree/main/examples).
 
 Always generate passes on the server — your signing keys must never reach the client.
 

@@ -65,6 +65,26 @@ export const textAlignmentSchema = z.enum([
 	"right",
 	"natural",
 ]);
+// Data detectors turn matching text on the BACK of a pass into tappable links.
+// Apple applies all detectors by default; an empty array disables them. They
+// have no effect on fields shown on the front of the pass.
+export const dataDetectorTypeSchema = z.enum([
+	"phoneNumber",
+	"link",
+	"address",
+	"calendarEvent",
+]);
+
+// Machine-readable metadata (Apple's SemanticTags). Apple accepts a semantics
+// dictionary at the root of pass.json and as a top-level key of any field
+// dictionary. Values are strings, numbers, booleans or structured tag types
+// (SemanticTagType.Seat, .CurrencyAmount, …), so the shape stays open.
+const semanticTagsSchema = z.record(z.string(), z.unknown());
+
+// Apple requires a time zone on any value rendered with dateStyle/timeStyle
+// ("A date or time value needs to include a time zone" — PassFieldContent).
+// Matches a trailing UTC designator (Z) or numeric offset (±HH:MM / ±HHMM).
+const TIMEZONE_RE = /(Z|[+-]\d{2}:?\d{2})$/;
 
 // FieldDef — a single display field on a pass.
 // slot maps to Apple's field areas; Google uses primary → subheader+header, rest → textModulesData.
@@ -74,8 +94,26 @@ export const fieldDefSchema = z
 		// Google: primary → subheader (label) + header (value), others → textModulesData
 		slot: z.enum(["header", "primary", "secondary", "auxiliary", "back"]),
 		key: z.string(),
-		label: z.string(),
+		// Apple documents PassFieldContent.label as optional. Google's
+		// textModulesData header falls back to the field key when it is omitted.
+		label: z.string().optional(),
 		value: z.string().optional(),
+		// Apple: attributedValue — the field value with HTML markup. Only the <a>
+		// tag and its href attribute are supported, and it overrides value.
+		// Not used on watchOS. Apple-only — ignored by Google.
+		attributedValue: z.string().optional(),
+		// Apple: dataDetectorTypes — back fields only. Omit to keep Apple's default
+		// (all detectors); pass an empty array to disable them entirely.
+		dataDetectorTypes: z.array(dataDetectorTypeSchema).optional(),
+		// Apple: ignoresTimeZone — renders the date/time in the time zone carried by
+		// value instead of the device's. Defaults to false.
+		ignoresTimeZone: z.boolean().optional(),
+		// Apple: isRelative — renders the date as a relative date ("in 3 days").
+		// Defaults to false. Neither key affects pass relevance.
+		isRelative: z.boolean().optional(),
+		// Apple: field-level semantics dictionary, merged over the tags passlet
+		// derives from the pass config (user-supplied values win).
+		semantics: semanticTagsSchema.optional(),
 		// Apple shows a change notification only if the message contains the "%@"
 		// placeholder, which it replaces with the new value.
 		changeMessage: z
@@ -110,7 +148,10 @@ export const fieldDefSchema = z
 		const hasDateStyle =
 			(f.dateStyle && f.dateStyle !== "none") ||
 			(f.timeStyle && f.timeStyle !== "none");
-		if (hasDateStyle && Number.isNaN(Date.parse(f.value))) {
+		if (!hasDateStyle) {
+			return;
+		}
+		if (Number.isNaN(Date.parse(f.value))) {
 			ctx.issues.push({
 				code: "custom",
 				message:
@@ -118,12 +159,41 @@ export const fieldDefSchema = z
 				input: f.value,
 				path: ["value"],
 			});
+			return;
+		}
+		// Apple: "A date or time value needs to include a time zone." A zone-less
+		// datetime renders in an unpredictable zone, so reject it up front.
+		if (!TIMEZONE_RE.test(f.value)) {
+			ctx.issues.push({
+				code: "custom",
+				message:
+					'value must include a time zone when dateStyle/timeStyle is set, e.g. "2024-06-01T20:00:00Z" or "2024-06-01T20:00:00-07:00"',
+				input: f.value,
+				path: ["value"],
+			});
 		}
 	});
 
 // Barcode
-// Google supports AZTEC, CODE_39, CODE_128, CODABAR, DATA_MATRIX, EAN_8, EAN_13, ITF_14, PDF_417, QR_CODE, UPC_A and TEXT_ONLY barcodes. Apple only supports PKBarcodeFormatQR, PKBarcodeFormatPDF417, PKBarcodeFormatAztec, and PKBarcodeFormatCode128 formats, but we exclude that since it's not widely supported by barcode scanners.
-export const barcodeFormatSchema = z.enum(["QR", "PDF417", "Aztec", "Code128"]);
+// Formats offered here are the ones both platforms render. Apple's Pass.Barcodes
+// accepts PKBarcodeFormatQR, PKBarcodeFormatPDF417, PKBarcodeFormatAztec,
+// PKBarcodeFormatCode128 and — from iOS 27 — PKBarcodeFormatCode39,
+// PKBarcodeFormatCodabar, PKBarcodeFormatEAN13 and PKBarcodeFormatI2of5.
+// Google supports all of these plus DATA_MATRIX, EAN_8, UPC_A and TEXT_ONLY,
+// which have no Apple equivalent and are therefore not offered.
+// Note: the deprecated singular `barcode` key only accepts QR, PDF417 and
+// Aztec, so the other formats are emitted in `barcodes` only.
+export const barcodeFormatSchema = z.enum([
+	"QR",
+	"PDF417",
+	"Aztec",
+	"Code128",
+	// iOS 27 and later
+	"Code39",
+	"Codabar",
+	"EAN13",
+	"ITF",
+]);
 
 export const barcodeSchema = z.object({
 	format: barcodeFormatSchema.default("QR"),
@@ -195,6 +265,11 @@ const appleOptionsSchema = z.object({
 			// (Base64-encoded X.509 SubjectPublicKeyInfo, ECDH P-256). NFC does
 			// not function without it.
 			encryptionPublicKey: z.string(),
+			// Requires the user to authenticate (Face ID / Touch ID / passcode) on
+			// every use of the NFC pass. Defaults to false. iOS 13.1 and later —
+			// Apple recommends pairing it with sharingProhibited so the pass cannot
+			// be shared to an older OS that ignores the requirement.
+			requiresAuthentication: z.boolean().optional(),
 		})
 		.optional(),
 	// Deep link opened when the user taps "Open" on the pass (requires associatedStoreIdentifiers)
@@ -213,6 +288,9 @@ const appleOptionsSchema = z.object({
 	authenticationToken: z.string().min(16).optional(),
 	// Bluetooth LE beacons that trigger lock screen relevance
 	beacons: z.array(beaconSchema).optional(),
+	// Pass-level semantic tags (Apple's SemanticTags dictionary). Merged over the
+	// tags passlet derives from the pass config — entries given here win.
+	semantics: semanticTagsSchema.optional(),
 });
 
 // Event-specific Apple options — includes poster event ticket fields
@@ -453,7 +531,10 @@ const basePassSchema = z.object({
 	// Apple: locations[] — up to 10 entries
 	// Google: merchantLocations[] — up to 10 entries per class (the older
 	// locations[] field is deprecated and silently triggers nothing)
-	locations: z.array(locationSchema).optional(),
+	locations: z
+		.array(locationSchema)
+		.max(10, "locations accepts at most 10 entries")
+		.optional(),
 
 	// Display fields — use field.primary(), field.secondary(), etc.
 	// Apple: maps to headerFields / primaryFields / secondaryFields / auxiliaryFields / backFields
@@ -464,6 +545,11 @@ const basePassSchema = z.object({
 	// Keys are field keys (matching field.key) or the reserved key "name" for the pass title.
 	// Use "fieldKey_value" to translate a field's static default value.
 	// Apple: generates {language}.lproj/pass.strings files in the .pkpass zip.
+	// Wallet looks entries up by the literal string that pass.json emits, so each
+	// key is resolved to the string it controls when the file is written (a field
+	// key becomes that field's label, "name" becomes the pass name). A key that
+	// matches no field is written through as-is, which lets a literal string with
+	// no field behind it — logoText, say — be translated by keying it directly.
 	// Google: adds translatedValues to LocalizedString objects.
 	locales: z
 		.record(localeCodeSchema, z.record(z.string(), z.string()))
@@ -510,9 +596,11 @@ export const eventPassSchema = basePassSchema
 export const flightPassSchema = basePassSchema
 	.extend({
 		type: z.literal("flight"),
-		// Apple: transitType (required for boardingPass layout, defaults to "air")
-		// Google: inferred from flightHeader
-		transitType: z.enum(["air", "train", "bus", "boat"]).optional(),
+		// Apple: transitType (required for boardingPass layout, defaults to "air").
+		// "generic" maps to PKTransitTypeGeneric for transit that is none of the
+		// other four.
+		// Google: inferred from flightHeader ("generic" falls back to transit OTHER)
+		transitType: z.enum(["air", "train", "bus", "boat", "generic"]).optional(),
 		// Required by Google flightClass — IATA codes and datetimes
 		// Apple: shown as display fields; provider maps these to the correct slots
 		carrier: z
@@ -589,6 +677,12 @@ export const passConfigSchema = z.discriminatedUnion("type", [
 export const createConfigSchema = z.object({
 	serialNumber: z.string().min(1, "CreateConfig missing: serialNumber"),
 	barcode: barcodeSchema.optional(),
+	// Multiple barcodes. Apple emits every entry in `barcodes` and renders the
+	// first one the device can display (iOS 27 and later reads more than one), so
+	// list the preferred format first and a widely-supported fallback after it.
+	// Google keeps a single barcode per object and uses the first entry.
+	// Takes precedence over `barcode` when both are given.
+	barcodes: z.array(barcodeSchema).optional(),
 	// Apple: no equivalent — ignored
 	// Google: validTimeInterval.start
 	validFrom: z.iso
@@ -705,6 +799,8 @@ export interface GoogleImage {
 export type DateStyle = z.infer<typeof dateStyleSchema>;
 export type NumberStyle = z.infer<typeof numberStyleSchema>;
 export type TextAlignment = z.infer<typeof textAlignmentSchema>;
+export type DataDetectorType = z.infer<typeof dataDetectorTypeSchema>;
+export type SemanticTags = z.infer<typeof semanticTagsSchema>;
 export type FieldDef = z.infer<typeof fieldDefSchema>;
 
 // Per-type field keys — TypeScript suggests these in autocomplete while still accepting any string.

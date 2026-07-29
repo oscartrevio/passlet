@@ -23,10 +23,12 @@ describe("toGoogleBarcodeType", () => {
 		["PDF417", "PDF_417"],
 		["Aztec", "AZTEC"],
 		["Code128", "CODE_128"],
-	])("maps %s to %s", (input, expected) => {
-		expect(
-			toGoogleBarcodeType(input as "QR" | "PDF417" | "Aztec" | "Code128")
-		).toBe(expected);
+		["Code39", "CODE_39"],
+		["Codabar", "CODABAR"],
+		["EAN13", "EAN_13"],
+		["ITF", "ITF_14"],
+	] as const)("maps %s to %s", (input, expected) => {
+		expect(toGoogleBarcodeType(input)).toBe(expected);
 	});
 });
 
