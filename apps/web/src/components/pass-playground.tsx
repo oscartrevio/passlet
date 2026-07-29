@@ -151,9 +151,10 @@ function EditableField({
 			</span>
 			<input
 				className={cn(
-					"w-24 bg-transparent font-semibold text-(--pass-text) text-xs leading-tighter caret-(--pass-text) outline-none placeholder:text-(--pass-text-subtle)",
+					"w-24 bg-transparent font-semibold text-(--pass-text) text-xs leading-tighter caret-(--pass-text) outline-none transition-colors duration-300 placeholder:text-(--pass-text-subtle) placeholder:transition-colors placeholder:duration-300",
 					value.trim().length === 0 && "animate-pulse",
-					wiggle && "animate-[wiggle_0.3s_ease-in-out]"
+					wiggle &&
+						"animate-[wiggle_0.3s_ease-in-out] text-(--red-a11) caret-(--red-a11) placeholder:text-(--red-a11)"
 				)}
 				maxLength={24}
 				onChange={(e) => onChange(e.target.value)}
@@ -231,6 +232,14 @@ export function PassPlayground({
 		triggerDelight();
 	};
 
+	const handleProviderChange = (value: WalletProvider) => {
+		if (value === provider) {
+			return;
+		}
+		setProvider(value);
+		playSound("tap");
+	};
+
 	const cardStyle = {
 		backgroundColor: activeColor.color,
 		"--pass-text": activeColor.text,
@@ -245,6 +254,7 @@ export function PassPlayground({
 		}
 		const trimmedName = name.trim();
 		if (!trimmedName) {
+			playSound("error");
 			setWiggleName(true);
 			setTimeout(() => setWiggleName(false), 300);
 			return;
@@ -411,7 +421,7 @@ export function PassPlayground({
 									? "bg-(--gray-a12)"
 									: "bg-transparent hover:bg-(--gray-a4)"
 							)}
-							onClick={() => setProvider("apple")}
+							onClick={() => handleProviderChange("apple")}
 							type="button"
 						>
 							<AppleWalletIcon
@@ -430,7 +440,7 @@ export function PassPlayground({
 									? "bg-(--gray-a12)"
 									: "bg-transparent hover:bg-(--gray-a4)"
 							)}
-							onClick={() => setProvider("google")}
+							onClick={() => handleProviderChange("google")}
 							type="button"
 						>
 							<GoogleWalletIcon
