@@ -22,13 +22,13 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.16",
-    "@changesets/cli": "^2.31.0",
-    "@commitlint/cli": "^21.0.2",
-    "@commitlint/config-conventional": "^21.0.2",
+    "@changesets/cli": "^2.31.1",
+    "@commitlint/cli": "^21.2.1",
+    "@commitlint/config-conventional": "^21.2.0",
     "@passlet/config": "workspace:*",
-    "@types/node": "^20.19.42",
-    "lefthook": "^2.1.9",
-    "turbo": "^2.9.16",
+    "@types/node": "^20.19.43",
+    "lefthook": "^2.1.10",
+    "turbo": "^2.10.7",
     "typescript": "^6.0.3",
     "ultracite": "7.8.2"
   },
@@ -37,5 +37,12 @@
       "@commitlint/config-conventional"
     ]
   },
-  "packageManager": "pnpm@10.33.0"
+  "packageManager": "pnpm@10.33.0",
+  "pnpm": {
+    "overrides": {
+      "postcss@<8.5.18": ">=8.5.18",
+      "sharp@<0.35.0": ">=0.35.0",
+      "esbuild@>=0.27.3 <0.28.1": ">=0.28.1"
+    }
+  }
 }
