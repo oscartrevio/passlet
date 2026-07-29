@@ -32,19 +32,27 @@ interface CreatePassResult {
 const APPLE_ICON_BASE64 =
 	"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7nWJ0AAAAASUVORK5CYII=";
 
-const appleCredentials = {
-	passTypeIdentifier: requiredEnv("APPLE_PASS_TYPE_IDENTIFIER"),
-	teamId: requiredEnv("APPLE_TEAM_ID"),
-	signerCert: requiredEnv("APPLE_SIGNER_CERT"),
-	signerKey: requiredEnv("APPLE_SIGNER_KEY"),
-	wwdr: requiredEnv("APPLE_WWDR"),
-};
+// Read lazily, inside the action, and only for the provider actually used.
+// Next bundles every Server Action reachable from a page into one module, so a
+// throw at module scope here would fail *all* of them (including setPassletColor)
+// with a 500 instead of just failing pass creation.
+function appleCredentials() {
+	return {
+		passTypeIdentifier: requiredEnv("APPLE_PASS_TYPE_IDENTIFIER"),
+		teamId: requiredEnv("APPLE_TEAM_ID"),
+		signerCert: requiredEnv("APPLE_SIGNER_CERT"),
+		signerKey: requiredEnv("APPLE_SIGNER_KEY"),
+		wwdr: requiredEnv("APPLE_WWDR"),
+	};
+}
 
-const googleCredentials = {
-	issuerId: requiredEnv("GOOGLE_ISSUER_ID"),
-	clientEmail: requiredEnv("GOOGLE_CLIENT_EMAIL"),
-	privateKey: requiredEnv("GOOGLE_PRIVATE_KEY"),
-};
+function googleCredentials() {
+	return {
+		issuerId: requiredEnv("GOOGLE_ISSUER_ID"),
+		clientEmail: requiredEnv("GOOGLE_CLIENT_EMAIL"),
+		privateKey: requiredEnv("GOOGLE_PRIVATE_KEY"),
+	};
+}
 
 export async function createPassAction(
 	input: CreatePassInput
@@ -63,8 +71,8 @@ export async function createPassAction(
 
 	const wallet = new Wallet(
 		input.provider === "apple"
-			? { apple: appleCredentials }
-			: { google: googleCredentials }
+			? { apple: appleCredentials() }
+			: { google: googleCredentials() }
 	);
 
 	const pass = wallet.loyalty({

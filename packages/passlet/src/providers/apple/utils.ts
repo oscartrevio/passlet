@@ -2,7 +2,10 @@ import { WalletError } from "../../errors";
 import type {
 	BarcodeFormat,
 	DataDetectorType,
+	DateStyle,
 	ImageSet,
+	NumberStyle,
+	TextAlignment,
 } from "../../types/schemas";
 
 // Convert a 6-digit hex color to Apple's rgb() format.
@@ -48,6 +51,44 @@ export function isLegacyBarcodeFormat(format: BarcodeFormat): boolean {
 // Code39, Codabar, EAN13, ITF) stay on iso-8859-1.
 export function toAppleMessageEncoding(format: BarcodeFormat): string {
 	return format === "QR" || format === "Aztec" ? "utf-8" : "iso-8859-1";
+}
+
+// Apple's PassFieldContent documents PK-prefixed constants for the field style
+// enums. passlet exposes friendly lowercase values, so they are mapped here.
+// https://developer.apple.com/documentation/walletpasses/passfieldcontent
+const APPLE_DATE_STYLE: Record<DateStyle, string> = {
+	none: "PKDateStyleNone",
+	short: "PKDateStyleShort",
+	medium: "PKDateStyleMedium",
+	long: "PKDateStyleLong",
+	full: "PKDateStyleFull",
+};
+
+// dateStyle and timeStyle share the PKDateStyle constants.
+export function toAppleDateStyle(style: DateStyle): string {
+	return APPLE_DATE_STYLE[style];
+}
+
+const APPLE_NUMBER_STYLE: Record<NumberStyle, string> = {
+	decimal: "PKNumberStyleDecimal",
+	percent: "PKNumberStylePercent",
+	scientific: "PKNumberStyleScientific",
+	spellOut: "PKNumberStyleSpellOut",
+};
+
+export function toAppleNumberStyle(style: NumberStyle): string {
+	return APPLE_NUMBER_STYLE[style];
+}
+
+const APPLE_TEXT_ALIGNMENT: Record<TextAlignment, string> = {
+	left: "PKTextAlignmentLeft",
+	center: "PKTextAlignmentCenter",
+	right: "PKTextAlignmentRight",
+	natural: "PKTextAlignmentNatural",
+};
+
+export function toAppleTextAlignment(alignment: TextAlignment): string {
+	return APPLE_TEXT_ALIGNMENT[alignment];
 }
 
 const APPLE_DATA_DETECTOR_TYPE: Record<DataDetectorType, string> = {

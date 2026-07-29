@@ -214,8 +214,6 @@ describe("loyalty pass", () => {
 			state: "ACTIVE",
 			loyaltyPoints: { balance: { string: "1250" } },
 			accountName: "Jane Doe",
-			subheader: { defaultValue: { language: "en-US", value: "Points" } },
-			header: { defaultValue: { language: "en-US", value: "1250" } },
 			// "member" maps to the structured accountName, so it is kept out of
 			// textModulesData even though it sits in the back slot
 			textModulesData: [{ header: "Tier", body: "Gold", id: "tier" }],
@@ -262,9 +260,7 @@ describe("loyalty pass", () => {
 		);
 
 		const obj = decodeObjectBody(pass, "loyaltyObjects");
-		expect((obj.header as Record<string, unknown>).defaultValue).toMatchObject({
-			value: "1500",
-		});
+		expect(obj.loyaltyPoints).toEqual({ balance: { string: "1500" } });
 		const firstModule = (obj.textModulesData as Record<string, unknown>[])[0];
 		if (!firstModule) {
 			throw new Error("no textModulesData");
@@ -310,9 +306,6 @@ describe("loyalty pass", () => {
 		expect(obj.textModulesData).toEqual([
 			{ header: "tier", body: "Gold", id: "tier" },
 		]);
-		expect(obj.subheader).toEqual({
-			defaultValue: { language: "en-US", value: "points" },
-		});
 	});
 
 	it("uses the first entry of createConfig.barcodes", async () => {
@@ -391,9 +384,10 @@ describe("event pass", () => {
 			seatInfo: {
 				seat: { defaultValue: { language: "en-US", value: "A12" } },
 			},
-			subheader: { defaultValue: { language: "en-US", value: "Venue" } },
-			header: { defaultValue: { language: "en-US", value: "Central Park" } },
-			textModulesData: [{ header: "Date", body: "Jul 15, 2026", id: "date" }],
+			textModulesData: [
+				{ header: "Venue", body: "Central Park", id: "venue" },
+				{ header: "Date", body: "Jul 15, 2026", id: "date" },
+			],
 		});
 	});
 
@@ -499,9 +493,10 @@ describe("flight pass", () => {
 			state: "ACTIVE",
 			passengerName: "Jane Doe",
 			reservationInfo: { confirmationCode: "flight-001" },
-			subheader: { defaultValue: { language: "en-US", value: "Gate" } },
-			header: { defaultValue: { language: "en-US", value: "B22" } },
-			textModulesData: [{ header: "Seat", body: "14A", id: "seat" }],
+			textModulesData: [
+				{ header: "Gate", body: "B22", id: "gate" },
+				{ header: "Seat", body: "14A", id: "seat" },
+			],
 		});
 	});
 
@@ -606,14 +601,8 @@ describe("coupon pass", () => {
 			id: `${ISSUER}.coupon-001`,
 			classId: `${ISSUER}.test-coupon`,
 			state: "ACTIVE",
-			subheader: { defaultValue: { language: "en-US", value: "Offer" } },
-			header: {
-				defaultValue: {
-					language: "en-US",
-					value: "20% off your next order",
-				},
-			},
 			textModulesData: [
+				{ header: "Offer", body: "20% off your next order", id: "offer" },
 				{ header: "Code", body: "SUMMER20", id: "code" },
 				{ header: "Expires", body: "Dec 31, 2026", id: "expires" },
 			],
@@ -656,9 +645,10 @@ describe("giftCard pass", () => {
 			// cardNumber is required by giftCardObject — defaults to the serial number
 			cardNumber: "gift-001",
 			balance: { micros: "50000000", currencyCode: "USD" },
-			subheader: { defaultValue: { language: "en-US", value: "Balance" } },
-			header: { defaultValue: { language: "en-US", value: "50.00" } },
-			textModulesData: [{ header: "PIN", body: "1234", id: "pin" }],
+			textModulesData: [
+				{ header: "Balance", body: "50.00", id: "balance" },
+				{ header: "PIN", body: "1234", id: "pin" },
+			],
 		});
 	});
 
@@ -945,8 +935,7 @@ describe("transit pass", () => {
 				departureDateTime: "2026-07-15T08:00:00+01:00",
 				arrivalDateTime: "2026-07-15T09:45:00+01:00",
 			},
-			subheader: { defaultValue: { language: "en-US", value: "Platform" } },
-			header: { defaultValue: { language: "en-US", value: "4" } },
+			textModulesData: [{ header: "Platform", body: "4", id: "platform" }],
 		});
 	});
 

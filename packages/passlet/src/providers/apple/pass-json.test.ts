@@ -517,6 +517,53 @@ describe("pass.json field content keys", () => {
 		expect(field?.isRelative).toBe(true);
 	});
 
+	// Apple's PassFieldContent documents PK-prefixed constants for the style
+	// enums; the friendly values passlet exposes must be mapped before emission.
+	// https://developer.apple.com/documentation/walletpasses/passfieldcontent
+	it("maps the style enums to Apple's PK-prefixed constants", async () => {
+		const { pass } = await generateApplePass(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Test",
+				fields: [
+					{
+						slot: "secondary",
+						key: "expires",
+						label: "Expires",
+						value: "2024-06-01T20:00:00Z",
+						dateStyle: "medium",
+						timeStyle: "none",
+						textAlignment: "right",
+					},
+					{
+						slot: "auxiliary",
+						key: "balance",
+						label: "Balance",
+						value: "50.00",
+						numberStyle: "decimal",
+					},
+				],
+				apple: { icon: STUB_ICON },
+			},
+			{ serialNumber: "s1" },
+			credentials
+		);
+		const json = await extractPassJson(pass);
+		const storeCard = json.storeCard as Record<
+			string,
+			Record<string, unknown>[]
+		>;
+		expect(storeCard.secondaryFields?.at(0)).toMatchObject({
+			dateStyle: "PKDateStyleMedium",
+			timeStyle: "PKDateStyleNone",
+			textAlignment: "PKTextAlignmentRight",
+		});
+		expect(storeCard.auxiliaryFields?.at(0)).toMatchObject({
+			numberStyle: "PKNumberStyleDecimal",
+		});
+	});
+
 	it("emits false values for ignoresTimeZone and isRelative", async () => {
 		const { pass } = await generateApplePass(
 			{

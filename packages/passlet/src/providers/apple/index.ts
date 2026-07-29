@@ -18,7 +18,10 @@ import {
 	resolveRequiredImageSet,
 	toAppleBarcodeFormat,
 	toAppleDataDetectorTypes,
+	toAppleDateStyle,
 	toAppleMessageEncoding,
+	toAppleNumberStyle,
+	toAppleTextAlignment,
 } from "./utils";
 
 // Apple pass type → pass.json key
@@ -79,17 +82,19 @@ interface AppleField {
 	changeMessage?: string;
 	currencyCode?: string;
 	dataDetectorTypes?: string[];
-	dateStyle?: FieldDef["dateStyle"];
+	// The style enums are emitted as Apple's PK-prefixed constants, so these are
+	// the mapped strings rather than passlet's friendly values.
+	dateStyle?: string;
 	ignoresTimeZone?: boolean;
 	isRelative?: boolean;
 	key: string;
 	// Apple documents label as optional — omitted entirely when unset
 	label?: string;
-	numberStyle?: FieldDef["numberStyle"];
+	numberStyle?: string;
 	row?: 0 | 1;
 	semantics?: Record<string, unknown>;
-	textAlignment?: FieldDef["textAlignment"];
-	timeStyle?: FieldDef["timeStyle"];
+	textAlignment?: string;
+	timeStyle?: string;
 	value: string;
 }
 
@@ -126,9 +131,9 @@ function buildSlots(
 			...(f.label !== undefined && { label: f.label }),
 			value,
 			...(f.changeMessage && { changeMessage: f.changeMessage }),
-			...(f.dateStyle && { dateStyle: f.dateStyle }),
-			...(f.timeStyle && { timeStyle: f.timeStyle }),
-			...(f.numberStyle && { numberStyle: f.numberStyle }),
+			...(f.dateStyle && { dateStyle: toAppleDateStyle(f.dateStyle) }),
+			...(f.timeStyle && { timeStyle: toAppleDateStyle(f.timeStyle) }),
+			...(f.numberStyle && { numberStyle: toAppleNumberStyle(f.numberStyle) }),
 			...(f.currencyCode && { currencyCode: f.currencyCode }),
 			// attributedValue overrides value on iOS and is ignored on watchOS
 			...(f.attributedValue !== undefined && {
@@ -150,7 +155,9 @@ function buildSlots(
 			// Apple ignores textAlignment on primary and back fields
 			...(f.textAlignment &&
 				f.slot !== "primary" &&
-				f.slot !== "back" && { textAlignment: f.textAlignment }),
+				f.slot !== "back" && {
+					textAlignment: toAppleTextAlignment(f.textAlignment),
+				}),
 			// Apple only supports `row` on auxiliary fields (event tickets)
 			...(f.row !== undefined && f.slot === "auxiliary" && { row: f.row }),
 		});

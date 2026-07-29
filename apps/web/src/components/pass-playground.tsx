@@ -153,8 +153,7 @@ function EditableField({
 				className={cn(
 					"w-24 bg-transparent font-semibold text-(--pass-text) text-xs leading-tighter caret-(--pass-text) outline-none transition-colors duration-300 placeholder:text-(--pass-text-subtle) placeholder:transition-colors placeholder:duration-300",
 					value.trim().length === 0 && "animate-pulse",
-					wiggle &&
-						"animate-[wiggle_0.3s_ease-in-out] text-(--red-a11) caret-(--red-a11) placeholder:text-(--red-a11)"
+					wiggle && "animate-[wiggle_0.3s_ease-in-out]"
 				)}
 				maxLength={24}
 				onChange={(e) => onChange(e.target.value)}
@@ -459,7 +458,12 @@ export function PassPlayground({
 				) : null}
 
 				<Button
-					className="mt-auto rounded-full bg-(--gray-a12) font-medium font-sans! text-white tracking-tight hover:bg-(--gray-a11) active:scale-95"
+					aria-busy={creating}
+					aria-disabled={creating}
+					// `pointer-events-auto` re-enables hit testing that the base variant
+					// disables, so the not-allowed cursor is actually visible; the click
+					// handler still bails out on `creating`, so nothing fires.
+					className="mt-auto cursor-pointer rounded-full bg-(--gray-a12) font-medium font-sans! text-white tracking-tight not-disabled:hover:bg-(--gray-a11) not-disabled:active:scale-95 disabled:pointer-events-auto disabled:cursor-not-allowed disabled:opacity-50"
 					disabled={creating}
 					onClick={handleCreatePass}
 				>

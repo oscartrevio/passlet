@@ -148,10 +148,11 @@ describe("Google locale translations", () => {
 		});
 	});
 
+	// header/subheader are GenericObject-only fields.
 	it("adds translatedValues to subheader (primary field label)", async () => {
 		const payload = await generate(
 			{
-				type: "loyalty",
+				type: "generic",
 				id: "p1",
 				name: "Rewards",
 				fields: [
@@ -166,7 +167,7 @@ describe("Google locale translations", () => {
 			{ serialNumber: "s1" }
 		);
 
-		const obj = getObj(payload, "loyaltyObjects");
+		const obj = getObj(payload, "genericObjects");
 		const subheader = obj.subheader as {
 			defaultValue: { value: string };
 			translatedValues: { language: string; value: string }[];
@@ -185,7 +186,7 @@ describe("Google locale translations", () => {
 	it("adds translatedValues to header (primary field value) using _value suffix", async () => {
 		const payload = await generate(
 			{
-				type: "loyalty",
+				type: "generic",
 				id: "p1",
 				name: "Rewards",
 				google: { logo: "https://example.com/logo.png" },
@@ -199,7 +200,7 @@ describe("Google locale translations", () => {
 			{ serialNumber: "s1" }
 		);
 
-		const obj = getObj(payload, "loyaltyObjects");
+		const obj = getObj(payload, "genericObjects");
 		const header = obj.header as {
 			defaultValue: { value: string };
 			translatedValues: { language: string; value: string }[];
@@ -214,7 +215,7 @@ describe("Google locale translations", () => {
 	it("omits translatedValues when no locale matches the field key", async () => {
 		const payload = await generate(
 			{
-				type: "loyalty",
+				type: "generic",
 				id: "p1",
 				name: "Rewards",
 				google: { logo: "https://example.com/logo.png" },
@@ -228,7 +229,7 @@ describe("Google locale translations", () => {
 			{ serialNumber: "s1" }
 		);
 
-		const obj = getObj(payload, "loyaltyObjects");
+		const obj = getObj(payload, "genericObjects");
 		const subheader = obj.subheader as { translatedValues?: unknown };
 		expect(subheader.translatedValues).toBeUndefined();
 	});

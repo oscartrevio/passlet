@@ -547,14 +547,30 @@ const STRUCTURED_FIELD_KEYS: Partial<Record<PassType, string[]>> = {
 	event: ["seat", "row", "section", "gate"],
 };
 
-// Display fields: primary → subheader+header, everything else (including back
-// fields) → textModulesData. Google deprecated infoModuleData in favour of
-// textModulesData, which holds up to ten entries on the object.
+// The primary field is the most prominent one, so it leads textModulesData on
+// the verticals that have no header/subheader to put it in.
+function orderPrimaryFirst(
+	fields: FieldDef[],
+	primaryField: FieldDef | undefined
+): FieldDef[] {
+	if (!primaryField) {
+		return fields;
+	}
+	return [primaryField, ...fields.filter((f) => f !== primaryField)];
+}
+
+// Display fields. `header` and `subheader` exist ONLY on GenericObject
+// (https://developers.google.com/wallet/reference/rest/v1/genericobject), so
+// generic passes render the primary field there and every other vertical keeps
+// it in textModulesData — first entry, ahead of the remaining fields. Google
+// deprecated infoModuleData in favour of textModulesData, which holds up to ten
+// entries on the object.
 function buildDisplayFields(
 	fields: FieldDef[],
 	values: Record<string, string | null>,
 	locales: PassConfig["locales"],
-	excludeKeys: string[] = []
+	excludeKeys: string[] = [],
+	{ generic = false }: { generic?: boolean } = {}
 ): Record<string, unknown> {
 	const primaryField = fields.find((f) => f.slot === "primary");
 	const primaryValue = primaryField
@@ -562,11 +578,17 @@ function buildDisplayFields(
 		: undefined;
 
 	const textModules = buildTextModules(
-		fields,
+		generic ? fields : orderPrimaryFirst(fields, primaryField),
 		values,
-		["primary"],
+		generic ? ["primary"] : [],
 		excludeKeys
 	);
+
+	if (!generic) {
+		return {
+			textModulesData: textModules.length > 0 ? textModules : undefined,
+		};
+	}
 
 	return {
 		subheader:
@@ -607,7 +629,8 @@ function buildObjectBody(
 		fields,
 		values,
 		pass.locales,
-		STRUCTURED_FIELD_KEYS[pass.type] ?? []
+		STRUCTURED_FIELD_KEYS[pass.type] ?? [],
+		{ generic: pass.type === "generic" }
 	);
 
 	return {
