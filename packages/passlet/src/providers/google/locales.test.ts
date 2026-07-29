@@ -117,7 +117,7 @@ describe("Google locale translations", () => {
 	});
 
 	it("adds translatedValues to cardTitle for generic passes", async () => {
-		await generate(
+		const payload = await generate(
 			{
 				type: "generic",
 				id: "p1",
@@ -131,20 +131,9 @@ describe("Google locale translations", () => {
 			{ serialNumber: "s1" }
 		);
 
-		// cardTitle is class-level — verify by inspecting the fetch call body (skip the GET)
-		const fetchMock = vi.mocked(globalThis.fetch);
-		const classCall = fetchMock.mock.calls.find(
-			([url, init]) =>
-				typeof url === "string" &&
-				url.includes("genericClass") &&
-				init?.body !== undefined
-		);
-		expect(classCall).toBeDefined();
-		const classBody = JSON.parse(classCall?.[1]?.body as string) as Record<
-			string,
-			unknown
-		>;
-		const cardTitle = classBody.cardTitle as {
+		// cardTitle is object-level for generic passes — genericClass has no cardTitle
+		const obj = getObj(payload, "genericObjects");
+		const cardTitle = obj.cardTitle as {
 			defaultValue: { value: string };
 			translatedValues: { language: string; value: string }[];
 		};
@@ -159,10 +148,11 @@ describe("Google locale translations", () => {
 		});
 	});
 
+	// header/subheader are GenericObject-only fields.
 	it("adds translatedValues to subheader (primary field label)", async () => {
 		const payload = await generate(
 			{
-				type: "loyalty",
+				type: "generic",
 				id: "p1",
 				name: "Rewards",
 				fields: [
@@ -177,7 +167,7 @@ describe("Google locale translations", () => {
 			{ serialNumber: "s1" }
 		);
 
-		const obj = getObj(payload, "loyaltyObjects");
+		const obj = getObj(payload, "genericObjects");
 		const subheader = obj.subheader as {
 			defaultValue: { value: string };
 			translatedValues: { language: string; value: string }[];
@@ -196,7 +186,7 @@ describe("Google locale translations", () => {
 	it("adds translatedValues to header (primary field value) using _value suffix", async () => {
 		const payload = await generate(
 			{
-				type: "loyalty",
+				type: "generic",
 				id: "p1",
 				name: "Rewards",
 				google: { logo: "https://example.com/logo.png" },
@@ -210,7 +200,7 @@ describe("Google locale translations", () => {
 			{ serialNumber: "s1" }
 		);
 
-		const obj = getObj(payload, "loyaltyObjects");
+		const obj = getObj(payload, "genericObjects");
 		const header = obj.header as {
 			defaultValue: { value: string };
 			translatedValues: { language: string; value: string }[];
@@ -225,7 +215,7 @@ describe("Google locale translations", () => {
 	it("omits translatedValues when no locale matches the field key", async () => {
 		const payload = await generate(
 			{
-				type: "loyalty",
+				type: "generic",
 				id: "p1",
 				name: "Rewards",
 				google: { logo: "https://example.com/logo.png" },
@@ -239,7 +229,7 @@ describe("Google locale translations", () => {
 			{ serialNumber: "s1" }
 		);
 
-		const obj = getObj(payload, "loyaltyObjects");
+		const obj = getObj(payload, "genericObjects");
 		const subheader = obj.subheader as { translatedValues?: unknown };
 		expect(subheader.translatedValues).toBeUndefined();
 	});

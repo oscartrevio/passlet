@@ -1,8 +1,9 @@
 export type { WalletErrorCode } from "./errors";
 export { WALLET_ERROR_CODES, WalletError } from "./errors";
-export { field, Pass } from "./pass";
+export { APPLE_PASS_CONTENT_TYPE, field, googleSaveUrl, Pass } from "./pass";
 export type {
 	AppleCredentials,
+	AppleExternalSigner,
 	GoogleCredentials,
 	IssuedPass,
 	WalletCredentials,
@@ -13,13 +14,19 @@ export type {
 	BarcodeFormat,
 	CouponPassConfig,
 	CreateConfig,
+	DataDetectorType,
 	DateStyle,
 	EventPassConfig,
 	FieldDef,
 	FlightPassConfig,
 	GenericPassConfig,
 	GiftCardPassConfig,
+	GoogleImageModule,
+	GoogleLink,
+	GoogleModules,
 	GooglePassMessage,
+	GoogleTransitOptions,
+	GoogleValueAddedModule,
 	ImageSet,
 	ImageSource,
 	LocaleCode,
@@ -30,7 +37,9 @@ export type {
 	PassConfig,
 	PassType,
 	RotatingBarcode,
+	SemanticTags,
 	TextAlignment,
 	TranslationMap,
+	UpdateOptions,
 } from "./types/schemas";
 export { Wallet } from "./wallet";

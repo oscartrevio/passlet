@@ -28,6 +28,7 @@ const GOOGLE_CLASS_TYPE = {
 	COUPON: "offerClass",
 	GIFTCARD: "giftCardClass",
 	GENERIC: "genericClass",
+	TRANSIT: "transitClass",
 } as const;
 
 const GOOGLE_OBJECT_TYPE = {
@@ -37,12 +38,13 @@ const GOOGLE_OBJECT_TYPE = {
 	COUPON: "offerObject",
 	GIFTCARD: "giftCardObject",
 	GENERIC: "genericObject",
+	TRANSIT: "transitObject",
 } as const;
 
 type WalletMethod = (typeof WALLET_METHOD)[keyof typeof WALLET_METHOD];
-type GoogleClassType =
+export type GoogleClassType =
 	(typeof GOOGLE_CLASS_TYPE)[keyof typeof GOOGLE_CLASS_TYPE];
-type GoogleObjectType =
+export type GoogleObjectType =
 	(typeof GOOGLE_OBJECT_TYPE)[keyof typeof GOOGLE_OBJECT_TYPE];
 
 // Cache access tokens for 55 minutes (tokens expire in 60).
@@ -51,8 +53,14 @@ const tokenCache = new Map<string, { token: string; expiresAt: number }>();
 export async function importGoogleKey(
 	credentials: GoogleCredentials
 ): Promise<CryptoKey> {
+	// Service-account keys are usually copied out of the JSON file into an env
+	// var, which keeps the JSON escaping: the PEM arrives with literal "\n"
+	// two-character sequences where the newlines should be, and importPKCS8
+	// rejects it. A PEM can never legitimately contain a backslash, so
+	// unescaping is always safe and leaves well-formed keys untouched.
+	const privateKey = credentials.privateKey.replace(/\\n/g, "\n");
 	try {
-		return await importPKCS8(credentials.privateKey, "RS256");
+		return await importPKCS8(privateKey, "RS256");
 	} catch (cause) {
 		throw new WalletError("GOOGLE_INVALID_PRIVATE_KEY", undefined, { cause });
 	}
@@ -244,14 +252,18 @@ export async function patchObject(
 	objectId: string,
 	patch: Record<string, unknown>,
 	credentials: GoogleCredentials,
-	privateKey: CryptoKey
+	privateKey: CryptoKey,
+	options?: { notify?: boolean }
 ): Promise<void> {
 	const response = await walletRequest(
 		WALLET_METHOD.PATCH,
 		`/${objectType}/${objectId}`,
 		credentials,
 		privateKey,
-		patch
+		// notifyPreference is a request-body field on the object, not a query
+		// parameter. It is ephemeral: Google requires it on every PATCH/UPDATE
+		// that should trigger a field-update notification.
+		options?.notify ? { ...patch, notifyPreference: "NOTIFY_ON_UPDATE" } : patch
 	);
 	await assertOk(response);
 }

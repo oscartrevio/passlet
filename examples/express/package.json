@@ -1,0 +1,23 @@
+{
+  "name": "passlet-example-express",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx --env-file=.env src/server.ts",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "passlet": "latest"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

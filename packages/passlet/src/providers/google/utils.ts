@@ -5,6 +5,10 @@ const GOOGLE_BARCODE_TYPE: Record<BarcodeFormat, string> = {
 	PDF417: "PDF_417",
 	Aztec: "AZTEC",
 	Code128: "CODE_128",
+	Code39: "CODE_39",
+	Codabar: "CODABAR",
+	EAN13: "EAN_13",
+	ITF: "ITF_14",
 };
 
 export function toGoogleBarcodeType(format: BarcodeFormat): string {
@@ -14,9 +18,14 @@ export function toGoogleBarcodeType(format: BarcodeFormat): string {
 // Matches a trailing UTC designator (Z) or numeric offset (±HH:MM).
 const UTC_OFFSET_RE = /(Z|[+-]\d{2}:\d{2})$/;
 
-// Google event/flight datetimes are local venue/airport wall-clock times and
-// must not carry a UTC offset (Google derives the zone and rejects an offset on
-// flight times). Strip a trailing Z or ±HH:MM, leaving the local date/time.
+// Google flight datetimes (localScheduledDepartureDateTime and friends) are
+// airport-local wall-clock times by definition and must not carry a UTC offset —
+// Google derives the zone from the airport code. Strip a trailing Z or ±HH:MM,
+// leaving the local date/time.
+//
+// Not for event datetimes: eventTicketClass.dateTime is documented as an "ISO
+// 8601 extended format date/time, with or without an offset", and Google uses
+// the offset to resolve the instant. Pass those through unchanged.
 export function toLocalDateTime(iso: string): string {
 	return iso.replace(UTC_OFFSET_RE, "");
 }

@@ -54,7 +54,31 @@ describe("Apple locale files", () => {
 		expect(fr).not.toBeNull();
 	});
 
-	it("formats entries as Apple pass.strings key = value pairs", async () => {
+	// Apple matches a pass.strings entry against the literal string that pass.json
+	// emits, so a field key in `locales` has to be resolved to that field's label.
+	it("keys label entries by the literal label emitted in pass.json", async () => {
+		const { pass } = await generateApplePass(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Acme Rewards",
+				fields: [field("points", "Points")],
+				apple: { icon: STUB_ICON },
+				locales: {
+					es: { points: "Puntos" },
+				},
+			},
+			{ serialNumber: "s1" },
+			credentials
+		);
+
+		const es = await getStringsFile(pass, "es");
+		expect(es).toContain('"Points" = "Puntos";');
+		// The field key never appears as a lookup key — Apple would never match it
+		expect(es).not.toContain('"points" =');
+	});
+
+	it('keys the reserved "name" entry by the pass name', async () => {
 		const { pass } = await generateApplePass(
 			{
 				type: "loyalty",
@@ -63,7 +87,7 @@ describe("Apple locale files", () => {
 				fields: [],
 				apple: { icon: STUB_ICON },
 				locales: {
-					es: { points: "Puntos", name: "Recompensas Acme" },
+					es: { name: "Recompensas Acme" },
 				},
 			},
 			{ serialNumber: "s1" },
@@ -71,20 +95,20 @@ describe("Apple locale files", () => {
 		);
 
 		const es = await getStringsFile(pass, "es");
-		expect(es).toContain('"points" = "Puntos";');
-		expect(es).toContain('"name" = "Recompensas Acme";');
+		expect(es).toContain('"Acme Rewards" = "Recompensas Acme";');
+		expect(es).not.toContain('"name" =');
 	});
 
-	it("escapes double quotes in translated values", async () => {
+	it("writes unmatched keys through so literal strings can be translated", async () => {
 		const { pass } = await generateApplePass(
 			{
 				type: "loyalty",
 				id: "p1",
 				name: "Test",
 				fields: [],
-				apple: { icon: STUB_ICON },
+				apple: { icon: STUB_ICON, logoText: "Fly Away" },
 				locales: {
-					es: { tagline: 'Say "Hola"' },
+					es: { "Fly Away": "Vuela lejos" },
 				},
 			},
 			{ serialNumber: "s1" },
@@ -92,7 +116,87 @@ describe("Apple locale files", () => {
 		);
 
 		const es = await getStringsFile(pass, "es");
-		expect(es).toContain('"tagline" = "Say \\"Hola\\"";');
+		expect(es).toContain('"Fly Away" = "Vuela lejos";');
+	});
+
+	it("skips fields with no label — there is no literal to key on", async () => {
+		const { pass } = await generateApplePass(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Test",
+				fields: [{ slot: "primary", key: "points", value: "500" }],
+				apple: { icon: STUB_ICON },
+				locales: {
+					es: { points: "Puntos" },
+				},
+			},
+			{ serialNumber: "s1" },
+			credentials
+		);
+
+		const es = await getStringsFile(pass, "es");
+		expect(es).toBe("");
+	});
+
+	it("keeps one entry when two fields share a label", async () => {
+		const { pass } = await generateApplePass(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Test",
+				fields: [field("points", "Total"), field("spend", "Total")],
+				apple: { icon: STUB_ICON },
+				locales: {
+					es: { points: "Total ES", spend: "Ignored" },
+				},
+			},
+			{ serialNumber: "s1" },
+			credentials
+		);
+
+		const es = await getStringsFile(pass, "es");
+		expect(es).toBe('"Total" = "Total ES";');
+	});
+
+	it("escapes double quotes in keys and translated values", async () => {
+		const { pass } = await generateApplePass(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: 'The "Best" Pass',
+				fields: [],
+				apple: { icon: STUB_ICON },
+				locales: {
+					es: { name: 'Say "Hola"' },
+				},
+			},
+			{ serialNumber: "s1" },
+			credentials
+		);
+
+		const es = await getStringsFile(pass, "es");
+		expect(es).toBe('"The \\"Best\\" Pass" = "Say \\"Hola\\"";');
+	});
+
+	it("escapes backslashes and newlines in keys and translated values", async () => {
+		const { pass } = await generateApplePass(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Back\\slash",
+				fields: [],
+				apple: { icon: STUB_ICON },
+				locales: {
+					es: { name: "Línea 1\nLínea 2\\fin" },
+				},
+			},
+			{ serialNumber: "s1" },
+			credentials
+		);
+
+		const es = await getStringsFile(pass, "es");
+		expect(es).toBe('"Back\\\\slash" = "Línea 1\\nLínea 2\\\\fin";');
 	});
 
 	it("includes lproj files in the manifest SHA1 hashes", async () => {
@@ -142,13 +246,15 @@ describe("Apple locale files", () => {
 		expect(lprojFiles).toHaveLength(0);
 	});
 
-	it("supports _value suffix for translating static field values", async () => {
+	it("keys _value entries by the literal field value in pass.json", async () => {
 		const { pass } = await generateApplePass(
 			{
 				type: "loyalty",
 				id: "p1",
 				name: "Test",
-				fields: [],
+				fields: [
+					{ slot: "primary", key: "tier", label: "Tier", value: "Gold" },
+				],
 				apple: { icon: STUB_ICON },
 				locales: { es: { tier_value: "Oro" } },
 			},
@@ -157,7 +263,28 @@ describe("Apple locale files", () => {
 		);
 
 		const es = await getStringsFile(pass, "es");
-		expect(es).toContain('"tier_value" = "Oro";');
+		expect(es).toContain('"Gold" = "Oro";');
+	});
+
+	it("keys _value entries by the per-recipient value when one is supplied", async () => {
+		const { pass } = await generateApplePass(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Test",
+				fields: [
+					{ slot: "primary", key: "tier", label: "Tier", value: "Gold" },
+				],
+				apple: { icon: STUB_ICON },
+				locales: { es: { tier_value: "Plata" } },
+			},
+			{ serialNumber: "s1", values: { tier: "Silver" } },
+			credentials
+		);
+
+		const es = await getStringsFile(pass, "es");
+		expect(es).toContain('"Silver" = "Plata";');
+		expect(es).not.toContain('"Gold"');
 	});
 });
 

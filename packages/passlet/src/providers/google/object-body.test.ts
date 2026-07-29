@@ -1,7 +1,7 @@
 import { generateKeyPairSync } from "node:crypto";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { GoogleCredentials } from "../../types/credentials";
-import { generateGooglePass } from "./index";
+import { generateGooglePass, updateGooglePass } from "./index";
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
 
@@ -111,6 +111,20 @@ function decodeObjectBody(
 	return obj;
 }
 
+/** URL and parsed body of the PATCH request sent by updateGooglePass. */
+function capturePatch(): { url: string; body: Record<string, unknown> } {
+	const call = vi
+		.mocked(globalThis.fetch)
+		.mock.calls.find(([, init]) => init?.method === "PATCH");
+	if (!call?.[1]?.body) {
+		throw new Error("no PATCH request found");
+	}
+	return {
+		url: call[0] as string,
+		body: JSON.parse(call[1].body as string) as Record<string, unknown>,
+	};
+}
+
 /** Decode the outer JWT claims (iss, aud, typ, origins, payload). */
 function decodeJwtClaims(jwt: string): Record<string, unknown> {
 	const [, segment] = jwt.split(".");
@@ -200,13 +214,34 @@ describe("loyalty pass", () => {
 			state: "ACTIVE",
 			loyaltyPoints: { balance: { string: "1250" } },
 			accountName: "Jane Doe",
-			subheader: { defaultValue: { language: "en-US", value: "Points" } },
-			header: { defaultValue: { language: "en-US", value: "1250" } },
+			// "member" maps to the structured accountName, so it is kept out of
+			// textModulesData even though it sits in the back slot
 			textModulesData: [{ header: "Tier", body: "Gold", id: "tier" }],
-			infoModuleData: {
-				labelValueRows: [{ columns: [{ label: "Member", value: "Jane Doe" }] }],
-			},
 		});
+	});
+
+	it("emits back fields as textModulesData, not the deprecated infoModuleData", async () => {
+		const { pass } = await run(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Rewards",
+				google: { logo: "https://example.com/logo.png" },
+				fields: [
+					{ slot: "secondary", key: "tier", label: "Tier", value: "Gold" },
+					{ slot: "back", key: "terms", label: "Terms", value: "No refunds." },
+				],
+			},
+			{ serialNumber: "s1" }
+		);
+
+		const obj = decodeObjectBody(pass, "loyaltyObjects");
+		expect(obj.infoModuleData).toBeUndefined();
+		// back fields are merged into textModulesData, keyed by the field key
+		expect(obj.textModulesData).toEqual([
+			{ header: "Tier", body: "Gold", id: "tier" },
+			{ header: "Terms", body: "No refunds.", id: "terms" },
+		]);
 	});
 
 	it("uses createConfig.values to override field values", async () => {
@@ -225,9 +260,7 @@ describe("loyalty pass", () => {
 		);
 
 		const obj = decodeObjectBody(pass, "loyaltyObjects");
-		expect((obj.header as Record<string, unknown>).defaultValue).toMatchObject({
-			value: "1500",
-		});
+		expect(obj.loyaltyPoints).toEqual({ balance: { string: "1500" } });
 		const firstModule = (obj.textModulesData as Record<string, unknown>[])[0];
 		if (!firstModule) {
 			throw new Error("no textModulesData");
@@ -251,6 +284,50 @@ describe("loyalty pass", () => {
 
 		const obj = decodeObjectBody(pass, "loyaltyObjects");
 		expect(obj.textModulesData).toBeUndefined();
+	});
+
+	// Apple documents label as optional, so Google needs a header fallback
+	it("falls back to the field key when a field has no label", async () => {
+		const { pass } = await run(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Rewards",
+				google: { logo: "https://example.com/logo.png" },
+				fields: [
+					{ slot: "primary", key: "points", value: "1250" },
+					{ slot: "secondary", key: "tier", value: "Gold" },
+				],
+			},
+			{ serialNumber: "s1" }
+		);
+
+		const obj = decodeObjectBody(pass, "loyaltyObjects");
+		expect(obj.textModulesData).toEqual([
+			{ header: "tier", body: "Gold", id: "tier" },
+		]);
+	});
+
+	it("uses the first entry of createConfig.barcodes", async () => {
+		const { pass } = await run(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Rewards",
+				google: { logo: "https://example.com/logo.png" },
+				fields: [],
+			},
+			{
+				serialNumber: "s1",
+				barcodes: [
+					{ value: "12345", format: "EAN13" },
+					{ value: "ABC-123", format: "QR" },
+				],
+			}
+		);
+
+		const obj = decodeObjectBody(pass, "loyaltyObjects");
+		expect(obj.barcode).toEqual({ type: "EAN_13", value: "12345" });
 	});
 });
 
@@ -288,9 +365,11 @@ describe("event pass", () => {
 			eventName: {
 				defaultValue: { language: "en-US", value: "Summer Festival" },
 			},
+			// EventDateTime accepts an offset and Google uses it to resolve the
+			// instant — the original string is forwarded verbatim
 			dateTime: {
-				start: "2026-07-15T20:00:00",
-				end: "2026-07-15T23:00:00",
+				start: "2026-07-15T20:00:00Z",
+				end: "2026-07-15T23:00:00Z",
 			},
 			hexBackgroundColor: "#6a0572",
 			issuerName: "Summer Festival",
@@ -305,9 +384,29 @@ describe("event pass", () => {
 			seatInfo: {
 				seat: { defaultValue: { language: "en-US", value: "A12" } },
 			},
-			subheader: { defaultValue: { language: "en-US", value: "Venue" } },
-			header: { defaultValue: { language: "en-US", value: "Central Park" } },
-			textModulesData: [{ header: "Date", body: "Jul 15, 2026", id: "date" }],
+			textModulesData: [
+				{ header: "Venue", body: "Central Park", id: "venue" },
+				{ header: "Date", body: "Jul 15, 2026", id: "date" },
+			],
+		});
+	});
+
+	it("forwards a UTC offset on event datetimes (EventDateTime accepts one)", async () => {
+		await run(
+			{
+				type: "event",
+				id: "e3",
+				name: "Show",
+				startsAt: "2026-07-15T20:00:00-04:00",
+				endsAt: "2026-07-15T23:00:00-04:00",
+				fields: [],
+			},
+			{ serialNumber: "event-003" }
+		);
+
+		expect(captureClassBody("eventTicketClass").dateTime).toEqual({
+			start: "2026-07-15T20:00:00-04:00",
+			end: "2026-07-15T23:00:00-04:00",
 		});
 	});
 
@@ -378,11 +477,11 @@ describe("flight pass", () => {
 				operatingFlightNumber: "100",
 			},
 			localScheduledDepartureDateTime: "2026-07-15T08:00:00",
+			// arrival time is a top-level flightClass field; destination AirportInfo
+			// only carries airport data
+			localScheduledArrivalDateTime: "2026-07-15T11:30:00",
 			origin: { airportIataCode: "JFK" },
-			destination: {
-				airportIataCode: "LAX",
-				localScheduledArrivalDateTime: "2026-07-15T11:30:00",
-			},
+			destination: { airportIataCode: "LAX" },
 			hexBackgroundColor: "#003087",
 			issuerName: "AA 100",
 			reviewStatus: "UNDER_REVIEW",
@@ -394,9 +493,10 @@ describe("flight pass", () => {
 			state: "ACTIVE",
 			passengerName: "Jane Doe",
 			reservationInfo: { confirmationCode: "flight-001" },
-			subheader: { defaultValue: { language: "en-US", value: "Gate" } },
-			header: { defaultValue: { language: "en-US", value: "B22" } },
-			textModulesData: [{ header: "Seat", body: "14A", id: "seat" }],
+			textModulesData: [
+				{ header: "Gate", body: "B22", id: "gate" },
+				{ header: "Seat", body: "14A", id: "seat" },
+			],
 		});
 	});
 
@@ -437,10 +537,7 @@ describe("flight pass", () => {
 		);
 		const cls = captureClassBody("flightClass");
 		expect(cls.localScheduledDepartureDateTime).toBe("2026-07-15T08:00:00");
-		expect(
-			(cls.destination as { localScheduledArrivalDateTime: string })
-				.localScheduledArrivalDateTime
-		).toBe("2026-07-15T11:30:00");
+		expect(cls.localScheduledArrivalDateTime).toBe("2026-07-15T11:30:00");
 	});
 
 	it("throws when departure is missing (required by flightClass)", async () => {
@@ -504,19 +601,11 @@ describe("coupon pass", () => {
 			id: `${ISSUER}.coupon-001`,
 			classId: `${ISSUER}.test-coupon`,
 			state: "ACTIVE",
-			subheader: { defaultValue: { language: "en-US", value: "Offer" } },
-			header: {
-				defaultValue: {
-					language: "en-US",
-					value: "20% off your next order",
-				},
-			},
-			textModulesData: [{ header: "Code", body: "SUMMER20", id: "code" }],
-			infoModuleData: {
-				labelValueRows: [
-					{ columns: [{ label: "Expires", value: "Dec 31, 2026" }] },
-				],
-			},
+			textModulesData: [
+				{ header: "Offer", body: "20% off your next order", id: "offer" },
+				{ header: "Code", body: "SUMMER20", id: "code" },
+				{ header: "Expires", body: "Dec 31, 2026", id: "expires" },
+			],
 		});
 	});
 });
@@ -540,7 +629,8 @@ describe("giftCard pass", () => {
 
 		expect(captureClassBody("giftCardClass")).toEqual({
 			id: `${ISSUER}.test-giftcard`,
-			cardTitle: {
+			// giftCardClass has no cardTitle — the merchant/title slot is merchantName
+			merchantName: {
 				defaultValue: { language: "en-US", value: "Store Gift Card" },
 			},
 			hexBackgroundColor: "#2a9d8f",
@@ -555,9 +645,10 @@ describe("giftCard pass", () => {
 			// cardNumber is required by giftCardObject — defaults to the serial number
 			cardNumber: "gift-001",
 			balance: { micros: "50000000", currencyCode: "USD" },
-			subheader: { defaultValue: { language: "en-US", value: "Balance" } },
-			header: { defaultValue: { language: "en-US", value: "50.00" } },
-			textModulesData: [{ header: "PIN", body: "1234", id: "pin" }],
+			textModulesData: [
+				{ header: "Balance", body: "50.00", id: "balance" },
+				{ header: "PIN", body: "1234", id: "pin" },
+			],
 		});
 	});
 
@@ -602,28 +693,25 @@ describe("generic pass", () => {
 			{ serialNumber: "generic-001" }
 		);
 
-		// genericClass has no reviewStatus — Google rejects the field on this type
+		// genericClass has no branding fields at all — cardTitle, color, images,
+		// issuerName, and reviewStatus are object-level (or nonexistent) for generic
 		expect(captureClassBody("genericClass")).toEqual({
 			id: `${ISSUER}.test-generic`,
-			cardTitle: { defaultValue: { language: "en-US", value: "Member Card" } },
-			hexBackgroundColor: "#264653",
-			issuerName: "Member Card",
 		});
 
-		// genericObject requires cardTitle — this was missing before and caused a smoke test failure
+		// genericObject carries all branding: cardTitle, color, logo, hero
 		expect(decodeObjectBody(pass, "genericObjects")).toEqual({
 			id: `${ISSUER}.generic-001`,
 			classId: `${ISSUER}.test-generic`,
 			state: "ACTIVE",
 			cardTitle: { defaultValue: { language: "en-US", value: "Member Card" } },
+			hexBackgroundColor: "#264653",
 			subheader: { defaultValue: { language: "en-US", value: "Member ID" } },
 			header: { defaultValue: { language: "en-US", value: "M-98765" } },
-			textModulesData: [{ header: "Name", body: "Jane Doe", id: "name" }],
-			infoModuleData: {
-				labelValueRows: [
-					{ columns: [{ label: "Member Since", value: "2024" }] },
-				],
-			},
+			textModulesData: [
+				{ header: "Name", body: "Jane Doe", id: "name" },
+				{ header: "Member Since", body: "2024", id: "since" },
+			],
 		});
 	});
 
@@ -648,5 +736,398 @@ describe("generic pass", () => {
 		expect(obj.header).toEqual({
 			defaultValue: { language: "en-US", value: "Member Card" },
 		});
+	});
+});
+
+// ─── Class-level geo and module data ──────────────────────────────────────────
+
+describe("merchantLocations", () => {
+	it("emits merchantLocations, not the deprecated locations field", async () => {
+		await run(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Rewards",
+				google: { logo: "https://example.com/logo.png" },
+				fields: [],
+				locations: [
+					{
+						latitude: 37.4,
+						longitude: -122.1,
+						altitude: 30,
+						relevantText: "Hi",
+					},
+					{ latitude: 40.7, longitude: -74 },
+				],
+			},
+			{ serialNumber: "s1" }
+		);
+
+		const cls = captureClassBody("loyaltyClass");
+		expect(cls.locations).toBeUndefined();
+		// MerchantLocation carries latitude/longitude only — altitude and
+		// relevantText are Apple-only and dropped
+		expect(cls.merchantLocations).toEqual([
+			{ latitude: 37.4, longitude: -122.1 },
+			{ latitude: 40.7, longitude: -74 },
+		]);
+	});
+});
+
+describe("links, images, and value-added modules", () => {
+	it("emits class-level module data", async () => {
+		await run(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Rewards",
+				google: {
+					logo: "https://example.com/logo.png",
+					links: [
+						{ uri: "https://example.com", description: "Website", id: "web" },
+						{ uri: "tel:+15551234567" },
+					],
+					images: [{ url: "https://example.com/banner.png", id: "banner" }],
+					valueAdded: [
+						{
+							header: "Parking",
+							uri: "https://example.com/parking",
+							body: "Reserve a spot",
+							imageUrl: "https://example.com/parking.png",
+							sortIndex: 1,
+						},
+					],
+				},
+				fields: [],
+			},
+			{ serialNumber: "s1" }
+		);
+
+		const cls = captureClassBody("loyaltyClass");
+		expect(cls.linksModuleData).toEqual({
+			uris: [
+				{ uri: "https://example.com", description: "Website", id: "web" },
+				{ uri: "tel:+15551234567" },
+			],
+		});
+		expect(cls.imageModulesData).toEqual([
+			{
+				mainImage: { sourceUri: { uri: "https://example.com/banner.png" } },
+				id: "banner",
+			},
+		]);
+		expect(cls.valueAddedModuleData).toEqual([
+			{
+				header: { defaultValue: { language: "en-US", value: "Parking" } },
+				body: { defaultValue: { language: "en-US", value: "Reserve a spot" } },
+				uri: "https://example.com/parking",
+				image: { sourceUri: { uri: "https://example.com/parking.png" } },
+				sortIndex: 1,
+			},
+		]);
+	});
+
+	it("emits per-recipient module data on the object", async () => {
+		const { pass } = await run(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Rewards",
+				google: { logo: "https://example.com/logo.png" },
+				fields: [],
+			},
+			{
+				serialNumber: "s1",
+				google: {
+					links: [{ uri: "https://example.com/me" }],
+					images: [{ url: "https://example.com/me.png" }],
+					valueAdded: [{ header: "Perks", uri: "https://example.com/perks" }],
+				},
+			}
+		);
+
+		const obj = decodeObjectBody(pass, "loyaltyObjects");
+		expect(obj.linksModuleData).toEqual({
+			uris: [{ uri: "https://example.com/me" }],
+		});
+		expect(obj.imageModulesData).toEqual([
+			{ mainImage: { sourceUri: { uri: "https://example.com/me.png" } } },
+		]);
+		expect(obj.valueAddedModuleData).toEqual([
+			{
+				header: { defaultValue: { language: "en-US", value: "Perks" } },
+				uri: "https://example.com/perks",
+			},
+		]);
+	});
+
+	it("omits module keys entirely when unset", async () => {
+		const { pass } = await run(
+			{
+				type: "loyalty",
+				id: "p1",
+				name: "Rewards",
+				google: { logo: "https://example.com/logo.png" },
+				fields: [],
+			},
+			{ serialNumber: "s1" }
+		);
+
+		const cls = captureClassBody("loyaltyClass");
+		expect(cls).not.toHaveProperty("linksModuleData");
+		expect(cls).not.toHaveProperty("imageModulesData");
+		expect(cls).not.toHaveProperty("valueAddedModuleData");
+		expect(decodeObjectBody(pass, "loyaltyObjects")).not.toHaveProperty(
+			"linksModuleData"
+		);
+	});
+});
+
+// ─── Transit vertical ─────────────────────────────────────────────────────────
+
+describe("transit pass", () => {
+	it("produces transitClass and transitObject bodies", async () => {
+		const { pass } = await run(
+			{
+				type: "flight",
+				id: "test-transit",
+				name: "Northern Line",
+				color: "#c60c30",
+				transitType: "train",
+				origin: "PAD",
+				destination: "BRI",
+				departure: "2026-07-15T08:00:00+01:00",
+				arrival: "2026-07-15T09:45:00+01:00",
+				google: {
+					logo: "https://example.com/rail.png",
+					transit: { tripType: "roundTrip", ticketNumber: "TK-9001" },
+				},
+				fields: [
+					{ slot: "primary", key: "platform", label: "Platform", value: "4" },
+				],
+			},
+			{ serialNumber: "transit-001", values: { passengerName: "Jane Doe" } }
+		);
+
+		expect(captureClassBody("transitClass")).toEqual({
+			id: `${ISSUER}.test-transit`,
+			// transitType is required on transitClass; "train" maps to Google's RAIL
+			transitType: "RAIL",
+			hexBackgroundColor: "#c60c30",
+			issuerName: "Northern Line",
+			// transitClass names its logo "logo", unlike flightClass
+			logo: { sourceUri: { uri: "https://example.com/rail.png" } },
+			reviewStatus: "UNDER_REVIEW",
+		});
+
+		expect(decodeObjectBody(pass, "transitObjects")).toEqual({
+			id: `${ISSUER}.transit-001`,
+			classId: `${ISSUER}.test-transit`,
+			state: "ACTIVE",
+			// tripType is required on transitObject
+			tripType: "ROUND_TRIP",
+			ticketNumber: "TK-9001",
+			passengerNames: "Jane Doe",
+			ticketLeg: {
+				originName: { defaultValue: { language: "en-US", value: "PAD" } },
+				destinationName: { defaultValue: { language: "en-US", value: "BRI" } },
+				// TicketLeg times accept an offset, unlike flightClass local times
+				departureDateTime: "2026-07-15T08:00:00+01:00",
+				arrivalDateTime: "2026-07-15T09:45:00+01:00",
+			},
+			textModulesData: [{ header: "Platform", body: "4", id: "platform" }],
+		});
+	});
+
+	it("defaults tripType to ONE_WAY", async () => {
+		const { pass } = await run(
+			{
+				type: "flight",
+				id: "p1",
+				name: "Bus",
+				transitType: "bus",
+				google: { logo: "https://example.com/bus.png", transit: {} },
+				fields: [],
+			},
+			{ serialNumber: "s1" }
+		);
+
+		const obj = decodeObjectBody(pass, "transitObjects");
+		expect(obj.tripType).toBe("ONE_WAY");
+		expect(captureClassBody("transitClass").transitType).toBe("BUS");
+	});
+
+	// Apple's PKTransitTypeGeneric has no Google counterpart
+	it("maps the generic transitType to OTHER", async () => {
+		await run(
+			{
+				type: "flight",
+				id: "p1",
+				name: "Shuttle",
+				transitType: "generic",
+				google: { logo: "https://example.com/shuttle.png", transit: {} },
+				fields: [],
+			},
+			{ serialNumber: "s1" }
+		);
+
+		expect(captureClassBody("transitClass").transitType).toBe("OTHER");
+	});
+
+	it("lets createConfig override tripType per recipient", async () => {
+		const { pass } = await run(
+			{
+				type: "flight",
+				id: "p1",
+				name: "Ferry",
+				transitType: "boat",
+				google: {
+					logo: "https://example.com/ferry.png",
+					transit: { tripType: "roundTrip" },
+				},
+				fields: [],
+			},
+			{ serialNumber: "s1", google: { tripType: "oneWay" } }
+		);
+
+		expect(decodeObjectBody(pass, "transitObjects").tripType).toBe("ONE_WAY");
+		// "boat" maps to Google's FERRY
+		expect(captureClassBody("transitClass").transitType).toBe("FERRY");
+	});
+
+	it("prefers an explicit google.transit.transitType and station names", async () => {
+		const { pass } = await run(
+			{
+				type: "flight",
+				id: "p1",
+				name: "Tram",
+				transitType: "train",
+				google: {
+					logo: "https://example.com/tram.png",
+					transit: {
+						transitType: "tram",
+						originName: "Market Street",
+						destinationName: "Harbour",
+						operatorName: "City Transit",
+					},
+				},
+				fields: [],
+			},
+			{ serialNumber: "s1" }
+		);
+
+		const cls = captureClassBody("transitClass");
+		expect(cls.transitType).toBe("TRAM");
+		expect(cls.transitOperatorName).toEqual({
+			defaultValue: { language: "en-US", value: "City Transit" },
+		});
+		const leg = decodeObjectBody(pass, "transitObjects").ticketLeg as Record<
+			string,
+			unknown
+		>;
+		expect(leg.originName).toEqual({
+			defaultValue: { language: "en-US", value: "Market Street" },
+		});
+		expect(leg.destinationName).toEqual({
+			defaultValue: { language: "en-US", value: "Harbour" },
+		});
+	});
+
+	it("does not require IATA fields or a passengerName", async () => {
+		await expect(
+			run(
+				{
+					type: "flight",
+					id: "p1",
+					name: "Bus",
+					google: { logo: "https://example.com/bus.png", transit: {} },
+					fields: [],
+				},
+				{ serialNumber: "s1" }
+			)
+		).resolves.toBeDefined();
+	});
+
+	it("throws when the transit logo is missing (required by transitClass)", async () => {
+		await expect(
+			run(
+				{
+					type: "flight",
+					id: "p1",
+					name: "Bus",
+					google: { transit: {} },
+					fields: [],
+				},
+				{ serialNumber: "s1" }
+			)
+		).rejects.toMatchObject({ code: "GOOGLE_MISSING_LOGO" });
+	});
+
+	it("still uses flightClass when google.transit is absent", async () => {
+		const { pass } = await run(
+			{
+				type: "flight",
+				id: "p1",
+				name: "Flight",
+				transitType: "train",
+				carrier: "AA",
+				flightNumber: "100",
+				origin: "JFK",
+				destination: "LAX",
+				departure: "2026-07-15T08:00:00Z",
+				fields: [],
+			},
+			{ serialNumber: "s1", values: { passengerName: "Jane" } }
+		);
+
+		expect(captureClassBody("flightClass").flightHeader).toBeDefined();
+		expect(decodeObjectBody(pass, "flightObjects").passengerName).toBe("Jane");
+	});
+});
+
+// ─── Update notifications ─────────────────────────────────────────────────────
+
+describe("updateGooglePass notifyPreference", () => {
+	const base = {
+		type: "loyalty" as const,
+		id: "p1",
+		name: "Rewards",
+		google: { logo: "https://example.com/logo.png" },
+		fields: [],
+	};
+
+	it("sets notifyPreference in the PATCH body when notify is requested", async () => {
+		stubFetch();
+		await updateGooglePass(base, { serialNumber: "s1" }, credentials, {
+			notify: true,
+		});
+
+		const { url, body } = capturePatch();
+		expect(body.notifyPreference).toBe("NOTIFY_ON_UPDATE");
+		// notifyPreference is a body field, not a query parameter
+		expect(url).not.toContain("notifyPreference");
+		expect(url).toContain(`/loyaltyObject/${ISSUER}.s1`);
+	});
+
+	it("omits notifyPreference by default (backward compatible)", async () => {
+		stubFetch();
+		await updateGooglePass(base, { serialNumber: "s1" }, credentials);
+		expect(capturePatch().body).not.toHaveProperty("notifyPreference");
+	});
+
+	it("patches transitObject for a transit pass", async () => {
+		stubFetch();
+		await updateGooglePass(
+			{
+				type: "flight",
+				id: "p1",
+				name: "Bus",
+				google: { logo: "https://example.com/bus.png", transit: {} },
+				fields: [],
+			},
+			{ serialNumber: "s1" },
+			credentials
+		);
+		expect(capturePatch().url).toContain(`/transitObject/${ISSUER}.s1`);
 	});
 });

@@ -151,7 +151,7 @@ function EditableField({
 			</span>
 			<input
 				className={cn(
-					"w-24 bg-transparent font-semibold text-(--pass-text) text-xs leading-tighter caret-(--pass-text) outline-none placeholder:text-(--pass-text-subtle)",
+					"w-24 bg-transparent font-semibold text-(--pass-text) text-xs leading-tighter caret-(--pass-text) outline-none transition-colors duration-300 placeholder:text-(--pass-text-subtle) placeholder:transition-colors placeholder:duration-300",
 					value.trim().length === 0 && "animate-pulse",
 					wiggle && "animate-[wiggle_0.3s_ease-in-out]"
 				)}
@@ -231,6 +231,14 @@ export function PassPlayground({
 		triggerDelight();
 	};
 
+	const handleProviderChange = (value: WalletProvider) => {
+		if (value === provider) {
+			return;
+		}
+		setProvider(value);
+		playSound("tap");
+	};
+
 	const cardStyle = {
 		backgroundColor: activeColor.color,
 		"--pass-text": activeColor.text,
@@ -245,6 +253,7 @@ export function PassPlayground({
 		}
 		const trimmedName = name.trim();
 		if (!trimmedName) {
+			playSound("error");
 			setWiggleName(true);
 			setTimeout(() => setWiggleName(false), 300);
 			return;
@@ -411,7 +420,7 @@ export function PassPlayground({
 									? "bg-(--gray-a12)"
 									: "bg-transparent hover:bg-(--gray-a4)"
 							)}
-							onClick={() => setProvider("apple")}
+							onClick={() => handleProviderChange("apple")}
 							type="button"
 						>
 							<AppleWalletIcon
@@ -430,7 +439,7 @@ export function PassPlayground({
 									? "bg-(--gray-a12)"
 									: "bg-transparent hover:bg-(--gray-a4)"
 							)}
-							onClick={() => setProvider("google")}
+							onClick={() => handleProviderChange("google")}
 							type="button"
 						>
 							<GoogleWalletIcon
@@ -449,7 +458,15 @@ export function PassPlayground({
 				) : null}
 
 				<Button
-					className="mt-auto rounded-full bg-(--gray-a12) font-medium font-sans! text-white tracking-tight hover:bg-(--gray-a11) active:scale-95"
+					aria-busy={creating}
+					// The empty-name state is announced as disabled but stays clickable
+					// (no native `disabled`), so a click can still answer with the error
+					// sound and the name-field wiggle instead of dying silently.
+					aria-disabled={creating || !name.trim()}
+					// `pointer-events-auto` re-enables hit testing that the base variant
+					// disables, so the not-allowed cursor is actually visible; the click
+					// handler still bails out on `creating`, so nothing fires.
+					className="mt-auto cursor-pointer rounded-full bg-(--gray-a12) font-medium font-sans! text-white tracking-tight transition-opacity duration-200 disabled:pointer-events-auto aria-disabled:cursor-not-allowed aria-disabled:opacity-50 not-disabled:aria-[disabled=false]:active:scale-95 not-disabled:aria-[disabled=false]:hover:bg-(--gray-a11)"
 					disabled={creating}
 					onClick={handleCreatePass}
 				>
