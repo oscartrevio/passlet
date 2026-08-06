@@ -383,8 +383,3 @@ PRs welcome. If you've dealt with wallet pass APIs before, you know why this nee
 ## License
 
 [MIT](LICENSE) © [Oscar Treviño](https://github.com/oscartrevio)
-
-<p align="center">
-  <sub>Passlet</sub><br>
-  <sub>MIT · Built by <a href="https://github.com/oscartrevio">Oscar Treviño</a></sub>
-</p>
