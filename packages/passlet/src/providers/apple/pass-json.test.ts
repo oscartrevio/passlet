@@ -2,20 +2,15 @@ import JSZip from "jszip";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { AppleCredentials } from "../../types/credentials";
 import { generateApplePass } from "./index";
-import { generateTestCerts, type TestCerts } from "./test-certs";
+import { generateTestCerts } from "./test-certs";
 
-const SHA1_RE = /^[0-9a-f]{40}$/;
-
-// ─── Fixtures ────────────────────────────────────────────────────────────────
-
-let certs: TestCerts;
 let credentials: AppleCredentials;
 
 // Stub icon — Apple requires one but content doesn't matter for structure tests.
 const STUB_ICON = new Uint8Array([1, 2, 3]);
 
 beforeAll(() => {
-	certs = generateTestCerts();
+	const certs = generateTestCerts();
 	credentials = {
 		passTypeIdentifier: "pass.com.test.example",
 		teamId: "ABCD1234EF",
@@ -35,8 +30,6 @@ async function extractPassJson(
 	}
 	return JSON.parse(raw);
 }
-
-// ─── Credential fields ───────────────────────────────────────────────────────
 
 describe("pass.json credential fields", () => {
 	it("includes passTypeIdentifier, teamIdentifier, and serialNumber", async () => {
@@ -74,8 +67,6 @@ describe("pass.json credential fields", () => {
 		expect(json.organizationName).toBe("Acme Rewards");
 	});
 });
-
-// ─── Pass type keys ───────────────────────────────────────────────────────────
 
 describe("pass.json type key", () => {
 	it.each([
@@ -121,8 +112,6 @@ describe("pass.json type key", () => {
 		expect(json).toHaveProperty("storeCard");
 	});
 });
-
-// ─── Colors ──────────────────────────────────────────────────────────────────
 
 describe("pass.json colors", () => {
 	it("converts backgroundColor to rgb() format", async () => {
@@ -175,8 +164,6 @@ describe("pass.json colors", () => {
 	});
 });
 
-// ─── Barcode ─────────────────────────────────────────────────────────────────
-
 describe("pass.json barcode", () => {
 	it("includes barcode with Apple format string", async () => {
 		const { pass } = await generateApplePass(
@@ -199,7 +186,6 @@ describe("pass.json barcode", () => {
 		expect(barcodes).toHaveLength(1);
 		expect(barcodes.at(0)?.format).toBe("PKBarcodeFormatQR");
 		expect(barcodes.at(0)?.message).toBe("ABC-123");
-		// QR uses UTF-8 so non-Latin-1 payloads are not mangled
 		expect(barcodes.at(0)?.messageEncoding).toBe("utf-8");
 	});
 
@@ -264,7 +250,6 @@ describe("pass.json barcode", () => {
 		expect(json.barcode).toBeUndefined();
 	});
 
-	// The deprecated singular key only accepts QR, PDF417 and Aztec
 	it("omits the singular barcode for Code128", async () => {
 		const { pass } = await generateApplePass(
 			{
@@ -306,7 +291,6 @@ describe("pass.json barcode", () => {
 		expect((json.barcodes as { format: string }[])[0]?.format).toBe(
 			appleFormat
 		);
-		// Never legal in the deprecated singular key
 		expect(json.barcode).toBeUndefined();
 	});
 
@@ -380,8 +364,6 @@ describe("pass.json barcode", () => {
 		expect(barcodes[0]?.message).toBe("NEW");
 	});
 });
-
-// ─── Field slots ─────────────────────────────────────────────────────────────
 
 describe("pass.json field slots", () => {
 	it("places fields in the correct Apple slots", async () => {
@@ -473,8 +455,6 @@ describe("pass.json field slots", () => {
 		expect(primary.at(0)).toEqual({ key: "points", value: "500" });
 	});
 });
-
-// ─── PassFieldContent keys ───────────────────────────────────────────────────
 
 describe("pass.json field content keys", () => {
 	it("emits attributedValue, ignoresTimeZone and isRelative", async () => {
@@ -652,7 +632,6 @@ describe("pass.json field content keys", () => {
 		expect(field?.dataDetectorTypes).toEqual([]);
 	});
 
-	// Apple applies data detectors to back fields only
 	it("drops dataDetectorTypes on non-back fields", async () => {
 		const { pass } = await generateApplePass(
 			{
@@ -711,8 +690,6 @@ describe("pass.json field content keys", () => {
 		});
 	});
 });
-
-// ─── Apple-specific fields ───────────────────────────────────────────────────
 
 describe("pass.json apple-specific fields", () => {
 	it("sets voided from createConfig.apple.voided", async () => {
@@ -836,8 +813,6 @@ describe("pass.json apple-specific fields", () => {
 	});
 });
 
-// ─── logoText ─────────────────────────────────────────────────────────────────
-
 describe("pass.json logoText", () => {
 	it("is omitted when not provided (not defaulted to the pass name)", async () => {
 		const { pass } = await generateApplePass(
@@ -891,8 +866,6 @@ describe("pass.json logoText", () => {
 		expect(json.logoText).toBeUndefined();
 	});
 });
-
-// ─── Semantic tags & relevance ───────────────────────────────────────────────
 
 describe("pass.json semantics and relevantDates", () => {
 	const FLIGHT = {
@@ -1117,17 +1090,12 @@ describe("pass.json semantics and relevantDates", () => {
 		);
 		const json = await extractPassJson(pass);
 		const semantics = json.semantics as Record<string, unknown>;
-		// Overridden
 		expect(semantics.airlineCode).toBe("ZZ");
-		// Added
 		expect(semantics.silenceRequested).toBe(true);
-		// Derived tags are kept
 		expect(semantics.departureAirportCode).toBe("JFK");
 		expect(semantics.flightCode).toBe("AA100");
 	});
 });
-
-// ─── .pkpass zip structure ───────────────────────────────────────────────────
 
 describe(".pkpass zip contents", () => {
 	it("contains pass.json, manifest.json, and signature", async () => {
@@ -1163,35 +1131,7 @@ describe(".pkpass zip contents", () => {
 		const zip = await JSZip.loadAsync(pass);
 		expect(zip.file("icon.png")).not.toBeNull();
 	});
-
-	it("manifest.json lists SHA1 hashes for every file", async () => {
-		const { pass } = await generateApplePass(
-			{
-				type: "loyalty",
-				id: "p1",
-				name: "Test",
-				fields: [],
-				apple: { icon: STUB_ICON },
-			},
-			{ serialNumber: "s1" },
-			credentials
-		);
-		const zip = await JSZip.loadAsync(pass);
-		const manifestFile = zip.file("manifest.json");
-		if (!manifestFile) {
-			throw new Error("manifest.json not found");
-		}
-		const manifest = JSON.parse(await manifestFile.async("string")) as Record<
-			string,
-			string
-		>;
-
-		expect(manifest["pass.json"]).toMatch(SHA1_RE);
-		expect(manifest["icon.png"]).toMatch(SHA1_RE);
-	});
 });
-
-// ─── Validation errors ───────────────────────────────────────────────────────
 
 describe("generateApplePass validation", () => {
 	it("throws APPLE_MISSING_ICON when apple.icon is not set", async () => {
@@ -1260,8 +1200,6 @@ describe("generateApplePass validation", () => {
 		});
 	});
 });
-
-// ─── Image warnings ───────────────────────────────────────────────────────────
 
 describe("generateApplePass image warnings", () => {
 	it("warns when the icon has no @2x variant", async () => {

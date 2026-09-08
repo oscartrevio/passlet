@@ -8,8 +8,7 @@ import type {
 	TextAlignment,
 } from "../../types/schemas";
 
-// Convert a 6-digit hex color to Apple's rgb() format.
-// Apple pass.json requires colors as "rgb(r, g, b)" strings.
+// Apple colors are "rgb(r, g, b)" strings, not hex.
 export function hexToRgb(hex: string): string {
 	const clean = hex.replace("#", "");
 	const r = Number.parseInt(clean.slice(0, 2), 16);
@@ -46,15 +45,12 @@ export function isLegacyBarcodeFormat(format: BarcodeFormat): boolean {
 	return LEGACY_BARCODE_FORMATS.has(format);
 }
 
-// QR and Aztec support a UTF-8 byte mode, so encode their payloads as UTF-8 to
-// avoid mangling non-Latin-1 characters. The linear formats (PDF417, Code128,
-// Code39, Codabar, EAN13, ITF) stay on iso-8859-1.
+// QR/Aztec use UTF-8 to preserve non-Latin-1 payloads; other formats use Latin-1.
 export function toAppleMessageEncoding(format: BarcodeFormat): string {
 	return format === "QR" || format === "Aztec" ? "utf-8" : "iso-8859-1";
 }
 
-// Apple's PassFieldContent documents PK-prefixed constants for the field style
-// enums. passlet exposes friendly lowercase values, so they are mapped here.
+// PassFieldContent requires PK-prefixed style constants.
 // https://developer.apple.com/documentation/walletpasses/passfieldcontent
 const APPLE_DATE_STYLE: Record<DateStyle, string> = {
 	none: "PKDateStyleNone",
@@ -102,9 +98,7 @@ export function toAppleDataDetectorTypes(types: DataDetectorType[]): string[] {
 	return types.map((t) => APPLE_DATA_DETECTOR_TYPE[t]);
 }
 
-// Escape a string for Apple's pass.strings format, which follows the
-// NeXTSTEP/plist strings syntax: backslashes, double quotes and literal
-// newlines must be escaped or the file fails to parse.
+// pass.strings uses NeXTSTEP/plist escaping, not JSON escaping.
 export function escapeStringsValue(value: string): string {
 	return value
 		.replace(/\\/g, "\\\\")
@@ -133,10 +127,6 @@ async function fetchAsBytes(url: string): Promise<Uint8Array> {
 	return new Uint8Array(await response.arrayBuffer());
 }
 
-function resolveSource(src: string | Uint8Array): Promise<Uint8Array> {
-	return src instanceof Uint8Array ? Promise.resolve(src) : fetchAsBytes(src);
-}
-
 async function resolveImageSetWithMode(
 	name: string,
 	imageSet: ImageSet,
@@ -145,13 +135,13 @@ async function resolveImageSetWithMode(
 	const files: Record<string, Uint8Array> = {};
 
 	const load = async (filename: string, src: string | Uint8Array) => {
-		if (options.required) {
-			files[filename] = await resolveSource(src);
-			return;
-		}
 		try {
-			files[filename] = await resolveSource(src);
+			files[filename] =
+				src instanceof Uint8Array ? src : await fetchAsBytes(src);
 		} catch (error) {
+			if (options.required) {
+				throw error;
+			}
 			options.warnings?.push(
 				`Could not load ${filename}: ${error instanceof Error ? error.message : String(error)}`
 			);
@@ -174,9 +164,7 @@ async function resolveImageSetWithMode(
 	return files;
 }
 
-// Resolve an ImageSet into named Apple image files (base.png, @2x, @3x).
-// Returns a record of filename → bytes. Optional images that fail to load
-// are skipped and a warning is added.
+// Optional image failures become warnings rather than aborting the pass.
 export function resolveImageSet(
 	name: string,
 	imageSet: ImageSet | undefined,

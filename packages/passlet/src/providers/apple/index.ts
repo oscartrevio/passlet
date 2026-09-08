@@ -24,7 +24,6 @@ import {
 	toAppleTextAlignment,
 } from "./utils";
 
-// Apple pass type → pass.json key
 const PASS_TYPE_KEY: Record<PassType, string> = {
 	loyalty: "storeCard",
 	coupon: "coupon",
@@ -45,7 +44,6 @@ const TRANSIT_TYPE: Record<
 	generic: "PKTransitTypeGeneric",
 };
 
-// Apple field slot → pass.json key
 const SLOT_KEY: Record<FieldDef["slot"], keyof AppleSlots> = {
 	header: "headerFields",
 	primary: "primaryFields",
@@ -61,14 +59,11 @@ function validateAppleRequirements(pass: PassConfig): void {
 	if (pass.type === "flight" && !pass.transitType) {
 		throw new WalletError("APPLE_BOARDING_MISSING_TRANSIT_TYPE");
 	}
-	// Apple requires an authenticationToken whenever a webServiceURL is set;
-	// without it the pass cannot authenticate update requests. (The schema
-	// enforces the ≥16-char length.)
+	// Apple update requests require a token; the schema enforces its 16-char minimum.
 	if (pass.apple?.webServiceURL && !pass.apple.authenticationToken) {
 		throw new WalletError("APPLE_MISSING_AUTH_TOKEN");
 	}
-	// appLaunchURL is passed to the associated app, identified by its App Store
-	// IDs — Apple ignores the URL without associatedStoreIdentifiers.
+	// Apple ignores appLaunchURL without associated App Store IDs.
 	if (
 		pass.apple?.appLaunchURL &&
 		!pass.apple.associatedStoreIdentifiers?.length
@@ -82,13 +77,10 @@ interface AppleField {
 	changeMessage?: string;
 	currencyCode?: string;
 	dataDetectorTypes?: string[];
-	// The style enums are emitted as Apple's PK-prefixed constants, so these are
-	// the mapped strings rather than passlet's friendly values.
 	dateStyle?: string;
 	ignoresTimeZone?: boolean;
 	isRelative?: boolean;
 	key: string;
-	// Apple documents label as optional — omitted entirely when unset
 	label?: string;
 	numberStyle?: string;
 	row?: 0 | 1;
@@ -106,6 +98,36 @@ type AppleSlots = Record<
 	| "backFields",
 	AppleField[]
 >;
+
+function buildField(f: FieldDef, value: string): AppleField {
+	return {
+		key: f.key,
+		label: f.label,
+		value,
+		changeMessage: f.changeMessage || undefined,
+		dateStyle: f.dateStyle ? toAppleDateStyle(f.dateStyle) : undefined,
+		timeStyle: f.timeStyle ? toAppleDateStyle(f.timeStyle) : undefined,
+		numberStyle: f.numberStyle ? toAppleNumberStyle(f.numberStyle) : undefined,
+		currencyCode: f.currencyCode || undefined,
+		// attributedValue overrides value on iOS and is ignored on watchOS.
+		attributedValue: f.attributedValue,
+		// Only back fields support detectors; [] explicitly disables them.
+		dataDetectorTypes:
+			f.dataDetectorTypes !== undefined && f.slot === "back"
+				? toAppleDataDetectorTypes(f.dataDetectorTypes)
+				: undefined,
+		ignoresTimeZone: f.ignoresTimeZone,
+		isRelative: f.isRelative,
+		semantics: f.semantics,
+		// Apple ignores textAlignment on primary and back fields.
+		textAlignment:
+			f.textAlignment && f.slot !== "primary" && f.slot !== "back"
+				? toAppleTextAlignment(f.textAlignment)
+				: undefined,
+		// Apple only supports `row` on auxiliary fields (event tickets).
+		row: f.slot === "auxiliary" ? f.row : undefined,
+	};
+}
 
 function buildSlots(
 	fields: FieldDef[],
@@ -125,57 +147,10 @@ function buildSlots(
 			continue;
 		}
 
-		slots[SLOT_KEY[f.slot]]?.push({
-			key: f.key,
-			// label is optional in Apple's PassFieldContent — omit it when unset
-			...(f.label !== undefined && { label: f.label }),
-			value,
-			...(f.changeMessage && { changeMessage: f.changeMessage }),
-			...(f.dateStyle && { dateStyle: toAppleDateStyle(f.dateStyle) }),
-			...(f.timeStyle && { timeStyle: toAppleDateStyle(f.timeStyle) }),
-			...(f.numberStyle && { numberStyle: toAppleNumberStyle(f.numberStyle) }),
-			...(f.currencyCode && { currencyCode: f.currencyCode }),
-			// attributedValue overrides value on iOS and is ignored on watchOS
-			...(f.attributedValue !== undefined && {
-				attributedValue: f.attributedValue,
-			}),
-			// Apple only applies data detectors to back fields; an empty array
-			// disables them, so the key is emitted whenever it is set.
-			...(f.dataDetectorTypes !== undefined &&
-				f.slot === "back" && {
-					dataDetectorTypes: toAppleDataDetectorTypes(f.dataDetectorTypes),
-				}),
-			...(f.ignoresTimeZone !== undefined && {
-				ignoresTimeZone: f.ignoresTimeZone,
-			}),
-			...(f.isRelative !== undefined && { isRelative: f.isRelative }),
-			// Field-level semantic tags — Apple accepts a semantics dictionary as a
-			// top-level key of any field dictionary
-			...(f.semantics && { semantics: f.semantics }),
-			// Apple ignores textAlignment on primary and back fields
-			...(f.textAlignment &&
-				f.slot !== "primary" &&
-				f.slot !== "back" && {
-					textAlignment: toAppleTextAlignment(f.textAlignment),
-				}),
-			// Apple only supports `row` on auxiliary fields (event tickets)
-			...(f.row !== undefined && f.slot === "auxiliary" && { row: f.row }),
-		});
+		slots[SLOT_KEY[f.slot]].push(buildField(f, value));
 	}
 
 	return slots;
-}
-
-function buildPassTypeContent(
-	pass: PassConfig,
-	slots: AppleSlots
-): Record<string, unknown> {
-	const content: Record<string, unknown> = { ...slots };
-	// transitType is guaranteed for flights by validateAppleRequirements()
-	if (pass.type === "flight" && pass.transitType) {
-		content.transitType = TRANSIT_TYPE[pass.transitType];
-	}
-	return content;
 }
 
 type EventPass = Extract<PassConfig, { type: "event" }>;
@@ -229,7 +204,6 @@ function buildFlightAppleFields(pass: FlightPass): Record<string, unknown> {
 	};
 }
 
-// Resolve a display field's value (per-recipient override or static default).
 function fieldValue(
 	fields: FieldDef[],
 	values: Record<string, string | null>,
@@ -243,8 +217,7 @@ function fieldValue(
 	return v == null ? undefined : v;
 }
 
-// Build a SemanticTagType.Seat array from well-known seat field keys. Returns
-// undefined when none are present so we never emit an empty seat.
+// Omit seats with no populated seat/row/section fields.
 function buildSeats(
 	fields: FieldDef[],
 	values: Record<string, string | null>
@@ -262,12 +235,10 @@ function buildSeats(
 	if (section) {
 		seat.seatSection = section;
 	}
-	return Object.keys(seat).length > 0 ? [seat] : undefined;
+	return number || row || section ? [seat] : undefined;
 }
 
-// Semantic tags let Wallet offer live features (flight tracking, event
-// relevance, Siri/lock-screen suggestions). They live at the top level of
-// pass.json. Without them the structured flight/event data never reaches Apple.
+// Top-level semantics enable Wallet flight tracking and event relevance.
 function buildFlightSemantics(
 	pass: FlightPass,
 	values: Record<string, string | null>
@@ -300,7 +271,6 @@ function buildFlightSemantics(
 	if (arrival) {
 		semantics.originalArrivalDate = arrival;
 	}
-	// Map well-known display fields to gate/terminal/boarding/seat semantics
 	const gate = fieldValue(pass.fields, values, "gate");
 	const terminal = fieldValue(pass.fields, values, "terminal");
 	const boardingGroup =
@@ -344,52 +314,32 @@ function buildEventSemantics(
 	return semantics;
 }
 
-// A poster event ticket uses eventLogoText, not logoText. We treat the pass as
-// a poster when it opts into the poster style scheme or sets eventLogoText.
-function isPosterEventTicket(pass: PassConfig): boolean {
-	if (pass.type !== "event") {
-		return false;
-	}
-	const a = pass.apple;
-	return Boolean(
-		a?.eventLogoText || a?.preferredStyleSchemes?.includes("posterEventTicket")
-	);
-}
-
-// logoText is only emitted when the caller sets it — never defaulted to the
-// pass name — and is omitted for poster event tickets, where it has no effect.
+// Poster event tickets use eventLogoText instead of logoText.
 function resolveLogoText(pass: PassConfig): string | undefined {
-	const logoText = pass.apple?.logoText;
-	if (!logoText || isPosterEventTicket(pass)) {
+	if (
+		pass.type === "event" &&
+		(pass.apple?.eventLogoText ||
+			pass.apple?.preferredStyleSchemes?.includes("posterEventTicket"))
+	) {
 		return;
 	}
-	return logoText;
+	return pass.apple?.logoText || undefined;
 }
 
-function deriveSemantics(
-	pass: PassConfig,
-	values: Record<string, string | null>
-): Record<string, unknown> | undefined {
-	if (pass.type === "flight") {
-		return buildFlightSemantics(pass, values);
-	}
-	if (pass.type === "event") {
-		return buildEventSemantics(pass, values);
-	}
-	return;
-}
-
-// Pass-level semantics: user-supplied tags are merged over the derived ones, so
-// an explicit apple.semantics entry always wins. Works for every pass type —
-// store cards and coupons carry only what the caller provides.
+// Explicit semantic tags override derived values for every pass type.
 function buildSemantics(
 	pass: PassConfig,
 	values: Record<string, string | null>
 ): Record<string, unknown> | undefined {
-	const derived = deriveSemantics(pass, values);
+	let derived: Record<string, unknown> | undefined;
+	if (pass.type === "flight") {
+		derived = buildFlightSemantics(pass, values);
+	} else if (pass.type === "event") {
+		derived = buildEventSemantics(pass, values);
+	}
 	const user = pass.apple?.semantics;
-	if (!(derived || user)) {
-		return;
+	if (!user) {
+		return derived;
 	}
 	const merged = { ...derived, ...user };
 	return Object.keys(merged).length > 0 ? merged : undefined;
@@ -397,8 +347,7 @@ function buildSemantics(
 
 type RelevantDate = { date: string } | { startDate: string; endDate: string };
 
-// Lock-screen relevance. An explicit apple.relevantDates always wins; otherwise
-// derive it from the event/flight times so those passes surface at the right time.
+// Explicit relevance dates override event/flight times.
 function deriveRelevantDates(pass: PassConfig): RelevantDate[] | undefined {
 	if (pass.apple?.relevantDates) {
 		return pass.apple.relevantDates;
@@ -440,9 +389,7 @@ function buildAppleCommonFields(
 ): Record<string, unknown> {
 	const a = pass.apple;
 	const barcodes = resolveBarcodes(createConfig);
-	// The deprecated singular key only accepts QR, PDF417 and Aztec — fall back
-	// to the first entry old systems can actually render, and omit the key when
-	// none qualifies (Code128 and the iOS 27 linear formats).
+	// The deprecated singular key accepts only QR, PDF417 and Aztec.
 	const legacy = barcodes?.find((b) => isLegacyBarcodeFormat(b.format));
 	return {
 		backgroundColor: pass.color ? hexToRgb(pass.color) : undefined,
@@ -452,12 +399,8 @@ function buildAppleCommonFields(
 		labelColor: a?.labelColor ? hexToRgb(a.labelColor) : undefined,
 		expirationDate: createConfig.expiresAt,
 		voided: createConfig.apple?.voided,
-		// Barcode — `barcodes` (array) is the modern key and holds every entry;
-		// the system renders the first one the device can display. `barcode`
-		// (singular) is the deprecated fallback older OS versions read.
 		barcodes: barcodes?.map(toAppleBarcode),
 		barcode: legacy ? toAppleBarcode(legacy) : undefined,
-		// Locations — altitude and relevantText are Apple-only
 		locations: pass.locations?.map(
 			({ latitude, longitude, altitude, relevantText }) => ({
 				latitude,
@@ -476,9 +419,7 @@ function buildAppleCommonFields(
 			? {
 					message: a.nfc.message,
 					encryptionPublicKey: a.nfc.encryptionPublicKey,
-					...(a.nfc.requiresAuthentication !== undefined && {
-						requiresAuthentication: a.nfc.requiresAuthentication,
-					}),
+					requiresAuthentication: a.nfc.requiresAuthentication,
 				}
 			: undefined,
 		appLaunchURL: a?.appLaunchURL,
@@ -494,9 +435,11 @@ function buildPassJson(
 	createConfig: CreateConfig,
 	credentials: AppleCredentials
 ): Record<string, unknown> {
-	const passTypeKey = PASS_TYPE_KEY[pass.type];
 	const values = createConfig.values ?? {};
-	const slots = buildSlots(pass.fields, values);
+	const content: Record<string, unknown> = buildSlots(pass.fields, values);
+	if (pass.type === "flight" && pass.transitType) {
+		content.transitType = TRANSIT_TYPE[pass.transitType];
+	}
 	const a = pass.apple;
 	const semantics = buildSemantics(pass, values);
 
@@ -512,7 +455,7 @@ function buildPassJson(
 		...(pass.type === "event" && buildEventAppleFields(pass)),
 		...(pass.type === "flight" && buildFlightAppleFields(pass)),
 		...(semantics && { semantics }),
-		[passTypeKey]: buildPassTypeContent(pass, slots),
+		[PASS_TYPE_KEY[pass.type]]: content,
 	};
 }
 
@@ -520,17 +463,12 @@ async function collectImages(
 	pass: PassConfig,
 	warnings: string[]
 ): Promise<Record<string, Uint8Array>> {
-	const images: Record<string, Uint8Array> = {};
-
-	// icon is required — validateAppleRequirements() throws before we reach here if missing
 	const icon = pass.apple?.icon;
 	if (!icon) {
 		throw new WalletError("APPLE_MISSING_ICON");
 	}
-	const iconFiles = await resolveRequiredImageSet("icon", icon);
-	Object.assign(images, iconFiles);
+	const images = await resolveRequiredImageSet("icon", icon);
 
-	// icon@2x is strongly recommended for Retina displays
 	const hasRetinaIcon =
 		typeof icon === "object" && !(icon instanceof Uint8Array) && !!icon.retina;
 	if (!hasRetinaIcon) {
@@ -539,7 +477,6 @@ async function collectImages(
 		);
 	}
 
-	// All other images are optional — adds warnings on failure
 	const optional = await Promise.all([
 		resolveImageSet("logo", pass.apple?.logo, warnings),
 		resolveImageSet("strip", pass.apple?.strip, warnings),
@@ -565,18 +502,9 @@ async function collectImages(
 	return images;
 }
 
-// Apple resolves a pass.strings entry by the LITERAL string pass.json emits,
-// not by the field key: a field with key "points" and label "Points" is
-// localized by an entry keyed "Points". passlet keeps the friendlier key-based
-// `locales` surface and resolves each key to the literal string it controls
-// when the file is written:
-//   "<fieldKey>"       → that field's label
-//   "<fieldKey>_value" → that field's rendered value
-//   "name"             → the pass name (organizationName, and description when
-//                        apple.description is not set)
-// A key matching no field is written through unchanged, so a literal string
-// that has no field behind it (logoText, for instance) can be translated by
-// keying it directly.
+// Apple matches literal pass.json strings, not field keys. Locale keys resolve
+// to labels, "<key>_value" to rendered values, and "name" to the pass name.
+// Unmatched keys pass through for literals such as logoText.
 const VALUE_SUFFIX = "_value";
 
 function stringsLiteral(
@@ -587,14 +515,17 @@ function stringsLiteral(
 	if (key === "name") {
 		return pass.name;
 	}
-	if (key.endsWith(VALUE_SUFFIX)) {
-		const fieldKey = key.slice(0, -VALUE_SUFFIX.length);
-		const field = pass.fields.find((f) => f.key === fieldKey);
-		return field ? fieldValue(pass.fields, values, field.key) : key;
+	const isValue = key.endsWith(VALUE_SUFFIX);
+	const fieldKey = isValue ? key.slice(0, -VALUE_SUFFIX.length) : key;
+	const field = pass.fields.find((f) => f.key === fieldKey);
+	if (!field) {
+		return key;
 	}
-	const field = pass.fields.find((f) => f.key === key);
-	// An unlabelled field has no literal in pass.json to key an entry on
-	return field ? field.label : key;
+	if (!isValue) {
+		// An unlabelled field has no literal in pass.json to key an entry on.
+		return field.label;
+	}
+	return (field.key in values ? values[field.key] : field.value) ?? undefined;
 }
 
 function buildStringsLines(
@@ -610,12 +541,12 @@ function buildStringsLines(
 		if (literal === undefined || entries.has(literal)) {
 			continue;
 		}
-		entries.set(literal, translation);
-	}
-	return [...entries].map(
-		([literal, translation]) =>
+		entries.set(
+			literal,
 			`"${escapeStringsValue(literal)}" = "${escapeStringsValue(translation)}";`
-	);
+		);
+	}
+	return [...entries.values()];
 }
 
 export async function generateApplePass(
@@ -631,11 +562,9 @@ export async function generateApplePass(
 	const zip = new JSZip();
 	const files: Record<string, Uint8Array> = {};
 
-	// pass.json
 	const passJson = buildPassJson(pass, createConfig, credentials);
 	files["pass.json"] = encoder.encode(JSON.stringify(passJson));
 
-	// Locale files — {language}.lproj/pass.strings
 	if (pass.locales) {
 		const values = createConfig.values ?? {};
 		for (const [language, translations] of Object.entries(pass.locales)) {
@@ -646,11 +575,7 @@ export async function generateApplePass(
 		}
 	}
 
-	// Images
-	const images = await collectImages(pass, warnings);
-	for (const [name, bytes] of Object.entries(images)) {
-		files[name] = bytes;
-	}
+	Object.assign(files, await collectImages(pass, warnings));
 
 	// manifest.json — SHA1 hash of every file
 	const manifest: Record<string, string> = {};
@@ -659,7 +584,6 @@ export async function generateApplePass(
 	}
 	const manifestBytes = encoder.encode(JSON.stringify(manifest));
 
-	// signature — PKCS#7 detached signature of manifest.json
 	const signature = await signManifestAsync({
 		manifest: manifestBytes,
 		signerCert: credentials.signerCert,

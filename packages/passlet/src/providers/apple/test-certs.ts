@@ -1,7 +1,4 @@
-/**
- * Generates a self-signed certificate pair for use in tests.
- * Uses 1024-bit keys for speed — security is not a concern for test fixtures.
- */
+// Self-signed 1024-bit RSA keys keep test fixtures fast; never use in production.
 import forge from "node-forge";
 
 export interface TestCerts {
@@ -23,10 +20,11 @@ export function generateTestCerts(): TestCerts {
 	cert.setSubject(attrs);
 	cert.setIssuer(attrs);
 	cert.sign(keypair.privateKey, forge.md.sha256.create());
+	const signerCert = forge.pki.certificateToPem(cert);
 
 	return {
-		signerCert: forge.pki.certificateToPem(cert),
+		signerCert,
 		signerKey: forge.pki.privateKeyToPem(keypair.privateKey),
-		wwdr: forge.pki.certificateToPem(cert),
+		wwdr: signerCert,
 	};
 }

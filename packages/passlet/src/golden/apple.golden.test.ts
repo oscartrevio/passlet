@@ -1,33 +1,4 @@
-/**
- * GOLDEN TESTS — Apple Wallet
- *
- * PHILOSOPHY
- * These tests encode the *vendor contract*, not passlet's current behaviour.
- * A complete `.pkpass` is built for every pass type with a self-signed cert
- * generated in-test, unzipped, and checked at the three layers Apple's
- * installer actually enforces:
- *
- *   1. pass.json — compared against an explicit golden object, written out in
- *      full so a reviewer can read the emitted payload as a diff rather than
- *      reverse-engineer it from assertions. Everything dynamic (serial numbers,
- *      pass type identifier, team id) is pinned by the fixture, so the goldens
- *      are byte-stable across runs.
- *   2. manifest.json — every archive member is listed with a SHA-1 recomputed
- *      here from the member's own bytes, and the manifest names nothing that is
- *      not in the archive.
- *   3. signature — parsed as DER PKCS#7, asserted to be a *detached* SignedData,
- *      with its messageDigest authenticated attribute equal to the SHA-1 of the
- *      manifest bytes and its signature cryptographically verified against the
- *      signer certificate. This is the check that catches a signature that is
- *      well-formed but signs the wrong thing.
- *
- * HOW TO UPDATE
- * A failure means passlet regressed or Apple changed the format. Update a
- * golden ONLY in the second case, and ONLY with the doc reference (a
- * developer.apple.com/documentation/walletpasses/* URL) in the commit message.
- * Never patch a golden to match new output just to get back to green — that
- * discards the only signal this file produces.
- */
+// Apple Wallet contract fixtures: compare payloads, recompute hashes, verify signatures.
 
 import { createHash } from "node:crypto";
 import JSZip from "jszip";
@@ -43,7 +14,7 @@ import type { CreateConfig, PassConfig } from "../types/schemas";
 
 const PASS_TYPE_IDENTIFIER = "pass.com.test.example";
 const TEAM_ID = "ABCD1234EF";
-/** Stub PNG bytes — Apple never parses image content during manifest checks. */
+// Image content is irrelevant to archive and signature checks.
 const IMAGE = new Uint8Array([1, 2, 3]);
 const ICON = { base: IMAGE, retina: IMAGE };
 
@@ -55,11 +26,8 @@ interface Fixture {
 	/** Files the archive must contain, besides manifest.json and signature. */
 	files: string[];
 	pass: PassConfig;
-	/** Full expected pass.json. */
 	passJson: Record<string, unknown>;
 }
-
-// ─── Fixtures ────────────────────────────────────────────────────────────────
 
 const FIXTURES: Record<string, Fixture> = {
 	// storeCard is Apple's loyalty layout — there is no dedicated loyalty type.
@@ -88,8 +56,7 @@ const FIXTURES: Record<string, Fixture> = {
 					key: "terms",
 					label: "Terms",
 					value: "No refunds.",
-					// An empty array explicitly disables Apple's data detectors, so the
-					// key must survive to pass.json rather than being pruned as falsy.
+					// [] explicitly disables Apple's data detectors.
 					dataDetectorTypes: [],
 				},
 			],
@@ -148,8 +115,7 @@ const FIXTURES: Record<string, Fixture> = {
 		},
 	},
 
-	// Poster event ticket: eventLogoText replaces logoText, which Apple ignores
-	// entirely for this style scheme.
+	// Poster tickets use eventLogoText; Apple ignores logoText for this style.
 	event: {
 		pass: {
 			type: "event",
@@ -203,7 +169,6 @@ const FIXTURES: Record<string, Fixture> = {
 				format: "PKBarcodeFormatPDF417",
 				messageEncoding: "iso-8859-1",
 			},
-			// Derived from startsAt/endsAt so the pass surfaces on the lock screen.
 			relevantDates: [
 				{ startDate: "2026-07-15T20:00:00Z", endDate: "2026-07-15T23:00:00Z" },
 			],
@@ -285,9 +250,7 @@ const FIXTURES: Record<string, Fixture> = {
 				{ startDate: "2026-07-15T08:00:00Z", endDate: "2026-07-15T11:30:00Z" },
 			],
 			upgradeURL: "https://example.com/upgrade",
-			// Semantic tags drive flight tracking and Siri suggestions. Note
-			// flightNumber is the numeric portion as a JSON number, while
-			// flightCode is the carrier-prefixed string.
+			// flightNumber is numeric; flightCode includes the carrier.
 			semantics: {
 				airlineCode: "AA",
 				flightCode: "AA100",
@@ -451,13 +414,10 @@ const FIXTURES: Record<string, Fixture> = {
 	},
 };
 
-// ─── Archive helpers ─────────────────────────────────────────────────────────
-
 interface Archive {
 	/** Names of the real (non-directory) archive members. */
 	entries: string[];
 	manifest: Record<string, string>;
-	manifestBytes: Uint8Array;
 	passJson: Record<string, unknown>;
 	/** SHA-1 of each member's bytes, recomputed here. */
 	sha1: Record<string, string>;
@@ -487,7 +447,7 @@ async function readArchive(fixture: Fixture): Promise<Archive> {
 		if (!bytes) {
 			throw new Error(`missing archive member ${name}`);
 		}
-		sha1[name] = createHash("sha1").update(Buffer.from(bytes)).digest("hex");
+		sha1[name] = createHash("sha1").update(bytes).digest("hex");
 		if (name === "manifest.json") {
 			manifestBytes = bytes;
 		}
@@ -498,8 +458,7 @@ async function readArchive(fixture: Fixture): Promise<Archive> {
 
 	return {
 		entries,
-		manifest: JSON.parse(Buffer.from(manifestBytes).toString("utf-8")),
-		manifestBytes,
+		manifest: JSON.parse(new TextDecoder().decode(manifestBytes)),
 		passJson: JSON.parse(
 			(await zip.file("pass.json")?.async("string")) ?? "null"
 		),
@@ -562,11 +521,7 @@ function messageDigestAttribute(signed: SignedData): string {
 	throw new Error("signature carries no messageDigest attribute");
 }
 
-/**
- * Re-serializes the authenticated attributes into the SET container defined by
- * RFC 2315 §9.3 — the exact bytes the signature covers — and verifies them
- * against the signer certificate's public key.
- */
+// RFC 2315 §9.3 signs the attributes re-serialized inside a SET container.
 function signatureVerifies(signed: SignedData, signerCertPem: string): boolean {
 	const set = forge.asn1.create(
 		forge.asn1.Class.UNIVERSAL,
@@ -580,8 +535,6 @@ function signatureVerifies(signed: SignedData, signerCertPem: string): boolean {
 	const publicKey = cert.publicKey as forge.pki.rsa.PublicKey;
 	return publicKey.verify(md.digest().getBytes(), signed.signature);
 }
-
-// ─── Suite ───────────────────────────────────────────────────────────────────
 
 const archives: Record<string, Archive> = {};
 
@@ -621,7 +574,6 @@ describe.each(CASES)("%s .pkpass", (name, fixture) => {
 			(entry) => entry !== "manifest.json" && entry !== "signature"
 		);
 
-		// Recomputed hashes, not the ones the generator wrote.
 		const recomputed = Object.fromEntries(
 			payload.map((entry) => [entry, archive.sha1[entry]])
 		);
@@ -636,9 +588,7 @@ describe.each(CASES)("%s .pkpass", (name, fixture) => {
 		const signed = parseSignature(archive.signature);
 
 		expect(signed.type).toBe(forge.pki.oids.signedData);
-		// Detached: the manifest bytes are not embedded in the signature.
 		expect(signed.content).toBeUndefined();
-		// Signer certificate plus the WWDR intermediate.
 		expect(signed.certificateCount).toBe(2);
 		expect(signed.digestAlgorithmOid).toBe(forge.pki.oids.sha1);
 	});
@@ -652,11 +602,7 @@ describe.each(CASES)("%s .pkpass", (name, fixture) => {
 
 		// The signed messageDigest attribute must be the SHA-1 of manifest.json —
 		// this is what makes the signature cover the whole archive.
-		expect(messageDigestAttribute(signed)).toBe(
-			createHash("sha1")
-				.update(Buffer.from(archive.manifestBytes))
-				.digest("hex")
-		);
+		expect(messageDigestAttribute(signed)).toBe(archive.sha1["manifest.json"]);
 		expect(signatureVerifies(signed, certs.signerCert)).toBe(true);
 	});
 
@@ -665,12 +611,7 @@ describe.each(CASES)("%s .pkpass", (name, fixture) => {
 	});
 });
 
-// ─── Localization ────────────────────────────────────────────────────────────
-//
-// Apple resolves a pass.strings entry by the LITERAL string pass.json emits, not
-// by the field key. A field with key "points" and label "Points" is localized by
-// an entry keyed "Points" — keying it "points" produces a file the device parses
-// but never matches, so the pass silently renders untranslated.
+// Apple matches localized strings by their emitted value, not by field keys.
 // https://developer.apple.com/documentation/walletpasses/creating-the-source-for-a-pass
 
 describe("localization", () => {
@@ -687,24 +628,13 @@ describe("localization", () => {
 		const zip = await JSZip.loadAsync(pass);
 		const strings = await zip.file("es.lproj/pass.strings")?.async("string");
 
-		// Golden file content, in emission order.
 		expect(strings).toBe(
 			[
-				// "points" → the field's label
 				'"Points" = "Puntos";',
-				// "tier_value" → the field's rendered value
 				'"Gold" = "Oro";',
-				// reserved "name" → the pass name
 				'"Acme Rewards" = "Recompensas Acme";',
 			].join("\n")
 		);
-
-		// The field keys must never appear as lookup keys — Apple cannot match them.
-		for (const key of ["points", "tier", "tier_value", "name"]) {
-			expect(strings, `"${key}" must not be a pass.strings key`).not.toContain(
-				`"${key}" =`
-			);
-		}
 	});
 
 	it("hashes the .lproj file into the manifest like any other member", () => {
