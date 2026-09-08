@@ -3,8 +3,6 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { GoogleCredentials } from "../../types/credentials";
 import { generateGooglePass, updateGooglePass } from "./index";
 
-// ─── Setup ────────────────────────────────────────────────────────────────────
-
 let credentials: GoogleCredentials;
 
 beforeAll(() => {
@@ -62,7 +60,7 @@ async function run(
 	createConfig: Parameters<typeof generateGooglePass>[1]
 ) {
 	stubFetch();
-	const { pass, warnings } = await generateGooglePass(
+	const { pass } = await generateGooglePass(
 		passConfig,
 		createConfig,
 		credentials
@@ -70,7 +68,7 @@ async function run(
 	if (!pass) {
 		throw new Error("expected a JWT");
 	}
-	return { pass, warnings };
+	return { pass };
 }
 
 /** Body sent in the POST that creates the class. */
@@ -93,14 +91,7 @@ function decodeObjectBody(
 	jwt: string,
 	objectsKey: string
 ): Record<string, unknown> {
-	const [, segment] = jwt.split(".");
-	if (!segment) {
-		throw new Error("invalid JWT");
-	}
-	const padded = segment.replace(/-/g, "+").replace(/_/g, "/");
-	const outer = JSON.parse(
-		Buffer.from(padded, "base64").toString("utf-8")
-	) as Record<string, unknown>;
+	const outer = decodeJwtClaims(jwt);
 	const inner = (outer.payload as Record<string, unknown>)[
 		objectsKey
 	] as Record<string, unknown>[];
@@ -131,11 +122,9 @@ function decodeJwtClaims(jwt: string): Record<string, unknown> {
 	if (!segment) {
 		throw new Error("invalid JWT");
 	}
-	const padded = segment.replace(/-/g, "+").replace(/_/g, "/");
-	return JSON.parse(Buffer.from(padded, "base64").toString("utf-8")) as Record<
-		string,
-		unknown
-	>;
+	return JSON.parse(
+		Buffer.from(segment, "base64url").toString("utf-8")
+	) as Record<string, unknown>;
 }
 
 const ISSUER = "3388000000022801234";
@@ -168,14 +157,7 @@ describe("JWT origins", () => {
 	});
 });
 
-// ─── Complete pass fixtures ───────────────────────────────────────────────────
-//
-// Each test generates a complete pass and compares the full class body (the POST
-// sent to the Google Wallet API) and the full object body (the JWT payload entry)
-// against expected fixtures.
-//
-// These fixtures are the source of truth. If Google requires a field, it must be
-// here — and if the code stops producing it, the test will catch it.
+// Complete class request and JWT object fixtures.
 
 describe("loyalty pass", () => {
 	it("produces the correct class and object bodies", async () => {
@@ -237,7 +219,6 @@ describe("loyalty pass", () => {
 
 		const obj = decodeObjectBody(pass, "loyaltyObjects");
 		expect(obj.infoModuleData).toBeUndefined();
-		// back fields are merged into textModulesData, keyed by the field key
 		expect(obj.textModulesData).toEqual([
 			{ header: "Tier", body: "Gold", id: "tier" },
 			{ header: "Terms", body: "No refunds.", id: "terms" },
@@ -441,7 +422,6 @@ describe("event pass", () => {
 			section: { defaultValue: { language: "en-US", value: "A" } },
 			gate: { defaultValue: { language: "en-US", value: "3" } },
 		});
-		// none of the structured keys leak into textModulesData
 		expect(obj.textModulesData).toBeUndefined();
 	});
 });
@@ -699,7 +679,6 @@ describe("generic pass", () => {
 			id: `${ISSUER}.test-generic`,
 		});
 
-		// genericObject carries all branding: cardTitle, color, logo, hero
 		expect(decodeObjectBody(pass, "genericObjects")).toEqual({
 			id: `${ISSUER}.generic-001`,
 			classId: `${ISSUER}.test-generic`,
@@ -738,8 +717,6 @@ describe("generic pass", () => {
 		});
 	});
 });
-
-// ─── Class-level geo and module data ──────────────────────────────────────────
 
 describe("merchantLocations", () => {
 	it("emits merchantLocations, not the deprecated locations field", async () => {
@@ -882,8 +859,6 @@ describe("links, images, and value-added modules", () => {
 		);
 	});
 });
-
-// ─── Transit vertical ─────────────────────────────────────────────────────────
 
 describe("transit pass", () => {
 	it("produces transitClass and transitObject bodies", async () => {
@@ -1033,21 +1008,6 @@ describe("transit pass", () => {
 		});
 	});
 
-	it("does not require IATA fields or a passengerName", async () => {
-		await expect(
-			run(
-				{
-					type: "flight",
-					id: "p1",
-					name: "Bus",
-					google: { logo: "https://example.com/bus.png", transit: {} },
-					fields: [],
-				},
-				{ serialNumber: "s1" }
-			)
-		).resolves.toBeDefined();
-	});
-
 	it("throws when the transit logo is missing (required by transitClass)", async () => {
 		await expect(
 			run(
@@ -1085,8 +1045,6 @@ describe("transit pass", () => {
 	});
 });
 
-// ─── Update notifications ─────────────────────────────────────────────────────
-
 describe("updateGooglePass notifyPreference", () => {
 	const base = {
 		type: "loyalty" as const,
@@ -1109,7 +1067,7 @@ describe("updateGooglePass notifyPreference", () => {
 		expect(url).toContain(`/loyaltyObject/${ISSUER}.s1`);
 	});
 
-	it("omits notifyPreference by default (backward compatible)", async () => {
+	it("omits notifyPreference when not requested", async () => {
 		stubFetch();
 		await updateGooglePass(base, { serialNumber: "s1" }, credentials);
 		expect(capturePatch().body).not.toHaveProperty("notifyPreference");

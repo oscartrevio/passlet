@@ -6,46 +6,18 @@ const WALLET_BASE = "https://walletobjects.googleapis.com/walletobjects/v1";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const WALLET_SCOPE = "https://www.googleapis.com/auth/wallet_object.issuer";
 
-interface JsonArray
-	extends Array<string | number | boolean | null | JsonObject | JsonArray> {}
+type WalletMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+type GoogleVertical =
+	| "loyalty"
+	| "eventTicket"
+	| "flight"
+	| "offer"
+	| "giftCard"
+	| "generic"
+	| "transit";
 
-interface JsonObject {
-	[key: string]: string | number | boolean | null | JsonObject | JsonArray;
-}
-
-const WALLET_METHOD = {
-	GET: "GET",
-	POST: "POST",
-	PUT: "PUT",
-	PATCH: "PATCH",
-	DELETE: "DELETE",
-} as const;
-
-const GOOGLE_CLASS_TYPE = {
-	LOYALTY: "loyaltyClass",
-	EVENT: "eventTicketClass",
-	FLIGHT: "flightClass",
-	COUPON: "offerClass",
-	GIFTCARD: "giftCardClass",
-	GENERIC: "genericClass",
-	TRANSIT: "transitClass",
-} as const;
-
-const GOOGLE_OBJECT_TYPE = {
-	LOYALTY: "loyaltyObject",
-	EVENT: "eventTicketObject",
-	FLIGHT: "flightObject",
-	COUPON: "offerObject",
-	GIFTCARD: "giftCardObject",
-	GENERIC: "genericObject",
-	TRANSIT: "transitObject",
-} as const;
-
-type WalletMethod = (typeof WALLET_METHOD)[keyof typeof WALLET_METHOD];
-export type GoogleClassType =
-	(typeof GOOGLE_CLASS_TYPE)[keyof typeof GOOGLE_CLASS_TYPE];
-export type GoogleObjectType =
-	(typeof GOOGLE_OBJECT_TYPE)[keyof typeof GOOGLE_OBJECT_TYPE];
+export type GoogleClassType = `${GoogleVertical}Class`;
+export type GoogleObjectType = `${GoogleVertical}Object`;
 
 // Cache access tokens for 55 minutes (tokens expire in 60).
 const tokenCache = new Map<string, { token: string; expiresAt: number }>();
@@ -53,11 +25,8 @@ const tokenCache = new Map<string, { token: string; expiresAt: number }>();
 export async function importGoogleKey(
 	credentials: GoogleCredentials
 ): Promise<CryptoKey> {
-	// Service-account keys are usually copied out of the JSON file into an env
-	// var, which keeps the JSON escaping: the PEM arrives with literal "\n"
-	// two-character sequences where the newlines should be, and importPKCS8
-	// rejects it. A PEM can never legitimately contain a backslash, so
-	// unescaping is always safe and leaves well-formed keys untouched.
+	// Service-account JSON copied into env vars may retain literal "\n".
+	// PEM cannot contain backslashes, so unescaping leaves valid keys untouched.
 	const privateKey = credentials.privateKey.replace(/\\n/g, "\n");
 	try {
 		return await importPKCS8(privateKey, "RS256");
@@ -90,7 +59,7 @@ async function getAccessToken(
 	}
 
 	const response = await fetch(TOKEN_URL, {
-		method: WALLET_METHOD.POST,
+		method: "POST",
 		headers: { "Content-Type": "application/x-www-form-urlencoded" },
 		body: new URLSearchParams({
 			grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
@@ -164,7 +133,7 @@ export async function ensureClass(
 	privateKey: CryptoKey
 ): Promise<void> {
 	const existing = await walletRequest(
-		WALLET_METHOD.GET,
+		"GET",
 		`/${classType}/${classId}`,
 		credentials,
 		privateKey
@@ -178,20 +147,20 @@ export async function ensureClass(
 				"Google Wallet API returned an invalid class payload"
 			);
 		}
-		const existingClass = rawClass as JsonObject;
-		// Class exists — PUT the body so template updates are reflected.
-		// Google Wallet requires the full body for PUT requests, so we merge
-		// our new attributes with the existing class from their API.
-		const updateBody = { ...existingClass, ...classBody };
+		// Google requires a full body for PUT; preserve attributes we do not own.
+		const updateBody = {
+			...(rawClass as Record<string, unknown>),
+			...classBody,
+		};
 
-		// Note: reviewStatus must be 'UNDER_REVIEW' or 'DRAFT' for updates
+		// Updates accept only UNDER_REVIEW or DRAFT.
 		if ("reviewStatus" in updateBody && updateBody.reviewStatus !== "DRAFT") {
 			updateBody.reviewStatus = "UNDER_REVIEW";
 		}
 
 		await assertOk(
 			await walletRequest(
-				WALLET_METHOD.PUT,
+				"PUT",
 				`/${classType}/${classId}`,
 				credentials,
 				privateKey,
@@ -205,24 +174,14 @@ export async function ensureClass(
 	}
 
 	if (existing.status !== 404) {
-		const text = await existing.text();
-		throw new WalletError(
-			"GOOGLE_API_ERROR",
-			`Google Wallet API error (${existing.status}): ${extractGoogleDetail(text)}`
-		);
+		await assertOk(existing);
 	}
 
 	await assertOk(
-		await walletRequest(
-			WALLET_METHOD.POST,
-			`/${classType}`,
-			credentials,
-			privateKey,
-			{
-				id: classId,
-				...classBody,
-			}
-		)
+		await walletRequest("POST", `/${classType}`, credentials, privateKey, {
+			id: classId,
+			...classBody,
+		})
 	);
 }
 
@@ -233,17 +192,15 @@ export async function deleteObject(
 	privateKey: CryptoKey
 ): Promise<void> {
 	const response = await walletRequest(
-		WALLET_METHOD.DELETE,
+		"DELETE",
 		`/${objectType}/${objectId}`,
 		credentials,
 		privateKey
 	);
-	// 404 = already deleted — treat as success (idempotent)
-	if (response.status === 404) {
-		await response.body?.cancel();
-		return;
+	// A missing object is already deleted, so deletion is idempotent.
+	if (response.status !== 404) {
+		await assertOk(response);
 	}
-	await assertOk(response);
 	await response.body?.cancel();
 }
 
@@ -256,7 +213,7 @@ export async function patchObject(
 	options?: { notify?: boolean }
 ): Promise<void> {
 	const response = await walletRequest(
-		WALLET_METHOD.PATCH,
+		"PATCH",
 		`/${objectType}/${objectId}`,
 		credentials,
 		privateKey,

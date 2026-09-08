@@ -1,24 +1,8 @@
 /**
- * Google Wallet REST schema — the allowed top-level keys of every class and
- * object resource passlet emits.
- *
- * WHY THIS FILE EXISTS
- * This is a transcription of the vendor contract, not of passlet's behaviour.
- * Google's Wallet Objects API rejects (or silently drops) request bodies that
- * carry keys the target resource does not define, and the failure only shows up
- * against the live API — long after a refactor moved a field onto the wrong
- * resource. The whitelists below let the golden tests catch that structurally.
- *
- * PROVENANCE
- * Generated from Google's machine-readable discovery document:
- *   https://walletobjects.googleapis.com/$discovery/rest?version=v1
- * which is the same source that backs the human-readable reference pages at
- *   https://developers.google.com/wallet/reference/rest/v1/<resource>
- *
- * HOW TO UPDATE
- * ONLY by re-reading the discovery document or the reference page for the
- * resource, and ONLY with the doc reference recorded in the commit message.
- * Never widen a whitelist to make a test pass.
+ * Allowed top-level keys from Google's Wallet Objects discovery document:
+ * https://walletobjects.googleapis.com/$discovery/rest?version=v1
+ * Reference: https://developers.google.com/wallet/reference/rest/v1/<resource>
+ * Update from those sources and record the reference with schema changes.
  */
 
 export type GoogleResource =
@@ -594,79 +578,30 @@ const RESOURCE_KEYS: Record<GoogleResource, readonly string[]> = {
 	],
 };
 
-/** Human-readable reference page for each resource, quoted in failure messages. */
 const DOC_BASE = "https://developers.google.com/wallet/reference/rest/v1";
 
 function docUrl(resource: GoogleResource): string {
 	return `${DOC_BASE}/${resource.toLowerCase()}`;
 }
 
-/** Top-level keys the resource actually defines, per Google's schema. */
-export function allowedKeys(resource: GoogleResource): readonly string[] {
-	return RESOURCE_KEYS[resource];
-}
-
-/**
- * Top-level keys present in `body` that the resource does not define.
- *
- * Undefined-valued keys are ignored: passlet builds bodies with `key: undefined`
- * placeholders that `JSON.stringify` drops before the request is sent, so they
- * never reach Google.
- */
-export function unknownTopLevelKeys(
-	resource: GoogleResource,
-	body: Record<string, unknown>
-): string[] {
-	const allowed = new Set(RESOURCE_KEYS[resource]);
-	return Object.keys(body)
-		.filter((key) => body[key] !== undefined)
-		.filter((key) => !allowed.has(key))
-		.sort();
-}
-
-/**
- * Asserts that `body` only carries top-level keys the Google resource defines.
- *
- * `knownDeviations` records keys passlet emits today that the schema does NOT
- * define. Listing one is an explicit, reviewable acknowledgement of a bug — not
- * a licence to add more. The assertion is exact in both directions: a new
- * off-schema key fails, and so does a deviation that has since been fixed, so
- * the list can never silently rot.
- */
 export function assertGoogleSchema(
 	resource: GoogleResource,
-	body: Record<string, unknown>,
-	knownDeviations: readonly string[] = []
+	body: Record<string, unknown>
 ): void {
-	const unknown = unknownTopLevelKeys(resource, body);
-	const unexpected = unknown.filter((key) => !knownDeviations.includes(key));
-	if (unexpected.length > 0) {
+	const allowed = RESOURCE_KEYS[resource];
+	// JSON.stringify omits undefined placeholders before requests reach Google.
+	const unknown = Object.keys(body)
+		.filter((key) => body[key] !== undefined && !allowed.includes(key))
+		.sort();
+	if (unknown.length > 0) {
 		throw new Error(
-			`${resource} carries ${unexpected.length} key(s) Google's schema does not define: ${unexpected
+			`${resource} carries unsupported key(s): ${unknown
 				.map((key) => `"${key}"`)
-				.join(
-					", "
-				)}.\nAllowed top-level keys are documented at ${docUrl(resource)}\nRemove the key, move it to the resource that defines it, or — if the docs disagree with this whitelist — update src/golden/google-schema.ts citing the doc.`
-		);
-	}
-
-	const fixed = knownDeviations.filter((key) => !unknown.includes(key));
-	if (fixed.length > 0) {
-		throw new Error(
-			`${resource} no longer emits the known-deviation key(s) ${fixed
-				.map((key) => `"${key}"`)
-				.join(
-					", "
-				)}. The underlying bug looks fixed — delete them from KNOWN_DEVIATIONS so the whitelist stays exact.\nSee ${docUrl(resource)}`
+				.join(", ")}.\nSee ${docUrl(resource)}`
 		);
 	}
 }
 
-/**
- * Asserts that `body` carries every key Google documents as required for the
- * resource. Complements the whitelist: one catches keys that should not be
- * there, the other catches keys that must be.
- */
 export function assertRequiredKeys(
 	resource: GoogleResource,
 	body: Record<string, unknown>,

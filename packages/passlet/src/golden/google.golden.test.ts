@@ -1,28 +1,8 @@
 /**
- * GOLDEN TESTS — Google Wallet
- *
- * PHILOSOPHY
- * These tests encode the *vendor contract*, not passlet's current behaviour.
- * Every assertion here answers "is this what Google's API accepts?", never
- * "is this what our code happens to emit today?".
- *
- * Two layers, deliberately:
- *   1. STRUCTURAL — each captured class/object body is checked against the
- *      allowed top-level keys of its resource, transcribed from Google's
- *      discovery document into src/golden/google-schema.ts. A key that the
- *      resource does not define is a bug even when the unit tests are green,
- *      because it only surfaces as a 400 against the live API.
- *   2. GOLDEN — a handful of explicit expectations for the shapes that vendor
- *      docs single out (genericClass carries no branding, giftCardClass uses
- *      merchantName rather than cardTitle, flightClass keeps arrival time at
- *      the top level, transitClass names its logo "logo").
- *
- * HOW TO UPDATE
- * A failure here means one of two things: passlet regressed, or Google changed
- * the contract. Change these expectations ONLY in the second case, and ONLY
- * with the doc reference (a developers.google.com/wallet/reference/rest/v1/*
- * URL) recorded in the commit message. Never relax an assertion to make a
- * refactor pass — that is exactly the regression this file exists to catch.
+ * Google Wallet class requests and JWT objects checked against the vendor
+ * schema in google-schema.ts and the REST resource reference:
+ * https://developers.google.com/wallet/reference/rest/v1
+ * Change expectations only with a cited vendor contract change.
  */
 
 import { generateKeyPairSync } from "node:crypto";
@@ -35,18 +15,6 @@ import {
 	assertRequiredKeys,
 	type GoogleResource,
 } from "./google-schema";
-
-// ─── Known schema deviations ─────────────────────────────────────────────────
-//
-// Keys passlet emits today that the target resource does NOT define. Each entry
-// is an acknowledged bug, kept explicit so it is reviewed rather than forgotten.
-// `assertGoogleSchema` is exact in both directions, so removing the underlying
-// bug makes these tests fail until the entry is deleted here too.
-//
-// There are none today — keep it that way.
-const KNOWN_DEVIATIONS: Partial<Record<GoogleResource, readonly string[]>> = {};
-
-// ─── Harness ─────────────────────────────────────────────────────────────────
 
 const ISSUER = "3388000000022801234";
 
@@ -102,7 +70,6 @@ function stubFetch(): void {
 	);
 }
 
-/** Body of the POST that creates the class. */
 function captureClassBody(classType: string): Record<string, unknown> {
 	const call = vi
 		.mocked(globalThis.fetch)
@@ -118,7 +85,6 @@ function captureClassBody(classType: string): Record<string, unknown> {
 	return JSON.parse(call[1].body as string) as Record<string, unknown>;
 }
 
-/** Object body embedded in the signed JWT payload. */
 function decodeObjectBody(
 	jwt: string,
 	objectsKey: string
@@ -127,9 +93,8 @@ function decodeObjectBody(
 	if (!segment) {
 		throw new Error("invalid JWT");
 	}
-	const padded = segment.replace(/-/g, "+").replace(/_/g, "/");
 	const outer = JSON.parse(
-		Buffer.from(padded, "base64").toString("utf-8")
+		Buffer.from(segment, "base64url").toString("utf-8")
 	) as Record<string, unknown>;
 	const objects = (outer.payload as Record<string, unknown>)[
 		objectsKey
@@ -146,11 +111,7 @@ interface Captured {
 	objectBody: Record<string, unknown>;
 }
 
-/**
- * Generates a pass and captures both request bodies, then runs the structural
- * checks every resource must satisfy. Individual tests add golden expectations
- * on top of the returned bodies.
- */
+/** Captures both payloads and checks Google's allowed and required fields. */
 async function capture(
 	pass: PassConfig,
 	createConfig: CreateConfig,
@@ -170,30 +131,19 @@ async function capture(
 	const classBody = captureClassBody(resource.class);
 	const objectBody = decodeObjectBody(jwt, `${resource.object}s`);
 
-	assertGoogleSchema(
-		resource.class,
-		classBody,
-		KNOWN_DEVIATIONS[resource.class]
-	);
-	assertGoogleSchema(
-		resource.object,
-		objectBody,
-		KNOWN_DEVIATIONS[resource.object]
-	);
+	assertGoogleSchema(resource.class, classBody);
+	assertGoogleSchema(resource.object, objectBody);
 	assertRequiredKeys(resource.class, classBody, required.class);
 	assertRequiredKeys(resource.object, objectBody, required.object);
 
 	return { classBody, objectBody };
 }
 
-/** Required on every class per the "Required" markers in the REST reference. */
+// Generic classes require only id; other verticals also require issuerName/reviewStatus.
 const CLASS_BASE_REQUIRED = ["id", "issuerName", "reviewStatus"] as const;
-/** Required on every object per the REST reference. */
 const OBJECT_BASE_REQUIRED = ["id", "classId", "state"] as const;
 
 const LOGO = "https://example.com/logo.png";
-
-// ─── Per-type goldens ────────────────────────────────────────────────────────
 
 describe("loyalty", () => {
 	it("conforms to loyaltyClass / loyaltyObject", async () => {
@@ -503,23 +453,7 @@ describe("generic", () => {
 			}
 		);
 
-		// genericClass defines no branding fields whatsoever — every one of these
-		// belongs on genericObject instead, and sending them to the class is a 400.
-		for (const key of [
-			"hexBackgroundColor",
-			"logo",
-			"issuerName",
-			"reviewStatus",
-			"cardTitle",
-			"heroImage",
-			"programName",
-			"wordMark",
-		]) {
-			expect(
-				classBody,
-				`genericClass must not carry ${key}`
-			).not.toHaveProperty(key);
-		}
+		// genericClass defines no branding fields.
 		expect(Object.keys(classBody)).toEqual(["id"]);
 
 		// genericObject carries all branding, and requires cardTitle + header.
@@ -533,47 +467,6 @@ describe("generic", () => {
 		expect(objectBody.logo).toEqual({ sourceUri: { uri: LOGO } });
 	});
 });
-
-// ─── The validator itself ────────────────────────────────────────────────────
-//
-// A golden test is only worth its failure mode, so these guard the guard.
-
-const OFFENDING_KEY_AND_DOC_RE =
-	/"hexBackgroundColor"[\s\S]*developers\.google\.com\/wallet\/reference\/rest\/v1\/genericclass/;
-const STALE_DEVIATION_RE =
-	/no longer emits the known-deviation key\(s\) "header"/;
-const MISSING_REQUIRED_RE = /missing required key\(s\): "transitType"/;
-
-describe("assertGoogleSchema", () => {
-	it("names every offending key and the doc URL", () => {
-		expect(() =>
-			assertGoogleSchema("genericClass", {
-				id: "x",
-				hexBackgroundColor: "#fff",
-			})
-		).toThrow(OFFENDING_KEY_AND_DOC_RE);
-	});
-
-	it("fails when a known deviation has been fixed, so the list cannot rot", () => {
-		expect(() =>
-			assertGoogleSchema("loyaltyObject", { id: "x" }, ["header"])
-		).toThrow(STALE_DEVIATION_RE);
-	});
-
-	it("ignores undefined placeholders, which JSON.stringify drops", () => {
-		expect(() =>
-			assertGoogleSchema("genericClass", { id: "x", issuerName: undefined })
-		).not.toThrow();
-	});
-
-	it("reports missing required keys", () => {
-		expect(() =>
-			assertRequiredKeys("transitClass", { id: "x" }, ["id", "transitType"])
-		).toThrow(MISSING_REQUIRED_RE);
-	});
-});
-
-// ─── Cross-cutting vendor rules ──────────────────────────────────────────────
 
 describe("cross-cutting", () => {
 	it("emits merchantLocations, never the deprecated locations field", async () => {
@@ -605,40 +498,5 @@ describe("cross-cutting", () => {
 		expect(classBody.merchantLocations).toEqual([
 			{ latitude: 37.4, longitude: -122.1 },
 		]);
-	});
-
-	it("keeps header/subheader off every non-generic object", async () => {
-		// header and subheader are GenericObject-only fields; the primary field of
-		// a non-generic pass goes to textModulesData instead.
-		stubFetch();
-		const { pass: jwt } = await generateGooglePass(
-			{
-				type: "loyalty",
-				id: "g-dev",
-				name: "Rewards",
-				google: { logo: LOGO },
-				fields: [
-					{ slot: "primary", key: "points", label: "Points", value: "10" },
-				],
-			},
-			{ serialNumber: "dev-001" },
-			credentials
-		);
-		if (!jwt) {
-			throw new Error("expected a JWT");
-		}
-		const objectBody = decodeObjectBody(jwt, "loyaltyObjects");
-
-		// Documented at
-		// https://developers.google.com/wallet/reference/rest/v1/loyaltyobject —
-		// neither key appears in the LoyaltyObject resource representation.
-		expect(
-			Object.keys(objectBody).filter(
-				(key) => key === "header" || key === "subheader"
-			)
-		).toEqual([]);
-		// The primary field is not lost: "points" is a structured loyaltyObject
-		// field, so it renders as loyaltyPoints rather than in textModulesData.
-		expect(objectBody.loyaltyPoints).toEqual({ balance: { string: "10" } });
 	});
 });

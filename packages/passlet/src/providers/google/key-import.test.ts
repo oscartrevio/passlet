@@ -28,8 +28,6 @@ describe("importGoogleKey", () => {
 		// What you get from `process.env.GOOGLE_PRIVATE_KEY` when the service
 		// account JSON was pasted into a .env file verbatim.
 		const escaped = pem.replace(/\n/g, "\\n");
-		expect(escaped).toContain("\\n");
-		expect(escaped).not.toContain("\n");
 		await expect(importGoogleKey(credentials(escaped))).resolves.toMatchObject({
 			type: "private",
 		});
