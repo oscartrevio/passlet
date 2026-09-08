@@ -101,7 +101,7 @@ function googleObjectRef(
 	};
 }
 
-function validateGoogleRequirements(pass: PassConfig): void {
+export function validateGoogleRequirements(pass: PassConfig): void {
 	// Google loyalty classes require a programLogo URL — the API returns 400 without it
 	if (pass.type === "loyalty" && !pass.google?.logo) {
 		throw new WalletError(
@@ -361,7 +361,7 @@ function applyClassImages(
 	}
 }
 
-function buildClassBody(pass: PassConfig): Record<string, unknown> {
+export function buildClassBody(pass: PassConfig): Record<string, unknown> {
 	const logo = imageUri(pass.google?.logo);
 	const wideLogo = imageUri(pass.google?.wideLogo);
 	const hero = imageUri(pass.google?.hero);
@@ -550,7 +550,7 @@ function buildDisplayFields(
 	return body;
 }
 
-function buildObjectBody(
+export function buildObjectBody(
 	pass: PassConfig,
 	createConfig: CreateConfig,
 	classId: string,

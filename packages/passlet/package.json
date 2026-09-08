@@ -29,9 +29,11 @@
   "scripts": {
     "build": "tsup",
     "check-types": "tsc --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "smoke": "tsx --env-file=.env scripts/smoke.ts",
+    "test": "vitest run --project unit --project integration",
+    "test:unit": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "test:e2e": "vitest run --project e2e",
+    "test:watch": "vitest --project unit --project integration",
     "prepack": "cp ../../README.md README.md"
   },
   "dependencies": {

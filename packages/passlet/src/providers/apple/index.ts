@@ -52,7 +52,7 @@ const SLOT_KEY: Record<FieldDef["slot"], keyof AppleSlots> = {
 	back: "backFields",
 };
 
-function validateAppleRequirements(pass: PassConfig): void {
+export function validateAppleRequirements(pass: PassConfig): void {
 	if (!pass.apple?.icon) {
 		throw new WalletError("APPLE_MISSING_ICON");
 	}
@@ -430,7 +430,7 @@ function buildAppleCommonFields(
 	};
 }
 
-function buildPassJson(
+export function buildPassJson(
 	pass: PassConfig,
 	createConfig: CreateConfig,
 	credentials: AppleCredentials
@@ -528,7 +528,7 @@ function stringsLiteral(
 	return (field.key in values ? values[field.key] : field.value) ?? undefined;
 }
 
-function buildStringsLines(
+export function buildStringsLines(
 	pass: PassConfig,
 	values: Record<string, string | null>,
 	translations: Record<string, string>
