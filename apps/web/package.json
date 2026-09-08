@@ -8,7 +8,6 @@
     "start": "next start"
   },
   "dependencies": {
-    "@passlet/env": "workspace:*",
     "@passlet/ui": "workspace:*",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.38.0",

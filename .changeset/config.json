@@ -7,5 +7,5 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": ["web", "@passlet/config", "@passlet/env", "@passlet/ui"]
+  "ignore": ["web", "@passlet/config", "@passlet/ui"]
 }

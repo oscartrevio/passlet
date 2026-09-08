@@ -77,20 +77,11 @@ export const METADATA: Metadata = {
 	},
 	alternates: {
 		canonical: SITE_MANIFEST.url,
-		types: {
-			"application/rss+xml": `${SITE_MANIFEST.url}/feed.xml`,
-		},
 	},
 };
 
 export const VIEWPORT: Viewport = {
-	themeColor: [
-		{ media: "(prefers-color-scheme: dark)", color: SITE_MANIFEST.theme_color },
-		{
-			media: "(prefers-color-scheme: light)",
-			color: SITE_MANIFEST.background_color,
-		},
-	],
+	themeColor: SITE_MANIFEST.theme_color,
 	width: "device-width",
 	initialScale: 1,
 	viewportFit: "cover",

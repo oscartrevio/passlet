@@ -32,10 +32,7 @@ interface CreatePassResult {
 const APPLE_ICON_BASE64 =
 	"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7nWJ0AAAAASUVORK5CYII=";
 
-// Read lazily, inside the action, and only for the provider actually used.
-// Next bundles every Server Action reachable from a page into one module, so a
-// throw at module scope here would fail *all* of them (including setPassletColor)
-// with a 500 instead of just failing pass creation.
+// Read credentials per action; a module-scope failure would break every bundled action.
 function appleCredentials() {
 	return {
 		passTypeIdentifier: requiredEnv("APPLE_PASS_TYPE_IDENTIFIER"),
@@ -110,7 +107,6 @@ export async function createPassAction(
 		},
 	});
 
-	// Count this creation by member name and provider (viewable in Upstash).
 	await recordPassCreated(input.memberName, input.provider);
 
 	return {

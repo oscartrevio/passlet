@@ -26,7 +26,7 @@ export default function RootLayout({
 	children: React.ReactNode;
 }>) {
 	return (
-		<html lang="en" suppressHydrationWarning>
+		<html lang="en">
 			<body className={`${fonts} min-h-full bg-(--gray-a1) antialiased`}>
 				{children}
 				<Analytics />

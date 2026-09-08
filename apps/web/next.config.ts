@@ -1,4 +1,3 @@
-import "@passlet/env/web";
 import type { NextConfig } from "next";
 
 // PREVIEW_ORIGIN: comma-separated `host[:port]` list this dev server is reached

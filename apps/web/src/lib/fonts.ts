@@ -27,4 +27,4 @@ const openRunde = localFont({
 	display: "auto",
 });
 
-export const fonts = [openRunde.variable].join(" ");
+export const fonts = openRunde.variable;
