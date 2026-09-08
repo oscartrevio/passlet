@@ -96,13 +96,7 @@ keep the `\n` escapes, or load the files with `readFileSync(..., "utf8")` at boo
 1. Sign up at the [Google Pay & Wallet Console](https://pay.google.com/business/console).
 2. In Google Cloud, enable the **Google Wallet API** and create a service account.
 3. Grant that service-account email access to your issuer account in the Wallet Console.
-4. Store `private_key` with its literal `\n` escapes and restore real newlines at runtime:
-
-   ```ts
-   privateKey: process.env.GOOGLE_PRIVATE_KEY!.replace(/\\n/g, "\n");
-   ```
-
-   A key with collapsed or doubled newlines fails with `GOOGLE_INVALID_PRIVATE_KEY`.
+4. Store `private_key` in `GOOGLE_PRIVATE_KEY`. Passlet restores literal `\n` escapes automatically; no manual replacement is needed.
 
 Set `google.origins` to the domains that embed your "Add to Google Wallet" button,
 otherwise the web save button won't render.

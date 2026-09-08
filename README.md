@@ -326,7 +326,7 @@ Requires a Google Wallet issuer account.
 3. Download the service account JSON key — use `client_email` and `private_key` from the file
 
 > [!TIP]
-> Store `private_key` with its literal `\n` escapes, then restore real newlines at runtime — `process.env.GOOGLE_PRIVATE_KEY!.replace(/\\n/g, "\n")`. A key with collapsed or doubled newlines fails to import with `GOOGLE_INVALID_PRIVATE_KEY`.
+> Pass `private_key` unchanged from the service-account JSON. Passlet normalizes literal `\n` escapes before importing the key.
 
 ## Error handling
 

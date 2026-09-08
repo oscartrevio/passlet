@@ -124,11 +124,7 @@ export const SWATCH_PATHS: Record<PatternType, string> = {
 	dots: buildDots(SWATCH_W, SWATCH_H, { targetSp: 18 }),
 };
 
-// Renders the selected pattern at @2x (750×196) as a transparent PNG,
-// replicating the CardStrip SVG filter via canvas compositing:
-//   - Outer white glow below the path  (feComposite operator="out")
-//   - Dark inset shadow inside the path (feComposite operator="arithmetic" inset)
-// Parameters are doubled so visual density matches the card preview at 375pt.
+// Export a 750×196 PNG with offset shadows and transparent pattern interiors.
 export function captureBannerBytes(pattern: PatternType): Promise<string> {
 	const W = 750;
 	const H = 196;
@@ -168,8 +164,6 @@ export function captureBannerBytes(pattern: PatternType): Promise<string> {
 		return el;
 	};
 
-	// Outer white glow — draw path with shadow, then erase the path shape
-	// so only the glow that bleeds outside the path boundary remains.
 	const outerGlow = offscreen((ctx) => {
 		ctx.shadowColor = "rgba(255,255,255,0.15)";
 		ctx.shadowOffsetY = 2;
@@ -180,8 +174,6 @@ export function captureBannerBytes(pattern: PatternType): Promise<string> {
 		draw(ctx, "white");
 	});
 
-	// Dark inset shadow — draw dark path shifted down, then clip it
-	// to the interior of the original path shape.
 	const insetShadow = offscreen((ctx) => {
 		ctx.shadowColor = "rgba(0,0,0,0.15)";
 		ctx.shadowOffsetY = -2;

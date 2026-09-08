@@ -1,23 +1,15 @@
 import { readFileSync } from "node:fs";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
-import { field, Wallet, WalletError } from "passlet";
+import {
+	APPLE_PASS_CONTENT_TYPE,
+	field,
+	googleSaveUrl,
+	Wallet,
+	WalletError,
+} from "passlet";
 
-/**
- * Passlet + Hono on the Node adapter.
- *
- * Passlet signs .pkpass archives with node-forge/jszip, so it needs a Node-like
- * runtime with `node:crypto`. It does not run on Cloudflare Workers' edge
- * runtime unless `nodejs_compat` is enabled.
- *
- * Run: pnpm dev   (reads .env — copy .env.example first)
- */
-
-// ---------------------------------------------------------------------------
-// Wallet setup — do this ONCE at boot, not per request.
-// ---------------------------------------------------------------------------
-
-// Apple requires an `icon`; it is raw bytes (Uint8Array/Buffer).
+// Use the Node adapter; Apple pass signing requires node:crypto.
 const icon = readFileSync(new URL("../assets/icon.png", import.meta.url));
 
 const wallet = new Wallet({
@@ -32,9 +24,7 @@ const wallet = new Wallet({
 	google: {
 		issuerId: requireEnv("GOOGLE_ISSUER_ID"),
 		clientEmail: requireEnv("GOOGLE_CLIENT_EMAIL"),
-		// .env stores the key with literal "\n" — restore real newlines or the
-		// PKCS#8 import fails with GOOGLE_INVALID_PRIVATE_KEY.
-		privateKey: requireEnv("GOOGLE_PRIVATE_KEY").replace(/\\n/g, "\n"),
+		privateKey: requireEnv("GOOGLE_PRIVATE_KEY"),
 		origins: ["http://localhost:3000"],
 	},
 });
@@ -54,21 +44,14 @@ const rewardsCard = wallet.loyalty({
 	google: { logo: requireEnv("GOOGLE_LOGO_URL"), issuerName: "Acme Inc." },
 });
 
-// ---------------------------------------------------------------------------
-// Routes
-// ---------------------------------------------------------------------------
-
 const app = new Hono();
 
-/** GET /passes/:serial/apple — serves the signed .pkpass bytes. */
 app.get("/passes/:serial/apple", async (c) => {
 	const serial = c.req.param("serial");
 
-	// `apple` is a Uint8Array, `google` is a JWT string; either is null when the
-	// matching credentials were omitted from the Wallet.
 	const { apple, warnings } = await rewardsCard.create({
-		serialNumber: serial, // unique per recipient
-		values: { points: "1250" }, // per-recipient field values
+		serialNumber: serial,
+		values: { points: "1250" },
 		barcode: { format: "QR", value: serial, altText: serial },
 	});
 
@@ -79,12 +62,10 @@ app.get("/passes/:serial/apple", async (c) => {
 		return c.text("Apple Wallet is not configured", 501);
 	}
 
-	// Returning a raw Response keeps full control over the headers. `c.body()`
-	// works too, but the exact Content-Type below is non-negotiable.
 	return new Response(apple, {
 		headers: {
 			// iOS Safari only triggers the "Add Pass" sheet for this exact type.
-			"Content-Type": "application/vnd.apple.pkpass",
+			"Content-Type": APPLE_PASS_CONTENT_TYPE,
 			"Content-Disposition": `attachment; filename="${sanitize(serial)}.pkpass"`,
 			"Content-Length": String(apple.byteLength),
 			"Cache-Control": "no-store, private",
@@ -92,7 +73,6 @@ app.get("/passes/:serial/apple", async (c) => {
 	});
 });
 
-/** GET /passes/:serial/google — 302 to the Google Wallet save link. */
 app.get("/passes/:serial/google", async (c) => {
 	const serial = c.req.param("serial");
 
@@ -109,19 +89,16 @@ app.get("/passes/:serial/google", async (c) => {
 		return c.text("Google Wallet is not configured", 501);
 	}
 
-	// The save URL is literally the JWT appended to Google's save endpoint.
-	// (`c.redirect(url, 302)` is equivalent — this form makes the no-store
-	// header, which matters for a recipient-specific JWT, explicit.)
+	// Save links are recipient-specific; keep the redirect uncached.
 	return new Response(null, {
 		status: 302,
 		headers: {
-			Location: `https://pay.google.com/gp/v/save/${google}`,
+			Location: googleSaveUrl(google),
 			"Cache-Control": "no-store, private",
 		},
 	});
 });
 
-// Typed errors carry a stable `code` you can switch on.
 app.onError((error, c) => {
 	if (error instanceof WalletError) {
 		console.error(error.code, error.message);
@@ -136,8 +113,6 @@ serve({ fetch: app.fetch, port: 3000 }, (info) => {
 	console.log("  /passes/user-123/apple");
 	console.log("  /passes/user-123/google");
 });
-
-// ---------------------------------------------------------------------------
 
 function requireEnv(name: string): string {
 	const value = process.env[name];

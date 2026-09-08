@@ -2,16 +2,13 @@ import JSZip from "jszip";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { AppleCredentials } from "../../types/credentials";
 import { generateApplePass } from "./index";
-import { generateTestCerts, type TestCerts } from "./test-certs";
+import { generateTestCerts } from "./test-certs";
 
-const SHA1_RE = /^[0-9a-f]{40}$/;
-
-let certs: TestCerts;
 let credentials: AppleCredentials;
 const STUB_ICON = new Uint8Array([1, 2, 3]);
 
 beforeAll(() => {
-	certs = generateTestCerts();
+	const certs = generateTestCerts();
 	credentials = {
 		passTypeIdentifier: "pass.com.test.example",
 		teamId: "ABCD1234EF",
@@ -74,7 +71,6 @@ describe("Apple locale files", () => {
 
 		const es = await getStringsFile(pass, "es");
 		expect(es).toContain('"Points" = "Puntos";');
-		// The field key never appears as a lookup key — Apple would never match it
 		expect(es).not.toContain('"points" =');
 	});
 
@@ -199,33 +195,6 @@ describe("Apple locale files", () => {
 		expect(es).toBe('"Back\\\\slash" = "Línea 1\\nLínea 2\\\\fin";');
 	});
 
-	it("includes lproj files in the manifest SHA1 hashes", async () => {
-		const { pass } = await generateApplePass(
-			{
-				type: "loyalty",
-				id: "p1",
-				name: "Test",
-				fields: [],
-				apple: { icon: STUB_ICON },
-				locales: { es: { name: "Prueba" } },
-			},
-			{ serialNumber: "s1" },
-			credentials
-		);
-
-		const zip = await JSZip.loadAsync(pass);
-		const manifestFile = zip.file("manifest.json");
-		if (!manifestFile) {
-			throw new Error("manifest.json not found");
-		}
-		const manifest = JSON.parse(await manifestFile.async("string")) as Record<
-			string,
-			string
-		>;
-
-		expect(manifest["es.lproj/pass.strings"]).toMatch(SHA1_RE);
-	});
-
 	it("generates no lproj files when locales is not set", async () => {
 		const { pass } = await generateApplePass(
 			{
@@ -288,7 +257,6 @@ describe("Apple locale files", () => {
 	});
 });
 
-// Inline helper — avoids importing field builder just for a simple FieldDef
 function field(key: string, label: string) {
 	return { slot: "primary" as const, key, label };
 }

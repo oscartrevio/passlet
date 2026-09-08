@@ -1,4 +1,4 @@
-import { QRCode } from "@passlet/ui/components/qr-code/server";
+import { QRCode } from "@passlet/ui/components/qr-code";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { InstallCommand } from "@/components/install-command";

@@ -30,8 +30,7 @@ passlet/
 ├── apps/web/             # Next.js site
 ├── packages/passlet/     # Core library
 ├── packages/ui/          # Shared UI components
-├── packages/config/      # Shared configuration
-└── packages/env/         # Environment variables
+└── packages/config/      # Shared configuration
 ```
 
 Most contributions will land in `packages/passlet` — that's where the core library lives.

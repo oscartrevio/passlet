@@ -15,17 +15,11 @@ export function toGoogleBarcodeType(format: BarcodeFormat): string {
 	return GOOGLE_BARCODE_TYPE[format];
 }
 
-// Matches a trailing UTC designator (Z) or numeric offset (±HH:MM).
 const UTC_OFFSET_RE = /(Z|[+-]\d{2}:\d{2})$/;
 
-// Google flight datetimes (localScheduledDepartureDateTime and friends) are
-// airport-local wall-clock times by definition and must not carry a UTC offset —
-// Google derives the zone from the airport code. Strip a trailing Z or ±HH:MM,
-// leaving the local date/time.
-//
-// Not for event datetimes: eventTicketClass.dateTime is documented as an "ISO
-// 8601 extended format date/time, with or without an offset", and Google uses
-// the offset to resolve the instant. Pass those through unchanged.
+// Flight datetimes are airport-local; Google derives the zone from the airport.
+// Strip Z or ±HH:MM without shifting the wall clock. EventDateTime accepts
+// and uses offsets, so event datetimes must bypass this conversion.
 export function toLocalDateTime(iso: string): string {
 	return iso.replace(UTC_OFFSET_RE, "");
 }
@@ -40,8 +34,6 @@ interface LocalizedString {
 	translatedValues?: TranslatedValue[];
 }
 
-// Build a Google Wallet LocalizedString object.
-// Pass translatedValues to include additional language variants.
 export function localized(
 	value: string,
 	language = "en-US",
@@ -53,8 +45,7 @@ export function localized(
 	};
 }
 
-// Build the translatedValues array for a given key by scanning all locales.
-// Used to look up field key translations (labels) and key_value translations (static values).
+// Locale field keys translate labels; "<key>_value" translates field values.
 export function translationsFor(
 	key: string,
 	locales: Locales | undefined
@@ -68,7 +59,6 @@ export function translationsFor(
 	return result.length > 0 ? result : undefined;
 }
 
-// Wrap a URL string as a Google Wallet ImageUri object.
 export function imageUri(url: string | undefined): GoogleImage | undefined {
 	return url ? { sourceUri: { uri: url } } : undefined;
 }

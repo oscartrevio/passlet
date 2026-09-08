@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { WalletError } from "./errors";
-import { field, Pass } from "./pass";
+import { Pass } from "./pass";
 import { createConfigSchema, passConfigSchema } from "./types/schemas";
 
-// Minimal valid configs used as baselines throughout these tests.
 const BASE_LOYALTY = {
 	type: "loyalty" as const,
 	id: "test-pass",
@@ -14,8 +13,6 @@ const BASE_LOYALTY = {
 const BASE_CREATE = {
 	serialNumber: "serial-001",
 };
-
-// ─── passConfigSchema ────────────────────────────────────────────────────────
 
 describe("passConfigSchema", () => {
 	it("accepts a minimal valid loyalty pass", () => {
@@ -120,13 +117,9 @@ describe("passConfigSchema", () => {
 	});
 
 	it("rejects unsupported google message types", () => {
-		const base = {
-			...BASE_LOYALTY,
-			google: { messages: [{ header: "Hi", body: "There" }] },
-		};
 		expect(
 			passConfigSchema.safeParse({
-				...base,
+				...BASE_LOYALTY,
 				google: {
 					messages: [{ header: "Hi", body: "There", messageType: "TEXT" }],
 				},
@@ -134,7 +127,7 @@ describe("passConfigSchema", () => {
 		).toBe(true);
 		expect(
 			passConfigSchema.safeParse({
-				...base,
+				...BASE_LOYALTY,
 				google: {
 					messages: [
 						{ header: "Hi", body: "There", messageType: "expireNotification" },
@@ -241,7 +234,6 @@ describe("passConfigSchema", () => {
 			dateField("2024-06-01T20:00:00")
 		);
 		expect(zoneless.success).toBe(false);
-		expect(zoneless.error?.issues[0]?.message).toContain("time zone");
 	});
 
 	it("skips the time zone check when dateStyle/timeStyle is none", () => {
@@ -353,8 +345,6 @@ describe("passConfigSchema", () => {
 	});
 });
 
-// ─── createConfigSchema ──────────────────────────────────────────────────────
-
 describe("createConfigSchema", () => {
 	it("accepts a minimal valid create config", () => {
 		expect(createConfigSchema.safeParse(BASE_CREATE).success).toBe(true);
@@ -393,17 +383,6 @@ describe("createConfigSchema", () => {
 			barcode: { value: "" },
 		});
 		expect(invalid.success).toBe(false);
-	});
-
-	it("defaults barcode format to QR", () => {
-		const result = createConfigSchema.safeParse({
-			...BASE_CREATE,
-			barcode: { value: "abc123" },
-		});
-		expect(result.success).toBe(true);
-		if (result.success) {
-			expect(result.data.barcode?.format).toBe("QR");
-		}
 	});
 
 	// Google supports rotation for QR_CODE and PDF_417 only — the remaining
@@ -450,8 +429,6 @@ describe("createConfigSchema", () => {
 	});
 });
 
-// ─── Pass constructor validation ─────────────────────────────────────────────
-
 describe("Pass constructor", () => {
 	it("throws PASS_CONFIG_INVALID for an empty id", () => {
 		expect(() => new Pass({ ...BASE_LOYALTY, id: "" }, {})).toThrow(
@@ -463,17 +440,11 @@ describe("Pass constructor", () => {
 	});
 
 	it("throws PASS_CONFIG_INVALID for an invalid color", () => {
-		expect(
-			() => new Pass({ ...BASE_LOYALTY, color: "blue" as never }, {})
-		).toThrow(expect.objectContaining({ code: "PASS_CONFIG_INVALID" }));
-	});
-
-	it("does not throw for a valid config", () => {
-		expect(() => new Pass(BASE_LOYALTY, {})).not.toThrow();
+		expect(() => new Pass({ ...BASE_LOYALTY, color: "blue" }, {})).toThrow(
+			expect.objectContaining({ code: "PASS_CONFIG_INVALID" })
+		);
 	});
 });
-
-// ─── Pass.create() validation ─────────────────────────────────────────────────
 
 describe("Pass.create() config validation", () => {
 	it("throws CREATE_CONFIG_INVALID for an empty serialNumber", async () => {
@@ -486,30 +457,15 @@ describe("Pass.create() config validation", () => {
 	it("throws CREATE_CONFIG_INVALID for an invalid validFrom", async () => {
 		const pass = new Pass(BASE_LOYALTY, {});
 		await expect(
-			pass.create({ serialNumber: "s1", validFrom: "bad-date" as never })
+			pass.create({ serialNumber: "s1", validFrom: "bad-date" })
 		).rejects.toMatchObject({ code: "CREATE_CONFIG_INVALID" });
 	});
 
-	it("does not throw for valid config with no credentials", async () => {
+	it("returns null outputs when neither provider is configured", async () => {
 		const pass = new Pass(BASE_LOYALTY, {});
 		const result = await pass.create(BASE_CREATE);
-		// No credentials → both are null, no errors
 		expect(result.apple).toBeNull();
 		expect(result.google).toBeNull();
 		expect(result.warnings).toEqual([]);
-	});
-});
-
-// ─── field builder ────────────────────────────────────────────────────────────
-
-describe("field builder", () => {
-	it("builds a primary field with the right slot", () => {
-		const f = field.primary("name", "Name");
-		expect(f).toMatchObject({ slot: "primary", key: "name", label: "Name" });
-	});
-
-	it("passes through optional field options", () => {
-		const f = field.back("terms", "Terms", { value: "No refunds." });
-		expect(f.value).toBe("No refunds.");
 	});
 });

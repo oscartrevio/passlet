@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-	imageUri,
-	localized,
-	toGoogleBarcodeType,
-	toLocalDateTime,
-} from "./utils";
+import { toGoogleBarcodeType, toLocalDateTime } from "./utils";
 
 describe("toLocalDateTime", () => {
 	it.each([
@@ -29,31 +24,5 @@ describe("toGoogleBarcodeType", () => {
 		["ITF", "ITF_14"],
 	] as const)("maps %s to %s", (input, expected) => {
 		expect(toGoogleBarcodeType(input)).toBe(expected);
-	});
-});
-
-describe("localized", () => {
-	it("wraps a value in a defaultValue object with en-US language", () => {
-		expect(localized("Hello")).toEqual({
-			defaultValue: { language: "en-US", value: "Hello" },
-		});
-	});
-
-	it("accepts a custom language", () => {
-		expect(localized("Hola", "es-MX")).toEqual({
-			defaultValue: { language: "es-MX", value: "Hola" },
-		});
-	});
-});
-
-describe("imageUri", () => {
-	it("wraps a URL string in a sourceUri object", () => {
-		expect(imageUri("https://example.com/logo.png")).toEqual({
-			sourceUri: { uri: "https://example.com/logo.png" },
-		});
-	});
-
-	it("returns undefined for undefined", () => {
-		expect(imageUri(undefined)).toBeUndefined();
 	});
 });

@@ -42,7 +42,6 @@ function stubFetch() {
 					ok: false,
 					status: 404,
 					body: null,
-					json: () => Promise.resolve({}),
 					text: () => Promise.resolve(""),
 				});
 			}
@@ -61,8 +60,7 @@ function decodePayload(jwt: string): Record<string, unknown> {
 	if (!payload) {
 		throw new Error("invalid JWT");
 	}
-	const padded = payload.replace(/-/g, "+").replace(/_/g, "/");
-	return JSON.parse(Buffer.from(padded, "base64").toString("utf-8"));
+	return JSON.parse(Buffer.from(payload, "base64url").toString("utf-8"));
 }
 
 async function generate(
@@ -94,28 +92,6 @@ function getObj(payload: Record<string, unknown>, key: string) {
 }
 
 describe("Google locale translations", () => {
-	it("adds translatedValues to eventName for event passes", async () => {
-		const payload = await generate(
-			{
-				type: "event",
-				id: "p1",
-				name: "Summer Festival",
-				fields: [],
-				locales: {
-					es: { name: "Festival de Verano" },
-					fr: { name: "Festival d'Été" },
-				},
-			},
-			{ serialNumber: "s1" }
-		);
-
-		// eventName is on the class, not the object — check class body via ensureClass call
-		// Instead verify via the class type fields returned in payload
-		const obj = getObj(payload, "eventTicketObjects");
-		// eventName is class-level; the object itself won't have it — skip object-level check
-		expect(obj).toBeDefined();
-	});
-
 	it("adds translatedValues to cardTitle for generic passes", async () => {
 		const payload = await generate(
 			{
