@@ -266,13 +266,14 @@ function buildClassTypeFields(pass: PassConfig): Record<string, unknown> {
 		};
 	}
 	if (pass.type === "giftCard") {
-		// giftCardClass has no cardTitle — the merchant/title slot is merchantName
+		// giftCardClass has no cardTitle — merchantName is a plain string, and
+		// the API rejects a LocalizedString there; translations belong in
+		// localizedMerchantName.
+		const translations = translationsFor("name", pass.locales);
 		return {
-			merchantName: localized(
-				pass.name,
-				"en-US",
-				translationsFor("name", pass.locales)
-			),
+			merchantName: pass.name,
+			localizedMerchantName:
+				translations && localized(pass.name, "en-US", translations),
 		};
 	}
 	// Generic branding belongs on genericObject.
