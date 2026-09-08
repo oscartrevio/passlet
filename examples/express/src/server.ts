@@ -4,19 +4,14 @@ import express, {
 	type Request,
 	type Response,
 } from "express";
-import { field, Wallet, WalletError } from "passlet";
+import {
+	APPLE_PASS_CONTENT_TYPE,
+	field,
+	googleSaveUrl,
+	Wallet,
+	WalletError,
+} from "passlet";
 
-/**
- * Passlet + Express 5.
- *
- * Run: pnpm dev   (reads .env — copy .env.example first)
- */
-
-// ---------------------------------------------------------------------------
-// Wallet setup — do this ONCE at boot, not per request.
-// ---------------------------------------------------------------------------
-
-// Apple requires an `icon`, supplied as raw bytes (Uint8Array/Buffer).
 const icon = readFileSync(new URL("../assets/icon.png", import.meta.url));
 
 const wallet = new Wallet({
@@ -31,9 +26,7 @@ const wallet = new Wallet({
 	google: {
 		issuerId: requireEnv("GOOGLE_ISSUER_ID"),
 		clientEmail: requireEnv("GOOGLE_CLIENT_EMAIL"),
-		// .env stores the key with literal "\n" — restore real newlines or the
-		// PKCS#8 import fails with GOOGLE_INVALID_PRIVATE_KEY.
-		privateKey: requireEnv("GOOGLE_PRIVATE_KEY").replace(/\\n/g, "\n"),
+		privateKey: requireEnv("GOOGLE_PRIVATE_KEY"),
 		origins: ["http://localhost:3000"],
 	},
 });
@@ -53,21 +46,14 @@ const rewardsCard = wallet.loyalty({
 	google: { logo: requireEnv("GOOGLE_LOGO_URL"), issuerName: "Acme Inc." },
 });
 
-// ---------------------------------------------------------------------------
-// Routes
-// ---------------------------------------------------------------------------
-
 const app = express();
 
-/** GET /passes/:serial/apple — serves the signed .pkpass bytes. */
 app.get("/passes/:serial/apple", async (req: Request, res: Response) => {
 	const serial = req.params.serial;
 
-	// `apple` is a Uint8Array, `google` is a JWT string; either is null when the
-	// matching credentials were omitted from the Wallet.
 	const { apple, warnings } = await rewardsCard.create({
-		serialNumber: serial, // unique per recipient
-		values: { points: "1250" }, // per-recipient field values
+		serialNumber: serial,
+		values: { points: "1250" },
 		barcode: { format: "QR", value: serial, altText: serial },
 	});
 
@@ -79,10 +65,8 @@ app.get("/passes/:serial/apple", async (req: Request, res: Response) => {
 		return;
 	}
 
-	// Set the headers explicitly and finish with res.end(): res.send() would
-	// guess a content type and may append an ETag, which some Wallet clients
-	// handle poorly.
-	res.setHeader("Content-Type", "application/vnd.apple.pkpass");
+	// res.end() preserves the explicit headers without adding an ETag.
+	res.setHeader("Content-Type", APPLE_PASS_CONTENT_TYPE);
 	res.setHeader(
 		"Content-Disposition",
 		`attachment; filename="${sanitize(serial)}.pkpass"`
@@ -92,7 +76,6 @@ app.get("/passes/:serial/apple", async (req: Request, res: Response) => {
 	res.end(Buffer.from(apple));
 });
 
-/** GET /passes/:serial/google — 302 to the Google Wallet save link. */
 app.get("/passes/:serial/google", async (req: Request, res: Response) => {
 	const serial = req.params.serial;
 
@@ -110,15 +93,13 @@ app.get("/passes/:serial/google", async (req: Request, res: Response) => {
 		return;
 	}
 
-	// The save URL is literally the JWT appended to Google's save endpoint.
-	// The JWT is recipient-specific and short-lived, so keep it uncached.
+	// Save links are recipient-specific; keep the redirect uncached.
 	res.setHeader("Cache-Control", "no-store, private");
-	res.redirect(302, `https://pay.google.com/gp/v/save/${google}`);
+	res.redirect(302, googleSaveUrl(google));
 });
 
 // Express 5 forwards rejected async handlers here automatically.
 app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
-	// Typed errors carry a stable `code` you can switch on.
 	if (error instanceof WalletError) {
 		console.error(error.code, error.message);
 		res.status(500).send(`Pass generation failed: ${error.code}`);
@@ -133,8 +114,6 @@ app.listen(3000, () => {
 	console.log("  /passes/user-123/apple");
 	console.log("  /passes/user-123/google");
 });
-
-// ---------------------------------------------------------------------------
 
 function requireEnv(name: string): string {
 	const value = process.env[name];
