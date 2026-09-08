@@ -1,7 +1,5 @@
 import { z } from "zod";
 
-// Primitives
-
 const hexColor = z
 	.string()
 	.regex(/^#[0-9a-fA-F]{6}$/, 'must be a 6-digit hex color like "#1a1a1a"')
@@ -17,12 +15,6 @@ const localeCodeSchema = z
 		'must be a BCP 47 language tag (e.g. "en-US", "es", "zh-Hans")'
 	);
 
-// Event/flight display datetimes. Accept an ISO datetime with or without a UTC
-// offset. Google's EventDateTime is documented as "ISO 8601 extended format
-// date/time, with or without an offset", so event datetimes are forwarded
-// verbatim. Flight times are airport-local by definition
-// (localScheduledDepartureDateTime), so an offset is stripped for Google there
-// while still being preserved for Apple semantics.
 const localDateTime = (message: string) =>
 	z.iso.datetime({ offset: true, local: true, message });
 
@@ -31,8 +23,7 @@ const imageValue = z.union([
 	z.custom<Uint8Array>((v) => v instanceof Uint8Array),
 ]);
 
-// An image can be a single source or an object with resolution variants.
-// base is required when using the object form; retina (@2x) and superRetina (@3x) are optional.
+// Resolution variants: retina is @2x; superRetina is @3x.
 const imageSet = z
 	.union([
 		imageValue,
@@ -43,8 +34,6 @@ const imageSet = z
 		}),
 	])
 	.optional();
-
-// Field formatting options
 
 export const dateStyleSchema = z.enum([
 	"none",
@@ -65,9 +54,6 @@ export const textAlignmentSchema = z.enum([
 	"right",
 	"natural",
 ]);
-// Data detectors turn matching text on the BACK of a pass into tappable links.
-// Apple applies all detectors by default; an empty array disables them. They
-// have no effect on fields shown on the front of the pass.
 export const dataDetectorTypeSchema = z.enum([
 	"phoneNumber",
 	"link",
@@ -86,8 +72,6 @@ const semanticTagsSchema = z.record(z.string(), z.unknown());
 // Matches a trailing UTC designator (Z) or numeric offset (±HH:MM / ±HHMM).
 const TIMEZONE_RE = /(Z|[+-]\d{2}:?\d{2})$/;
 
-// FieldDef — a single display field on a pass.
-// slot maps to Apple's field areas; Google uses primary → subheader+header, rest → textModulesData.
 export const fieldDefSchema = z
 	.object({
 		// Apple: headerFields / primaryFields / secondaryFields / auxiliaryFields / backFields
@@ -161,8 +145,6 @@ export const fieldDefSchema = z
 			});
 			return;
 		}
-		// Apple: "A date or time value needs to include a time zone." A zone-less
-		// datetime renders in an unpredictable zone, so reject it up front.
 		if (!TIMEZONE_RE.test(f.value)) {
 			ctx.issues.push({
 				code: "custom",
@@ -174,7 +156,6 @@ export const fieldDefSchema = z
 		}
 	});
 
-// Barcode
 // Formats offered here are the ones both platforms render. Apple's Pass.Barcodes
 // accepts PKBarcodeFormatQR, PKBarcodeFormatPDF417, PKBarcodeFormatAztec,
 // PKBarcodeFormatCode128 and — from iOS 27 — PKBarcodeFormatCode39,
@@ -200,8 +181,6 @@ export const barcodeSchema = z.object({
 	value: z.string().min(1, "barcode.value must not be empty"),
 	altText: z.string().optional(),
 });
-
-// Apple-specific options — no cross-platform equivalent
 
 // Bluetooth Low Energy beacon — shows the pass on lock screen when nearby
 const beaconSchema = z.object({
@@ -234,9 +213,8 @@ const relevantDateSchema = z.union([
 	}),
 ]);
 
-// Base Apple options — applicable to all pass types
 const appleOptionsSchema = z.object({
-	// Required by Apple Wallet — validated at create() time
+	// Required when Apple credentials are configured.
 	icon: imageSet,
 	// Apple image slots (accepts bytes or URL)
 	logo: imageSet,
@@ -293,7 +271,6 @@ const appleOptionsSchema = z.object({
 	semantics: semanticTagsSchema.optional(),
 });
 
-// Event-specific Apple options — includes poster event ticket fields
 const appleEventOptionsSchema = appleOptionsSchema.extend({
 	// Text next to the logo on poster event tickets (use logoText for standard event tickets)
 	eventLogoText: z.string().optional(),
@@ -324,7 +301,6 @@ const appleEventOptionsSchema = appleOptionsSchema.extend({
 	transitInformationURL: z.url().optional(),
 });
 
-// Flight-specific Apple options — boarding pass action URLs
 const appleFlightOptionsSchema = appleOptionsSchema.extend({
 	changeSeatURL: z.url().optional(),
 	entertainmentURL: z.url().optional(),
@@ -341,8 +317,6 @@ const appleFlightOptionsSchema = appleOptionsSchema.extend({
 	transitProviderWebsiteURL: z.url().optional(),
 	upgradeURL: z.url().optional(),
 });
-
-// Google-specific sub-schemas
 
 // Info message shown inside the pass view (e.g. alerts, promotions, expiry warnings).
 // Class-level messages appear for all holders; object-level messages are per-recipient.
@@ -433,7 +407,6 @@ const googleValueAddedSchema = z.object({
 	sortIndex: z.number().int().optional(),
 });
 
-// Module data shared by every Google class and object.
 const googleModulesSchema = z.object({
 	// Google: linksModuleData.uris
 	links: z.array(googleLinkSchema).optional(),
@@ -445,8 +418,6 @@ const googleModulesSchema = z.object({
 		.max(10, "google.valueAdded accepts at most 10 modules")
 		.optional(),
 });
-
-// Google-specific options — no cross-platform equivalent
 
 const googleOptionsSchema = z.object({
 	// Google image slots (URL only — Google Wallet does not accept binary uploads)
@@ -493,7 +464,6 @@ const googleTransitOptionsSchema = z.object({
 	operatorName: z.string().optional(),
 });
 
-// Flight-specific Google options — adds the transit vertical opt-in
 const googleFlightOptionsSchema = googleOptionsSchema.extend({
 	// Set to issue the pass as transitClass/transitObject (train, bus, tram,
 	// ferry) instead of the default flightClass/flightObject (air).
@@ -515,11 +485,7 @@ export const locationSchema = z.object({
 	relevantText: z.string().optional(),
 });
 
-// Base pass config — shared across all pass types
-
 const basePassSchema = z.object({
-	// Apple: description (pass name shown in Wallet list)
-	// Google: cardTitle
 	id: z.string().min(1, "PassConfig missing: id"),
 	name: z.string().min(1, "PassConfig missing: name"),
 
@@ -536,9 +502,6 @@ const basePassSchema = z.object({
 		.max(10, "locations accepts at most 10 entries")
 		.optional(),
 
-	// Display fields — use field.primary(), field.secondary(), etc.
-	// Apple: maps to headerFields / primaryFields / secondaryFields / auxiliaryFields / backFields
-	// Google: primary → subheader + header, all others → textModulesData
 	fields: z.array(fieldDefSchema).default([]),
 
 	// Translations for field labels and pass-level strings.
@@ -559,84 +522,72 @@ const basePassSchema = z.object({
 	google: googleOptionsSchema.optional(),
 });
 
-// Per-type pass configs
-// Each type adds structured properties that providers need beyond display fields.
-
 export const loyaltyPassSchema = basePassSchema.extend({
 	type: z.literal("loyalty"),
 	// No extra structured props — Google maps field keys by convention:
 	// "points" → loyaltyPoints, "member" → accountName, "memberId" → accountId
 });
 
-export const eventPassSchema = basePassSchema
-	.extend({
-		type: z.literal("event"),
-		// Venue wall-clock time. Apple: relevant date / eventStartDate semantic.
-		// Google: dateTime.start on eventTicketClass (EventDateTime), which accepts
-		// an ISO 8601 datetime "with or without an offset" — the value is forwarded
-		// verbatim so an offset, when given, reaches Google intact.
-		startsAt: localDateTime(
-			'must be an ISO datetime e.g. "2024-06-01T20:00:00Z" or "2024-06-01T20:00:00"'
-		).optional(),
-		endsAt: localDateTime(
-			'must be an ISO datetime e.g. "2024-06-01T23:00:00Z" or "2024-06-01T23:00:00"'
-		).optional(),
-		// Google: eventTicketClass.venue — requires BOTH name and address.
-		// Apple: name feeds the venueName semantic tag.
-		venue: z
-			.object({
-				name: z.string().min(1),
-				address: z.string().min(1),
-			})
-			.optional(),
-	})
-	.extend({ apple: appleEventOptionsSchema.optional() });
+export const eventPassSchema = basePassSchema.extend({
+	type: z.literal("event"),
+	// Venue wall-clock time. Apple: relevant date / eventStartDate semantic.
+	// Google: dateTime.start on eventTicketClass (EventDateTime), which accepts
+	// an ISO 8601 datetime "with or without an offset" — the value is forwarded
+	// verbatim so an offset, when given, reaches Google intact.
+	startsAt: localDateTime(
+		'must be an ISO datetime e.g. "2024-06-01T20:00:00Z" or "2024-06-01T20:00:00"'
+	).optional(),
+	endsAt: localDateTime(
+		'must be an ISO datetime e.g. "2024-06-01T23:00:00Z" or "2024-06-01T23:00:00"'
+	).optional(),
+	// Google: eventTicketClass.venue — requires BOTH name and address.
+	// Apple: name feeds the venueName semantic tag.
+	venue: z
+		.object({
+			name: z.string().min(1),
+			address: z.string().min(1),
+		})
+		.optional(),
+	apple: appleEventOptionsSchema.optional(),
+});
 
-// Flight covers air, train, bus, and boat boarding passes.
-export const flightPassSchema = basePassSchema
-	.extend({
-		type: z.literal("flight"),
-		// Apple: transitType (required for boardingPass layout, defaults to "air").
-		// "generic" maps to PKTransitTypeGeneric for transit that is none of the
-		// other four.
-		// Google: inferred from flightHeader ("generic" falls back to transit OTHER)
-		transitType: z.enum(["air", "train", "bus", "boat", "generic"]).optional(),
-		// Required by Google flightClass — IATA codes and datetimes
-		// Apple: shown as display fields; provider maps these to the correct slots
-		carrier: z
-			.string()
-			.regex(
-				/^[A-Z0-9]{2}$/,
-				'must be a 2-character IATA carrier code e.g. "AA"'
-			)
-			.optional(),
-		flightNumber: z
-			.string()
-			.regex(/^\d{1,4}[A-Z]?$/, 'must be a flight number e.g. "100" or "1234A"')
-			.optional(),
-		origin: z
-			.string()
-			.regex(/^[A-Z]{3}$/, 'must be a 3-letter IATA airport code e.g. "JFK"')
-			.optional(),
-		destination: z
-			.string()
-			.regex(/^[A-Z]{3}$/, 'must be a 3-letter IATA airport code e.g. "LAX"')
-			.optional(),
-		// Local airport wall-clock time. Google rejects a UTC offset here (it
-		// derives the zone from the airport); an offset, if given, is kept for
-		// Apple semantics and stripped for Google.
-		departure: localDateTime(
-			'must be an ISO datetime e.g. "2024-06-01T08:00:00Z" or "2024-06-01T08:00:00"'
-		).optional(),
-		arrival: localDateTime(
-			'must be an ISO datetime e.g. "2024-06-01T11:30:00Z" or "2024-06-01T11:30:00"'
-		).optional(),
-		// passengerName is per-recipient — pass in values at create() time
-	})
-	.extend({
-		apple: appleFlightOptionsSchema.optional(),
-		google: googleFlightOptionsSchema.optional(),
-	});
+export const flightPassSchema = basePassSchema.extend({
+	type: z.literal("flight"),
+	// Apple: transitType (required for boardingPass layout, defaults to "air").
+	// "generic" maps to PKTransitTypeGeneric for transit that is none of the
+	// other four.
+	// Google: inferred from flightHeader ("generic" falls back to transit OTHER)
+	transitType: z.enum(["air", "train", "bus", "boat", "generic"]).optional(),
+	// Required by Google flightClass — IATA codes and datetimes
+	// Apple: shown as display fields; provider maps these to the correct slots
+	carrier: z
+		.string()
+		.regex(/^[A-Z0-9]{2}$/, 'must be a 2-character IATA carrier code e.g. "AA"')
+		.optional(),
+	flightNumber: z
+		.string()
+		.regex(/^\d{1,4}[A-Z]?$/, 'must be a flight number e.g. "100" or "1234A"')
+		.optional(),
+	origin: z
+		.string()
+		.regex(/^[A-Z]{3}$/, 'must be a 3-letter IATA airport code e.g. "JFK"')
+		.optional(),
+	destination: z
+		.string()
+		.regex(/^[A-Z]{3}$/, 'must be a 3-letter IATA airport code e.g. "LAX"')
+		.optional(),
+	// Local airport wall-clock time. Google rejects a UTC offset here (it
+	// derives the zone from the airport); an offset, if given, is kept for
+	// Apple semantics and stripped for Google.
+	departure: localDateTime(
+		'must be an ISO datetime e.g. "2024-06-01T08:00:00Z" or "2024-06-01T08:00:00"'
+	).optional(),
+	arrival: localDateTime(
+		'must be an ISO datetime e.g. "2024-06-01T11:30:00Z" or "2024-06-01T11:30:00"'
+	).optional(),
+	apple: appleFlightOptionsSchema.optional(),
+	google: googleFlightOptionsSchema.optional(),
+});
 
 export const couponPassSchema = basePassSchema.extend({
 	type: z.literal("coupon"),
@@ -658,10 +609,7 @@ export const giftCardPassSchema = basePassSchema.extend({
 
 export const genericPassSchema = basePassSchema.extend({
 	type: z.literal("generic"),
-	// No extra structured props — full control via fields
 });
-
-// Discriminated union — the full PassConfig type
 
 export const passConfigSchema = z.discriminatedUnion("type", [
 	loyaltyPassSchema,
@@ -671,8 +619,6 @@ export const passConfigSchema = z.discriminatedUnion("type", [
 	giftCardPassSchema,
 	genericPassSchema,
 ]);
-
-// Create config — per-recipient values supplied at issue time
 
 export const createConfigSchema = z.object({
 	serialNumber: z.string().min(1, "CreateConfig missing: serialNumber"),
@@ -724,18 +670,8 @@ export const createConfigSchema = z.object({
 		.optional(),
 });
 
-// Options for pass.update() / updateGooglePass().
-export const updateOptionsSchema = z.object({
-	// Sets notifyPreference: "NOTIFY_ON_UPDATE" on the PATCH body, asking Google
-	// to push a field-update notification. Google only notifies for allowlisted
-	// fields, and the setting is ephemeral — it must be sent on every request.
-	notify: z.boolean().optional(),
-});
-
-// Inferred types
-
-// Common BCP 47 language tags — autocomplete hints while still accepting any valid string.
-type CommonLocaleCode =
+/** A BCP 47 language tag. Common values are suggested without restricting valid strings. */
+export type LocaleCode =
 	| "en"
 	| "en-US"
 	| "en-GB"
@@ -778,9 +714,6 @@ type CommonLocaleCode =
 	| "id"
 	| "th"
 	| (string & {});
-
-// A BCP 47 language tag. Common values are suggested by autocomplete; any valid tag is accepted.
-export type LocaleCode = CommonLocaleCode;
 
 // Keys are field keys, "name" for the pass title, or "fieldKey_value" for static field values.
 export type TranslationMap = Record<string, string>;
@@ -873,4 +806,10 @@ export type GoogleImageModule = z.infer<typeof googleImageModuleSchema>;
 export type GoogleValueAddedModule = z.infer<typeof googleValueAddedSchema>;
 export type GoogleModules = z.infer<typeof googleModulesSchema>;
 export type GoogleTransitOptions = z.infer<typeof googleTransitOptionsSchema>;
-export type UpdateOptions = z.infer<typeof updateOptionsSchema>;
+export interface UpdateOptions {
+	/**
+	 * Ask Google to push a field-update notification for allowlisted fields.
+	 * This setting is ephemeral and must be sent on every update that should notify.
+	 */
+	notify?: boolean | undefined;
+}

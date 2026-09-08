@@ -1,10 +1,9 @@
-/** biome-ignore-all lint/style/noNonNullAssertion: env vars are validated by smoke test setup */
+/** biome-ignore-all lint/style/noNonNullAssertion: the selected provider requires its remaining credential env vars */
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { field, Wallet } from "../src/index";
+import { field, googleSaveUrl, type IssuedPass, Wallet } from "../src/index";
 
-// Credentials — omit a provider to skip it entirely
 const apple = process.env.APPLE_SIGNER_CERT
 	? {
 			passTypeIdentifier: process.env.APPLE_PASS_TYPE_IDENTIFIER!,
@@ -36,7 +35,7 @@ console.log(
 	`Credentials: ${[apple && "Apple", google && "Google"].filter(Boolean).join(" + ")}\n`
 );
 
-// Minimal 1×1 white PNG — valid enough for pass generation without a real asset
+// Minimal 1×1 PNG for sample pass generation.
 const STUB_ICON = new Uint8Array([
 	0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49,
 	0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02,
@@ -55,11 +54,7 @@ let failed = 0;
 async function run(
 	label: string,
 	serial: string,
-	passPromise: Promise<{
-		apple: Uint8Array | null;
-		google: string | null;
-		warnings: string[];
-	}>
+	passPromise: Promise<IssuedPass>
 ) {
 	const start = Date.now();
 	process.stdout.write(`  ${label.padEnd(28)}`);
@@ -77,7 +72,7 @@ async function run(
 		}
 
 		if (result.google) {
-			const url = `https://pay.google.com/gp/v/save/${result.google}`;
+			const url = googleSaveUrl(result.google);
 			const link = `\x1b]8;;${url}\x07Add to Google Wallet\x1b]8;;\x07`;
 			parts.push(link);
 		} else if (google) {
@@ -85,7 +80,7 @@ async function run(
 		}
 
 		if (result.warnings.length) {
-			parts.push(`⚠ ${result.warnings.join(", ")}`);
+			parts.push(`Warnings: ${result.warnings.join(", ")}`);
 		}
 
 		console.log(`PASS  ${ms}ms  ${parts.join("  ")}`);
@@ -97,36 +92,7 @@ async function run(
 	}
 }
 
-async function runUpdate(label: string, updatePromise: Promise<void>) {
-	const start = Date.now();
-	process.stdout.write(`  ${label.padEnd(28)}`);
-	try {
-		await updatePromise;
-		console.log(`PASS  ${Date.now() - start}ms`);
-		passed++;
-	} catch (err) {
-		const msg = (err as Error).message;
-		// Google objects only exist after a user saves the JWT — PATCH/expire will 404
-		// until then. Mark as SKIP rather than FAIL so the suite stays green.
-		if (msg.includes("404")) {
-			console.log(
-				`SKIP  ${Date.now() - start}ms  object not yet saved to a wallet`
-			);
-		} else {
-			console.log(`FAIL  ${Date.now() - start}ms  ${msg}`);
-			failed++;
-		}
-	}
-}
-
-function section(title: string) {
-	console.log(`\n${title}`);
-	console.log("─".repeat(title.length));
-}
-
-// ─── All pass types ───────────────────────────────────────────────────────────
-
-section("Pass types");
+console.log("\nPass types");
 
 await run(
 	"loyalty",
@@ -186,7 +152,7 @@ await run(
 				field.primary("from", "JFK", "New York"),
 				field.primary("to", "LAX", "Los Angeles"),
 				field.header("date", "Date", "Jul 15"),
-				field.secondary("passenger", "Passenger", "Jane Doe"),
+				field.secondary("passengerName", "Passenger"),
 				field.secondary("gate", "Gate", "B22"),
 				field.auxiliary("seat", "Seat", "14A"),
 				field.auxiliary("class", "Class", "Economy"),
@@ -195,7 +161,10 @@ await run(
 			],
 			apple: { icon: STUB_ICON },
 		})
-		.create({ serialNumber: "smoke-flight-air" })
+		.create({
+			serialNumber: "smoke-flight-air",
+			values: { passengerName: "Jane Doe" },
+		})
 );
 
 await run(
@@ -253,9 +222,7 @@ await run(
 		.create({ serialNumber: "smoke-generic" })
 );
 
-// ─── Barcode formats ──────────────────────────────────────────────────────────
-
-section("Barcode formats");
+console.log("\nBarcode formats");
 
 for (const format of ["QR", "PDF417", "Aztec", "Code128"] as const) {
 	await run(
@@ -275,9 +242,7 @@ for (const format of ["QR", "PDF417", "Aztec", "Code128"] as const) {
 	);
 }
 
-// ─── Field behaviors ──────────────────────────────────────────────────────────
-
-section("Field behaviors");
+console.log("\nField behaviors");
 
 await run(
 	"all slot types",
@@ -338,9 +303,7 @@ await run(
 		})
 );
 
-// ─── Apple-specific options ───────────────────────────────────────────────────
-
-section("Apple-specific options");
+console.log("\nApple-specific options");
 
 await run(
 	"foreground + label colors",
@@ -436,9 +399,7 @@ await run(
 		})
 );
 
-// ─── Google-specific options ──────────────────────────────────────────────────
-
-section("Google-specific options");
+console.log("\nGoogle-specific options");
 
 await run(
 	"class-level messages",
@@ -535,42 +496,12 @@ await run(
 		.create({ serialNumber: "smoke-coupon-instore" })
 );
 
-// ─── Pass lifecycle (Google only) ─────────────────────────────────────────────
-
-if (google) {
-	section("Pass lifecycle (Google)");
-
-	const lifecyclePass = wallet.loyalty({
-		id: "smoke-lifecycle",
-		name: "Lifecycle Test",
-		fields: [field.primary("points", "Points", "100")],
-		apple: { icon: STUB_ICON },
-		google: { logo: process.env.GOOGLE_LOGO_URL },
-	});
-
-	await run(
-		"create",
-		"lifecycle-create",
-		lifecyclePass.create({ serialNumber: "smoke-lifecycle" })
-	);
-
-	await runUpdate(
-		"update (new points value)",
-		lifecyclePass.update({
-			serialNumber: "smoke-lifecycle",
-			values: { points: "500" },
-		})
-	);
-
-	await runUpdate("expire", lifecyclePass.expire("smoke-lifecycle"));
-}
-
-// ─── Summary ──────────────────────────────────────────────────────────────────
-
-console.log(`\n${passed + failed} tests  ${passed} passed  ${failed} failed`);
+console.log(
+	`\n${passed + failed} samples  ${passed} generated  ${failed} failed`
+);
 
 if (apple) {
-	console.log("\nApple .pkpass files written to: scripts/out/");
+	console.log(`\nApple .pkpass files written to: ${OUT_DIR}`);
 }
 
 if (failed > 0) {

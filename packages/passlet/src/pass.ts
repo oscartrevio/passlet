@@ -15,17 +15,11 @@ import type {
 } from "./types/schemas";
 import { createConfigSchema, passConfigSchema } from "./types/schemas";
 
-// Field builder — use these to define display fields on any pass type.
-
 type FieldOptions = Omit<FieldDef, "slot" | "key" | "label">;
 
-// A string shorthand sets value directly; an object passes all options through.
 type FieldArg = string | FieldOptions;
 
 function resolveOptions(arg: FieldArg | undefined): FieldOptions | undefined {
-	if (arg === undefined) {
-		return;
-	}
 	return typeof arg === "string" ? { value: arg } : arg;
 }
 
@@ -104,8 +98,6 @@ export const field = {
 	}),
 };
 
-// Serving helpers
-
 /**
  * `Content-Type` Apple Wallet requires when serving a `.pkpass` file.
  *
@@ -133,18 +125,6 @@ export function googleSaveUrl(jwt: string): string {
 	return `https://pay.google.com/gp/v/save/${jwt}`;
 }
 
-// Validation
-
-function validatePassConfig(config: PassConfig): void {
-	const result = passConfigSchema.safeParse(config);
-	if (!result.success) {
-		throw new WalletError(
-			"PASS_CONFIG_INVALID",
-			result.error.issues[0]?.message
-		);
-	}
-}
-
 function validateCreateConfig(config: CreateConfig): void {
 	const result = createConfigSchema.safeParse(config);
 	if (!result.success) {
@@ -156,20 +136,14 @@ function validateCreateConfig(config: CreateConfig): void {
 }
 
 /**
- * Provider requirements that are facts about the template, not about any one
- * recipient: they depend only on the pass config and which credentials were
- * supplied, both known at construction. Checking them here turns a
- * misconfigured template into a boot-time failure instead of a failure on the
- * first `create()` — often the first real request in production.
- *
- * Each provider re-checks the same requirement inside `create()`; that check
- * stays the authoritative one, this is the early warning.
+ * Check template-only provider requirements at construction so configuration
+ * errors surface before the first request. Providers also check them at issue
+ * time, where the config may have changed.
  */
 function validateTemplateRequirements(
 	config: PassConfig,
 	credentials: WalletCredentials
 ): void {
-	// Apple rejects any pass without an icon, regardless of type.
 	if (credentials.apple && !config.apple?.icon) {
 		throw new WalletError("APPLE_MISSING_ICON");
 	}
@@ -198,8 +172,6 @@ function validateTemplateRequirements(
 	}
 }
 
-// Pass
-
 /**
  * A configured pass template. Obtain one from {@link Wallet} rather than
  * constructing directly.
@@ -215,9 +187,13 @@ export class Pass {
 	private readonly credentials: WalletCredentials;
 
 	constructor(config: PassConfig, credentials: WalletCredentials) {
-		// Validate immediately so misconfiguration is surfaced at construction time,
-		// not deferred until the first create().
-		validatePassConfig(config);
+		const result = passConfigSchema.safeParse(config);
+		if (!result.success) {
+			throw new WalletError(
+				"PASS_CONFIG_INVALID",
+				result.error.issues[0]?.message
+			);
+		}
 		validateTemplateRequirements(config, credentials);
 		this.config = config;
 		this.credentials = credentials;
@@ -236,14 +212,13 @@ export class Pass {
 	async create(createConfig: CreateConfig): Promise<IssuedPass> {
 		validateCreateConfig(createConfig);
 
-		// Both providers run independently — a Google API failure won't block the Apple pass.
 		const [appleResult, googleResult] = await Promise.allSettled([
 			this.credentials.apple
 				? generateApplePass(this.config, createConfig, this.credentials.apple)
-				: Promise.resolve({ pass: null, warnings: [] as string[] }),
+				: { pass: null, warnings: [] },
 			this.credentials.google
 				? generateGooglePass(this.config, createConfig, this.credentials.google)
-				: Promise.resolve({ pass: null, warnings: [] as string[] }),
+				: { pass: null, warnings: [] },
 		]);
 
 		if (appleResult.status === "rejected") {

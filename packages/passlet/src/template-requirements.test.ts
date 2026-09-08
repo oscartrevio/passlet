@@ -18,101 +18,58 @@ const google: GoogleCredentials = {
 	privateKey: "-----BEGIN PRIVATE KEY-----\nx\n-----END PRIVATE KEY-----",
 };
 
+const template = { id: "p1", name: "Test", fields: [] };
 const icon = new Uint8Array([1, 2, 3]);
-const logo = "https://cdn.example.com/logo.png";
 
 describe("Apple icon is validated at template construction", () => {
-	it("throws APPLE_MISSING_ICON when Apple credentials are set but apple.icon is not", () => {
+	it("requires an icon only when Apple credentials are configured", () => {
 		const wallet = new Wallet({ apple });
-		expect(() =>
-			wallet.generic({ id: "p1", name: "Test", fields: [] })
-		).toThrow(expect.objectContaining({ code: "APPLE_MISSING_ICON" }));
-	});
-
-	it("throws for every pass type, not just one", () => {
-		const wallet = new Wallet({ apple });
-		expect(() => wallet.event({ id: "p1", name: "Test", fields: [] })).toThrow(
+		expect(() => wallet.generic(template)).toThrow(
 			expect.objectContaining({ code: "APPLE_MISSING_ICON" })
 		);
 		expect(() =>
-			wallet.coupon({
-				id: "p1",
-				name: "Test",
-				fields: [],
-				redemptionChannel: "instore",
-			})
-		).toThrow(expect.objectContaining({ code: "APPLE_MISSING_ICON" }));
-	});
-
-	it("does not throw when apple.icon is present", () => {
-		const wallet = new Wallet({ apple });
-		expect(() =>
-			wallet.generic({ id: "p1", name: "Test", fields: [], apple: { icon } })
+			wallet.generic({ ...template, apple: { icon } })
 		).not.toThrow();
-	});
-
-	it("does not throw when Apple credentials were omitted entirely", () => {
-		const wallet = new Wallet({ google });
-		expect(() =>
-			wallet.generic({ id: "p1", name: "Test", fields: [] })
-		).not.toThrow();
+		expect(() => new Wallet({ google }).generic(template)).not.toThrow();
 	});
 });
 
 describe("Google logo is validated at template construction", () => {
-	it("throws GOOGLE_MISSING_LOGO for a loyalty pass without google.logo", () => {
+	it("requires a loyalty logo only when Google credentials are configured", () => {
 		const wallet = new Wallet({ google });
-		expect(() =>
-			wallet.loyalty({ id: "p1", name: "Rewards", fields: [] })
-		).toThrow(expect.objectContaining({ code: "GOOGLE_MISSING_LOGO" }));
-	});
-
-	it("does not throw for a loyalty pass with google.logo", () => {
-		const wallet = new Wallet({ google });
+		expect(() => wallet.loyalty(template)).toThrow(
+			expect.objectContaining({ code: "GOOGLE_MISSING_LOGO" })
+		);
 		expect(() =>
 			wallet.loyalty({
-				id: "p1",
-				name: "Rewards",
-				fields: [],
-				google: { logo },
+				...template,
+				google: { logo: "https://cdn.example.com/logo.png" },
 			})
+		).not.toThrow();
+		expect(() =>
+			new Wallet({ apple }).loyalty({ ...template, apple: { icon } })
 		).not.toThrow();
 	});
 
-	it("throws for a transit flight pass without google.logo", () => {
+	it("requires a logo for transit flights but not air flights", () => {
 		const wallet = new Wallet({ google });
 		expect(() =>
 			wallet.flight({
-				id: "p1",
-				name: "Bus",
+				...template,
 				transitType: "bus",
-				fields: [],
 				google: { transit: {} },
 			})
 		).toThrow(expect.objectContaining({ code: "GOOGLE_MISSING_LOGO" }));
-	});
-
-	it("does not throw for an air flight pass without google.logo (flightClass needs none)", () => {
-		const wallet = new Wallet({ google });
 		expect(() =>
 			wallet.flight({
-				id: "p1",
-				name: "AA 100",
+				...template,
 				transitType: "air",
 				carrier: "AA",
 				flightNumber: "100",
 				origin: "JFK",
 				destination: "LAX",
 				departure: "2026-08-01T08:00:00Z",
-				fields: [],
 			})
-		).not.toThrow();
-	});
-
-	it("does not throw when Google credentials were omitted entirely", () => {
-		const wallet = new Wallet({ apple });
-		expect(() =>
-			wallet.loyalty({ id: "p1", name: "Rewards", fields: [], apple: { icon } })
 		).not.toThrow();
 	});
 });

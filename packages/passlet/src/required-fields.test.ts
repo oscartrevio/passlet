@@ -2,23 +2,14 @@ import { generateKeyPairSync } from "node:crypto";
 import JSZip from "jszip";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { generateApplePass } from "./providers/apple/index";
-import {
-	generateTestCerts,
-	type TestCerts,
-} from "./providers/apple/test-certs";
+import { generateTestCerts } from "./providers/apple/test-certs";
 import { generateGooglePass } from "./providers/google/index";
 import type { AppleCredentials, GoogleCredentials } from "./types/credentials";
 import type { CreateConfig, PassConfig, PassType } from "./types/schemas";
 
-// A single source of truth for "what each platform requires per pass type",
-// driven straight off the audit's required-field matrix. If a provider ever
-// stops emitting a required field, the matching row fails — the regression net
-// that would have caught the gift-card cardNumber / generic header bugs.
-
 const STUB_ICON = new Uint8Array([1, 2, 3]);
 const LOGO = "https://example.com/logo.png";
 
-// Minimal VALID config per type (all required structured props supplied).
 function passFor(type: PassType): PassConfig {
 	const base = {
 		id: `c-${type}`,
@@ -99,8 +90,6 @@ const ALL_TYPES: PassType[] = [
 	"generic",
 ];
 
-// ─── Apple ─────────────────────────────────────────────────────────────────────
-
 const APPLE_TOP_LEVEL_REQUIRED = [
 	"formatVersion",
 	"passTypeIdentifier",
@@ -123,7 +112,7 @@ describe("Apple required fields per type", () => {
 	let credentials: AppleCredentials;
 
 	beforeAll(() => {
-		const certs: TestCerts = generateTestCerts();
+		const certs = generateTestCerts();
 		credentials = {
 			passTypeIdentifier: "pass.com.test.example",
 			teamId: "ABCD1234EF",
@@ -162,8 +151,6 @@ describe("Apple required fields per type", () => {
 		);
 	});
 });
-
-// ─── Google ────────────────────────────────────────────────────────────────────
 
 const GOOGLE_CLASS_REQUIRED: Record<PassType, string[]> = {
 	loyalty: ["id", "programName", "programLogo", "issuerName", "reviewStatus"],
@@ -228,13 +215,12 @@ describe("Google required fields per type", () => {
 		credentials = {
 			issuerId: "3388000000022801234",
 			clientEmail: "test@test.iam.gserviceaccount.com",
-			privateKey: privateKey as string,
+			privateKey,
 		};
 	});
 
 	afterEach(() => {
-		vi.unstubAllGlobals?.();
-		vi.restoreAllMocks();
+		vi.unstubAllGlobals();
 	});
 
 	function stubFetch() {
@@ -247,17 +233,10 @@ describe("Google required fields per type", () => {
 						json: () => Promise.resolve({ access_token: "t" }),
 					});
 				}
-				if (!init?.method || init.method === "GET") {
-					return Promise.resolve({
-						ok: false,
-						status: 404,
-						body: null,
-						text: () => Promise.resolve(""),
-					});
-				}
+				const isGet = !init?.method || init.method === "GET";
 				return Promise.resolve({
-					ok: true,
-					status: 201,
+					ok: !isGet,
+					status: isGet ? 404 : 201,
 					body: null,
 					text: () => Promise.resolve(""),
 				});

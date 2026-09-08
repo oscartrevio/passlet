@@ -1,9 +1,7 @@
 export const WALLET_ERROR_CODES = {
-	// Config validation — message comes from the schema
 	PASS_CONFIG_INVALID: "PassConfig invalid",
 	CREATE_CONFIG_INVALID: "CreateConfig invalid",
 
-	// Apple — provider-level constraints the schema cannot enforce
 	APPLE_INVALID_SIGNER_CERT:
 		"Apple signing failed: signerCert is not a valid PEM certificate",
 	APPLE_INVALID_SIGNER_KEY:
@@ -20,7 +18,6 @@ export const WALLET_ERROR_CODES = {
 	APPLE_APP_LAUNCH_URL_REQUIRES_STORE_IDS:
 		"Apple appLaunchURL requires associatedStoreIdentifiers",
 
-	// Google — provider-level constraints the schema cannot enforce
 	GOOGLE_INVALID_PRIVATE_KEY:
 		"Google signing failed: privateKey is not a valid PKCS#8 PEM private key",
 	GOOGLE_SIGNING_FAILED: "Google signing failed: could not sign the Wallet JWT",
@@ -32,7 +29,6 @@ export const WALLET_ERROR_CODES = {
 	GOOGLE_FLIGHT_MISSING_PASSENGER_NAME:
 		"Google Wallet flightObject requires passengerName",
 
-	// Images
 	IMAGE_FETCH_NETWORK_ERROR: "Failed to fetch image: network error",
 	IMAGE_FETCH_FAILED: "Failed to fetch image: non-2xx response",
 } as const;

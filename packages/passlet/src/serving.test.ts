@@ -9,21 +9,8 @@ describe("APPLE_PASS_CONTENT_TYPE", () => {
 
 describe("googleSaveUrl", () => {
 	it("builds the pay.google.com save link for a JWT", () => {
-		expect(googleSaveUrl("header.payload.signature")).toBe(
-			"https://pay.google.com/gp/v/save/header.payload.signature"
+		expect(googleSaveUrl("ab-_.cd-_.ef-_")).toBe(
+			"https://pay.google.com/gp/v/save/ab-_.cd-_.ef-_"
 		);
-	});
-
-	it("produces a parseable https URL whose last path segment is the JWT", () => {
-		const jwt = "eyJhbGciOiJSUzI1NiJ9.eyJpc3MiOiJhQGIuY29tIn0.c2ln";
-		const url = new URL(googleSaveUrl(jwt));
-		expect(url.protocol).toBe("https:");
-		expect(url.host).toBe("pay.google.com");
-		expect(url.pathname.split("/").pop()).toBe(jwt);
-	});
-
-	it("does not mangle base64url characters used by JWTs", () => {
-		const jwt = "ab-_.cd-_.ef-_";
-		expect(googleSaveUrl(jwt).endsWith(jwt)).toBe(true);
 	});
 });
