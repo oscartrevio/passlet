@@ -1,9 +1,15 @@
-import { WalletError } from "./errors";
+import type { z } from "zod";
+import {
+	WalletError,
+	type WalletErrorCode,
+	type WalletValidationIssue,
+} from "./errors";
 import { generateApplePass } from "./providers/apple/index";
 import {
 	deleteGooglePass,
 	expireGooglePass,
 	generateGooglePass,
+	publishGooglePass,
 	updateGooglePass,
 } from "./providers/google/index";
 import type { IssuedPass, WalletCredentials } from "./types/credentials";
@@ -125,13 +131,33 @@ export function googleSaveUrl(jwt: string): string {
 	return `https://pay.google.com/gp/v/save/${jwt}`;
 }
 
+function configError(
+	code: Extract<
+		WalletErrorCode,
+		"PASS_CONFIG_INVALID" | "CREATE_CONFIG_INVALID"
+	>,
+	error: z.ZodError
+): WalletError {
+	const issues: WalletValidationIssue[] = error.issues.map(
+		({ path, message }) => ({
+			path: path.map((part) =>
+				typeof part === "symbol" ? String(part) : part
+			),
+			message,
+		})
+	);
+	const first = issues[0];
+	return new WalletError(
+		code,
+		first ? `${first.path.join(".") || "config"}: ${first.message}` : undefined,
+		{ issues }
+	);
+}
+
 function validateCreateConfig(config: CreateConfig): void {
 	const result = createConfigSchema.safeParse(config);
 	if (!result.success) {
-		throw new WalletError(
-			"CREATE_CONFIG_INVALID",
-			result.error.issues[0]?.message
-		);
+		throw configError("CREATE_CONFIG_INVALID", result.error);
 	}
 }
 
@@ -153,10 +179,7 @@ function validateTemplateRequirements(
 	}
 	// Google loyalty classes require a programLogo URL — the API returns 400 without it.
 	if (config.type === "loyalty" && !config.google?.logo) {
-		throw new WalletError(
-			"GOOGLE_MISSING_LOGO",
-			"Google Wallet loyalty passes require a logo URL (programLogo) in google.logo"
-		);
+		throw new WalletError("GOOGLE_MISSING_LOGO");
 	}
 	// transitClass requires a logo. The air flightClass vertical does not, so
 	// only the transit opt-in is checked here.
@@ -165,10 +188,7 @@ function validateTemplateRequirements(
 		config.google?.transit &&
 		!config.google.logo
 	) {
-		throw new WalletError(
-			"GOOGLE_MISSING_LOGO",
-			"Google Wallet transit passes require a logo URL in google.logo"
-		);
+		throw new WalletError("GOOGLE_MISSING_LOGO");
 	}
 }
 
@@ -189,10 +209,7 @@ export class Pass {
 	constructor(config: PassConfig, credentials: WalletCredentials) {
 		const result = passConfigSchema.safeParse(config);
 		if (!result.success) {
-			throw new WalletError(
-				"PASS_CONFIG_INVALID",
-				result.error.issues[0]?.message
-			);
+			throw configError("PASS_CONFIG_INVALID", result.error);
 		}
 		validateTemplateRequirements(config, credentials);
 		this.config = config;
@@ -233,6 +250,17 @@ export class Pass {
 			google: googleResult.value.pass,
 			warnings: [...appleResult.value.warnings, ...googleResult.value.warnings],
 		};
+	}
+
+	/**
+	 * Publish shared Google template changes. create() only creates missing classes;
+	 * it does not overwrite existing ones. Apple templates are embedded in each pass.
+	 */
+	async publish(): Promise<void> {
+		if (!this.credentials.google) {
+			throw new WalletError("GOOGLE_NOT_CONFIGURED");
+		}
+		await publishGooglePass(this.config, this.credentials.google);
 	}
 
 	/**

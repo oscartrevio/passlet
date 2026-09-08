@@ -23,6 +23,19 @@ pnpm check        # linting
 pnpm fix          # auto-format
 ```
 
+### Tests
+
+The library's tests live in `packages/passlet/test/` in three tiers:
+
+```bash
+pnpm -F passlet test              # unit + integration (what CI runs)
+pnpm -F passlet test:unit         # pure functions: schemas, pass.json, class/object bodies
+pnpm -F passlet test:integration  # signing, .pkpass archives, Wallet API flow against a stubbed fetch
+pnpm -F passlet test:e2e          # real credentials from packages/passlet/.env; skipped when absent
+```
+
+The e2e tier issues passes against Apple's signing chain and Google's Wallet API. Copy `packages/passlet/.env.example` to `.env`, fill in your credentials, and the generated `.pkpass` files land in `packages/passlet/test/e2e/out/` for opening on a device.
+
 ## Project structure
 
 ```
@@ -71,7 +84,7 @@ One change per PR when possible. Before opening, make sure:
 
 - `pnpm check-types` passes
 - `pnpm check` passes
-- There's a clear description of what changed and why
+- `pnpm -F passlet test` passes
 
 Don't worry about making it perfect — we're happy to work through feedback together.
 

@@ -50,5 +50,5 @@ coverage
 tmp
 temp
 
-# Smoke test output
-packages/passlet/scripts/out/
+# e2e .pkpass output
+packages/passlet/test/e2e/out/

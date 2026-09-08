@@ -3,383 +3,225 @@
   <img src="https://raw.githubusercontent.com/oscartrevio/passlet/main/.github/assets/header.svg" alt="Passlet" width="100%">
 </picture>
 
-<p align="center">
-  <a href="https://www.npmjs.com/package/passlet">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/group/npm/passlet+npm/passlet/downloads+github/license/oscartrevio/passlet.svg?variant=secondary&size=xs&mode=dark">
-      <img src="https://shieldcn.dev/group/npm/passlet+npm/passlet/downloads+github/license/oscartrevio/passlet.svg?variant=secondary&size=xs&mode=light" alt="npm">
-    </picture>
-  </a>
-</p>
+**Apple Wallet and Google Wallet passes from one TypeScript API.**
 
-**[Passlet](https://github.com/oscartrevio/passlet)** is a library for generating Apple Wallet and Google Wallet passes from a single API.
+Define a template. Fill in a recipient's details. Get a signed `.pkpass` file and a Google Wallet save link.
 
-## The problem
-
-Creating wallet passes is painful.
-
-Apple Wallet and Google Wallet have nothing in common.
-Apple uses .pkpass files — a signed ZIP bundle with a JSON manifest, PKCS#7 certificates, and SHA hashes for every asset. Google uses a REST API with service accounts, JWTs, and a completely different data model. Different field names. Different auth flows. Different everything.
-
-If your app supports both, you're building two separate systems.
-
-Passlet fixes that. One API that handles the signing, formatting, and platform translation for you — whether you need one wallet or both.
+[Playground](https://passlet.oscartrevio.xyz) · [Examples](examples/) · [npm](https://www.npmjs.com/package/passlet)
 
 ## Install
 
-```bash
+```sh
 npm install passlet
 ```
 
-## Quickstart
+Run Passlet on the **server**, never in a client component. Signing credentials must stay private.
 
-```ts
-import { Wallet, field } from "passlet";
+## Create a pass
+
+[Set up your credentials](#credentials) first. This example uses both platforms; omit either credential block to use just one.
+
+Save the script as `pass.mjs`. Place `signerCert.pem`, `signerKey.pem`, `wwdr.pem`, `service-account.json`, and your PNG icons (`icon.png`, `icon@2x.png`) beside it. Set `APPLE_PASS_TYPE_ID`, `APPLE_TEAM_ID`, `GOOGLE_ISSUER_ID`, and `GOOGLE_LOGO_URL` in your environment. The logo URL must be publicly accessible.
+
+```js
+import { readFile, writeFile } from "node:fs/promises";
+import { field, googleSaveUrl, Wallet } from "passlet";
+
+const serviceAccount = JSON.parse(await readFile("./service-account.json", "utf8"));
 
 const wallet = new Wallet({
   apple: {
-    passTypeIdentifier: process.env.APPLE_PASS_TYPE_ID!,
-    teamId: process.env.APPLE_TEAM_ID!,
-    signerCert: process.env.APPLE_SIGNER_CERT!,
-    signerKey: process.env.APPLE_SIGNER_KEY!,
-    wwdr: process.env.APPLE_WWDR!,
+    passTypeIdentifier: process.env.APPLE_PASS_TYPE_ID,
+    teamId: process.env.APPLE_TEAM_ID,
+    signerCert: await readFile("./signerCert.pem", "utf8"),
+    signerKey: await readFile("./signerKey.pem", "utf8"),
+    wwdr: await readFile("./wwdr.pem", "utf8"),
   },
   google: {
-    issuerId: process.env.GOOGLE_ISSUER_ID!,
-    clientEmail: process.env.GOOGLE_CLIENT_EMAIL!,
-    privateKey: process.env.GOOGLE_PRIVATE_KEY!,
+    issuerId: process.env.GOOGLE_ISSUER_ID,
+    clientEmail: serviceAccount.client_email,
+    privateKey: serviceAccount.private_key,
   },
 });
 
-const pass = wallet.loyalty({
-  id: "my-rewards",
-  name: "Rewards Card",
-  fields: [
-    field.primary("points", "Points", "1250"),
-    field.secondary("tier", "Tier", "Gold"),
-  ],
-});
-
-const { apple, google } = await pass.create({ serialNumber: "user-123" });
-```
-
-`apple` is a `Uint8Array` — the `.pkpass` file, ready to serve with `Content-Type: application/vnd.apple.pkpass`.
-
-`google` is a JWT string — build the save link as `https://pay.google.com/gp/v/save/{jwt}`.
-
-Only need one platform? Omit `apple` or `google` from the wallet config and Passlet skips it.
-
-## Pass types
-
-```ts
-wallet.loyalty(config); // Rewards cards, memberships, point systems
-wallet.event(config); // Concerts, conferences, sports, any ticketed event
-wallet.flight(config); // Boarding passes with gate, seat, departure info
-wallet.coupon(config); // Discounts, promos, limited-time offers
-wallet.giftCard(config); // Prepaid cards with balance tracking
-wallet.generic(config); // Anything else — credentials, IDs, parking, keys
-```
-
-Every type maps automatically to the correct Apple pass style and Google Wallet class. You don't touch platform-specific schemas.
-
-## Fields
-
-Fields define what shows on the pass. Passlet handles the translation to each platform's layout model.
-
-```ts
-import { field } from "passlet";
-
-const pass = wallet.event({
-  id: "summer-fest",
-  name: "Summer Fest",
-  fields: [
-    field.primary("event", "Event", "Summer Fest"),
-    field.secondary("date", "Date", "Aug 29, 2026"),
-    field.secondary("location", "Location", "Monterrey, MX"),
-    field.auxiliary("door", "Doors Open", "6:00 PM"),
-    field.auxiliary("seat", "Seat", "GA"),
-  ],
-});
-```
-
-Field groups (`primary`, `secondary`, `auxiliary`, `back`) map to Apple's layout zones and Google's equivalent row structure. Primary fields render large and prominent. Secondary and auxiliary fill the detail rows. Back fields go on the reverse side (Apple) or expandable section (Google).
-
-## Issuing passes
-
-A pass config is a reusable template. Issue it to a recipient with `create()`, passing a unique `serialNumber` and any per-recipient data:
-
-```ts
-const card = wallet.loyalty({
-  id: "my-rewards",
-  name: "Rewards Card",
-  fields: [
-    field.primary("points", "Points"), // value supplied per recipient
-    field.secondary("tier", "Tier", "Gold"), // static default for everyone
-  ],
-});
-
-const { apple, google, warnings } = await card.create({
-  serialNumber: "user-123", // unique per recipient
-  values: { points: "1250" }, // fills field values for this holder
-  barcode: { format: "QR", value: "user-123" },
-  expiresAt: "2026-12-31T23:59:59Z", // optional ISO datetime
-});
-```
-
-- **`values`** maps field keys to the value shown for this recipient. Set a key to `null` to hide that field for them; fields left without a default value are filled here.
-- **`warnings`** lists non-fatal issues (e.g. a missing optional image) — worth logging.
-- Reuse the same `card` template across as many recipients as you like.
-
-## Barcodes
-
-Pass the barcode to `create()` so every recipient can carry their own code:
-
-```ts
-await card.create({
-  serialNumber: "user-123",
-  barcode: {
-    format: "QR", // "QR" | "PDF417" | "Aztec" | "Code128"
-    value: "ABC-12345",
-    altText: "ABC-12345", // text shown below the barcode
-  },
-});
-```
-
-Passlet normalizes barcode formats across platforms. If a format isn't supported on one platform, it falls back to the closest equivalent.
-
-## Structured data
-
-Some pass types take structured properties beyond display fields. Passlet maps them to the right slots on each platform automatically.
-
-```ts
-const boarding = wallet.flight({
-  id: "aa-100",
-  name: "American Airlines",
-  transitType: "air", // "air" | "train" | "bus" | "boat"
-  carrier: "AA", // 2-letter IATA carrier code
-  flightNumber: "100",
-  origin: "JFK", // 3-letter IATA airport codes
-  destination: "LAX",
-  departure: "2026-08-01T08:00:00Z",
-  arrival: "2026-08-01T11:30:00Z",
-  fields: [
-    field.primary("origin", "From", "New York"),
-    field.primary("destination", "To", "Los Angeles"),
-    field.auxiliary("gate", "Gate", "B22"),
-    field.auxiliary("seat", "Seat", "14C"),
-  ],
-});
-
-await boarding.create({
-  serialNumber: "ticket-001",
-  values: { passengerName: "Jane Doe" }, // per-recipient
-  barcode: { format: "PDF417", value: "AA100JFKLAX" },
-});
-```
-
-Other types with structured props:
-
-- **`event`** — `startsAt` / `endsAt` ISO datetimes drive lock-screen relevance
-- **`coupon`** — `redemptionChannel: "online" | "instore" | "both"`
-- **`giftCard`** — `currency: "USD"` (ISO 4217) to format the balance
-
-### Well-known field keys
-
-Google Wallet renders certain data in dedicated slots rather than as generic text rows. Passlet routes a display field there automatically when its **key** matches one of the names below — so `field.secondary("seat", "Seat", "14C")` becomes real `seatInfo.seat` on Google while staying an ordinary secondary field on Apple. No extra API: just name the key.
-
-| Pass type      | Field key                          | Google destination                              |
-| -------------- | ---------------------------------- | ----------------------------------------------- |
-| **`loyalty`**  | `points`                           | `loyaltyPoints.balance`                          |
-|                | `member`                           | `accountName`                                    |
-|                | `memberId`                         | `accountId`                                      |
-| **`event`**    | `seat`, `row`, `section`, `gate`   | `seatInfo.*`                                     |
-| **`giftCard`** | `balance`                          | `balance` (with the pass's `currency`)           |
-|                | `cardNumber`                       | `cardNumber` (falls back to `serialNumber`)      |
-| **`flight`**   | `passengerName`                    | `passengerName` / transit `passengerNames`       |
-
-Two caveats:
-
-- For `loyalty`, `event`, and `giftCard` these are **field keys** — they must appear in the template's `fields` array, and the value can come from the field's default or from `values` at `create()` time.
-- `passengerName` is read straight from `values` at `create()` time and does **not** need a matching field. Google requires it on every flight pass, so `create()` throws `GOOGLE_FLIGHT_MISSING_PASSENGER_NAME` without it.
-
-For `loyalty` and `event`, a key claimed by a structured slot is not duplicated into Google's `textModulesData`; every other field key becomes a text module. Apple is unaffected either way — all fields render in the slot you assigned them.
-
-## Visual customization
-
-```ts
-import { readFileSync } from "node:fs";
-
-wallet.loyalty({
-  id: "my-card",
-  name: "My Card",
-  color: "#1c1917", // background — Apple backgroundColor / Google hexBackgroundColor
+const rewards = wallet.loyalty({
+  id: "rewards",
+  name: "Coffee Club",
+  color: "#3c2415",
   apple: {
-    icon: readFileSync("./assets/icon.png"), // required for Apple passes
-    logo: readFileSync("./assets/logo.png"),
-    foregroundColor: "#fafaf9",
-    labelColor: "#a8a29e",
+    icon: {
+      base: await readFile("./icon.png"),
+      retina: await readFile("./icon@2x.png"),
+    },
   },
-  google: {
-    logo: "https://cdn.example.com/logo.png", // required for Google passes (URL only)
-  },
+  google: { logo: process.env.GOOGLE_LOGO_URL },
   fields: [
-    /* ... */
+    field.primary("points", "Points"),
+    field.secondary("tier", "Tier", "Member"),
   ],
 });
-```
 
-Top-level `color` sets the background on both platforms. Apple image slots (`icon`, `logo`, `strip`, …) plus `foregroundColor` / `labelColor` live under `apple` and accept `Uint8Array` or `Buffer`. Google needs hosted image **URLs** under `google` — binary uploads aren't supported. Apple requires an `icon`; Google requires a `logo`.
-
-## Serving passes
-
-`apple` is raw `.pkpass` bytes; `google` is a JWT for a save link. Passlet exports two helpers so you never have to retype either detail:
-
-```ts
-import { APPLE_PASS_CONTENT_TYPE, googleSaveUrl } from "passlet";
-
-APPLE_PASS_CONTENT_TYPE; // "application/vnd.apple.pkpass"
-googleSaveUrl(google); // "https://pay.google.com/gp/v/save/<jwt>"
-```
-
-**Two rules cover almost every serving bug:**
-
-- Serve the Apple pass as `application/vnd.apple.pkpass`. iOS silently refuses to open a pass sent as `application/octet-stream` or `application/zip` — it just downloads a dead file.
-- `apple` is a `Uint8Array`. Web-standard responses (`Response`, `NextResponse`) accept it directly; Node's `http`/Express `res.end()` does not, so wrap it: `res.end(Buffer.from(apple))`.
-
-A Next.js route handler:
-
-```ts
-// app/api/passes/[id]/route.ts
-import { NextResponse } from "next/server";
-import { APPLE_PASS_CONTENT_TYPE, googleSaveUrl } from "passlet";
-import { wallet } from "@/lib/wallet"; // your configured Wallet instance
-
-export async function GET(
-  _req: Request,
-  { params }: { params: { id: string } }
-) {
-  const { apple, google } = await wallet
-    .loyalty({ id: "rewards", name: "Rewards Card", fields: [] })
-    .create({ serialNumber: params.id });
-
-  // Apple: stream the .pkpass file
-  return new NextResponse(apple, {
-    headers: {
-      "Content-Type": APPLE_PASS_CONTENT_TYPE,
-      "Content-Disposition": `attachment; filename="${params.id}.pkpass"`,
-    },
-  });
-
-  // Google: redirect to the save link instead
-  // return NextResponse.redirect(googleSaveUrl(google));
-}
-```
-
-The same thing on Express, where the `Buffer.from` wrap matters:
-
-```ts
-import { APPLE_PASS_CONTENT_TYPE, googleSaveUrl } from "passlet";
-
-app.get("/passes/:id.pkpass", async (req, res) => {
-  const { apple } = await card.create({ serialNumber: req.params.id });
-  res.setHeader("Content-Type", APPLE_PASS_CONTENT_TYPE);
-  res.setHeader(
-    "Content-Disposition",
-    `attachment; filename="${req.params.id}.pkpass"`
-  );
-  res.end(Buffer.from(apple)); // Uint8Array → Buffer
+const { apple, google, warnings } = await rewards.create({
+  serialNumber: "member-123",
+  values: { points: "1250" },
+  barcode: { format: "QR", value: "member-123" },
 });
 
-app.get("/passes/:id/google", async (req, res) => {
-  const { google } = await card.create({ serialNumber: req.params.id });
-  res.redirect(googleSaveUrl(google));
-});
+if (apple) await writeFile("./rewards.pkpass", apple);
+if (google) console.log(googleSaveUrl(google));
+if (warnings.length) console.warn(warnings);
 ```
 
-Runnable Express, Hono, and Next.js servers live in [`examples/`](https://github.com/oscartrevio/passlet/tree/main/examples).
+Run `node pass.mjs`, or `node --env-file=.env pass.mjs` if you keep the environment variables in a `.env` file.
 
-Always generate passes on the server — your signing keys must never reach the client.
+- `apple` is the signed file as a `Uint8Array`; `google` is a signed JWT. An unconfigured provider returns `null`.
+- `warnings` reports non-fatal issues, such as an unavailable optional image. A required image failure rejects the call.
+- Keep the template `id` stable. Give each recipient or ticket its own `serialNumber`; lifecycle operations use that same number.
+
+For one platform, also remove its unused file reads and template options. Reuse the configured wallet and template across requests.
+
+## Shape the pass
+
+| Method | Use it for |
+| --- | --- |
+| `wallet.loyalty(config)` | Rewards and memberships |
+| `wallet.event(config)` | Event tickets |
+| `wallet.flight(config)` | Flights; ground transport with `google.transit` |
+| `wallet.coupon(config)` | Offers and discounts |
+| `wallet.giftCard(config)` | Prepaid balances |
+| `wallet.generic(config)` | Other passes |
+
+Use `field.header`, `field.primary`, `field.secondary`, `field.auxiliary`, and `field.back` to arrange information. The third argument is a default value or a formatting options object:
+
+```ts
+field.secondary("balance", "Balance", { value: "25", currencyCode: "USD" });
+field.back("terms", "Terms", "Valid at participating locations.");
+```
+
+Recipient `values` override those defaults. An omitted key keeps its default; `null` hides the field. Platform-specific options live under `apple` and `google`—the wallets do not have identical layouts or requirements.
+
+Apple requires `apple.icon` on every pass and `transitType` on boarding passes. Google requires a public `google.logo` URL for loyalty and transit passes. Air flights also require carrier, flight number, airports, departure time, and a recipient `passengerName`.
+
+See the [exported types](packages/passlet/src/index.ts) and [pass schemas](packages/passlet/src/types/schemas.ts) for images, localization, barcodes, dates, locations, and platform options.
+
+## Serve and update
+
+| Output | Deliver it as |
+| --- | --- |
+| Apple | Raw bytes with `Content-Type: application/vnd.apple.pkpass` (`APPLE_PASS_CONTENT_TYPE`) and a `.pkpass` filename |
+| Google | A redirect or button linking to `googleSaveUrl(google)` |
+
+Use HTTPS and `Cache-Control: no-store, private`. Pass files and save links contain recipient data; do not put them in shared caches or public logs. See the runnable [Express, Hono, and Next.js examples](examples/README.md).
+
+### Google template publication
+
+`create()` creates a missing Google class but **never overwrites an existing one**. After changing a template's shared configuration, publish it explicitly from your setup or deployment code:
+
+```ts
+await rewards.publish();
+```
+
+This updates the shared class for all of its passes. Do not publish on every download. Calling `publish()` without Google credentials throws `GOOGLE_NOT_CONFIGURED`.
+
+For a pass already saved to Google Wallet:
+
+```ts
+await rewards.update({ serialNumber: "member-123", values: { points: "1500" } });
+await rewards.expire("member-123");
+await rewards.delete("member-123");
+```
+
+These lifecycle methods affect Google only; with Apple-only credentials they do nothing. Apple updates require your own [pass web service and push notifications](https://developer.apple.com/documentation/walletpasses). Passlet generates and signs the replacement file, but does not host that service or send APNs notifications. To issue a voided Apple pass, pass `apple: { voided: true }` to `create()`.
 
 ## Credentials
 
-### Apple
+### Apple Wallet
 
-Requires an Apple Developer account with a Pass Type ID.
+1. [Register a Pass Type ID](https://developer.apple.com/account/resources/identifiers/list/passTypeId) with an Apple Developer account and create its signing certificate.
+2. Export the certificate **with its private key** as `certificate.p12`. Convert it to PEM:
 
-1. [Create a Pass Type ID](https://developer.apple.com/account/resources/identifiers/list/passTypeId) in the Apple Developer portal
-2. Create and download the signing certificate
-3. Export as `.p12`, convert to PEM:
+   ```sh
+   openssl pkcs12 -in certificate.p12 -clcerts -nokeys -out signerCert.pem
+   openssl pkcs12 -in certificate.p12 -nocerts -nodes -out signerKey.pem
+   ```
 
-```bash
-openssl pkcs12 -in certificate.p12 -clcerts -nokeys -out signerCert.pem
-openssl pkcs12 -in certificate.p12 -nocerts -out signerKey.pem
-```
+3. Download the [Apple WWDR G4 intermediate certificate](https://www.apple.com/certificateauthority/) and convert the downloaded DER certificate:
 
-4. Download the [Apple WWDR certificate](https://www.apple.com/certificateauthority/) (G4)
+   ```sh
+   openssl x509 -inform DER -in AppleWWDRCAG4.cer -out wwdr.pem
+   ```
 
-### Google
+4. Set `APPLE_PASS_TYPE_ID` and `APPLE_TEAM_ID` to the identifiers in the signing certificate. Supply your app's PNG icon in standard and @2x sizes.
 
-Requires a Google Wallet issuer account.
+The private key must be unencrypted PEM; protect it with filesystem permissions or a secret manager. Passlet also supports an `AppleExternalSigner` for keys held outside your process. Never commit certificates, private keys, or `.env` files.
 
-1. [Sign up for the Google Pay & Wallet Console](https://pay.google.com/business/console) — your **Issuer ID** is shown under *Google Wallet API › Settings*
-2. In Google Cloud, enable the **Google Wallet API** and create a service account
-3. Download the service account JSON key — use `client_email` and `private_key` from the file
+### Google Wallet
 
-> [!TIP]
-> Pass `private_key` unchanged from the service-account JSON. Passlet normalizes literal `\n` escapes before importing the key.
+1. Create an issuer account in the [Google Pay & Wallet Console](https://pay.google.com/business/console) and set `GOOGLE_ISSUER_ID` to its issuer ID.
+2. Enable the Google Wallet API in Google Cloud, create a service account, and download its JSON key as `service-account.json`.
+3. **Grant that service-account email Developer access in your Wallet issuer account.** A Cloud service account alone does not grant issuer access.
+4. Set `GOOGLE_LOGO_URL` to your hosted logo. In demo mode, add your test accounts in the Wallet Console; request publishing access before issuing to the public.
 
-## Error handling
+Use `client_email` and `private_key` from the JSON unchanged. Passlet also accepts literal `\n` escapes in the key. Google's [REST authentication guide](https://developers.google.com/wallet/generic/getting-started/auth/rest) covers account permissions.
 
-Passlet throws a typed `WalletError` with a stable `code` you can switch on:
+## Handle failures
+
+Catch `WalletError` around **both template construction and async operations**. Branch on `code`, not message text.
 
 ```ts
-import { Wallet, WalletError } from "passlet";
+import { WalletError } from "passlet";
 
 try {
-  await pass.create({ serialNumber: "user-123" });
-} catch (err) {
-  if (err instanceof WalletError) {
-    console.error(err.code, err.message);
+  await rewards.create({ serialNumber: "member-123", values: { points: "1250" } });
+} catch (error) {
+  if (!(error instanceof WalletError)) throw error;
+  const { code, status, message, why, fix } = error;
+  console.error({ code, status, message, why, fix });
+  for (const issue of error.issues) {
+    console.error(issue.path.join("."), issue.message);
   }
 }
 ```
 
-Common codes:
+Every error exposes **`code`, `status`, `message`, `why`, and `fix`**. `status` is the upstream HTTP status when available, otherwise the catalog default below. It is diagnostic metadata—not an instruction to forward provider authentication errors to your users.
 
-| Code                                                 | Meaning                                                  |
-| ---------------------------------------------------- | -------------------------------------------------------- |
-| `PASS_CONFIG_INVALID`                                | Pass config failed validation (message names the field) |
-| `CREATE_CONFIG_INVALID`                              | The `create()` config failed validation                 |
-| `APPLE_INVALID_SIGNER_CERT` / `_SIGNER_KEY` / `_WWDR` | A PEM credential couldn't be parsed                      |
-| `APPLE_MISSING_ICON`                                 | Apple passes require an `icon` image                     |
-| `GOOGLE_INVALID_PRIVATE_KEY`                         | The service-account `private_key` isn't valid PKCS#8 PEM |
-| `GOOGLE_MISSING_LOGO`                                | Google passes require a `logo` URL                       |
-| `GOOGLE_API_ERROR`                                   | The Google Wallet REST API rejected the request          |
+Validation errors include `issues`. Google HTTP failures may include `retryAfter` in seconds; Passlet does not retry automatically. Messages omit raw provider responses and image URLs. Treat the underlying `cause` as private diagnostic data.
 
-Config errors throw at construction (`PASS_CONFIG_INVALID`) or at `create()` time; signing and API errors surface from `create()`.
+<details>
+<summary>Error catalog</summary>
 
-## Updating, expiring & deleting
+The code is the key in the exported `WALLET_ERROR_CODES` catalog. Each entry contains its default status, message, reason, and remedy.
 
-For passes already saved to Google Wallet, manage their lifecycle via the REST API:
+| Code | Status | Message | Why | Fix |
+| --- | --- | --- | --- | --- |
+| `PASS_CONFIG_INVALID` | 400 | Invalid pass template. | The template does not satisfy the pass schema. | Correct each field listed in issues before constructing the template. |
+| `CREATE_CONFIG_INVALID` | 400 | Invalid recipient data. | The issuance or update data does not satisfy the recipient schema. | Correct each field listed in issues before retrying the operation. |
+| `APPLE_INVALID_SIGNER_CERT` | 500 | Invalid Apple signing certificate. | signerCert could not be parsed as a PEM certificate. | Export your Pass Type ID certificate as PEM and pass its contents as signerCert. |
+| `APPLE_INVALID_SIGNER_KEY` | 500 | Invalid Apple signing key. | signerKey could not be parsed as an unencrypted PEM private key. | Export the private key matching signerCert as unencrypted PEM. |
+| `APPLE_INVALID_WWDR` | 500 | Invalid Apple WWDR certificate. | wwdr could not be parsed as a PEM certificate. | Download the Apple WWDR G4 intermediate certificate and convert DER to PEM. |
+| `APPLE_SIGNING_FAILED` | 500 | Apple pass signing failed. | The signer could not produce the pass's detached PKCS#7 signature. | Check the certificate/key pair; for an external signer, check the digest and RSA padding. |
+| `APPLE_MISSING_ICON` | 400 | Apple pass icon is missing. | Apple Wallet requires an icon on every pass. | Set apple.icon to PNG bytes or an accessible image URL, with an @2x variant. |
+| `APPLE_BOARDING_MISSING_TRANSIT_TYPE` | 400 | Boarding pass transit type is missing. | Apple boarding passes require a transitType. | Set transitType to air, train, bus, boat, or generic. |
+| `APPLE_MISSING_AUTH_TOKEN` | 400 | Apple update authentication token is missing or too short. | A pass using webServiceURL needs an authenticationToken of at least 16 characters. | Set apple.authenticationToken to a secure token with at least 16 characters. |
+| `APPLE_APP_LAUNCH_URL_REQUIRES_STORE_IDS` | 400 | Associated App Store identifiers are missing. | Apple requires associatedStoreIdentifiers when appLaunchURL is set. | Set apple.associatedStoreIdentifiers to your app's numeric App Store IDs. |
+| `GOOGLE_INVALID_PRIVATE_KEY` | 500 | Invalid Google service-account private key. | privateKey could not be imported as a PKCS#8 PEM private key. | Use private_key unchanged from the service-account JSON, not the filename or entire JSON. |
+| `GOOGLE_SIGNING_FAILED` | 500 | Google JWT signing failed. | The service-account key could not sign the OAuth assertion or Wallet JWT. | Check that the service-account key is a valid RSA private key usable with RS256. |
+| `GOOGLE_API_ERROR` | 502 | Google rejected the Wallet request. | The Wallet API returned an error not covered by a more specific code. | Check status and verify the pass fields against Google's resource requirements. |
+| `GOOGLE_AUTH_FAILED` | 401 | Google authentication failed. | Google rejected the service-account assertion or access token. | Check clientEmail, the active service-account key, and the system clock. |
+| `GOOGLE_ACCESS_DENIED` | 403 | Google denied access to the issuer. | The credentials do not have permission to perform this Wallet operation. | Enable the Wallet API and grant the service-account email Developer access to your issuer. |
+| `GOOGLE_NOT_FOUND` | 404 | Google Wallet resource was not found. | The requested class or saved pass object does not exist for this issuer. | Check the issuer, template ID, and serial number; a pass must be saved before updating it. |
+| `GOOGLE_CONFLICT` | 409 | Google Wallet resource already exists. | Another resource already uses the requested ID. | Use the existing resource or a different ID; publish shared template changes explicitly. |
+| `GOOGLE_RATE_LIMITED` | 429 | Google request quota was exceeded. | Google is limiting requests for the issuer or project. | Reduce request volume and wait before retrying; respect retryAfter when provided. |
+| `GOOGLE_UNAVAILABLE` | 503 | Google Wallet is temporarily unavailable. | Google returned a server error. | Retry later with backoff and respect retryAfter when provided. |
+| `GOOGLE_NETWORK_ERROR` | 502 | Could not reach Google. | The OAuth or Wallet request failed before a complete response could be read. | Check DNS, TLS, proxies, and network access to Google's OAuth and Wallet endpoints. |
+| `GOOGLE_INVALID_RESPONSE` | 502 | Google returned an invalid response. | A successful response was malformed or missing required data. | Check for an upstream service or proxy failure before retrying. |
+| `GOOGLE_NOT_CONFIGURED` | 500 | Google Wallet is not configured. | Template publication was requested without Google credentials. | Configure google credentials on Wallet before calling publish(). |
+| `GOOGLE_MISSING_LOGO` | 400 | Google Wallet logo is missing. | Google loyalty and transit classes require a publicly accessible logo URL. | Set google.logo to a hosted image URL; image bytes are not supported by Google. |
+| `GOOGLE_FLIGHT_MISSING_CLASS_FIELDS` | 400 | Google flight details are incomplete. | The flight class is missing required header or departure data. | Set carrier, flightNumber, origin, destination, and departure on the flight template. |
+| `GOOGLE_FLIGHT_MISSING_PASSENGER_NAME` | 400 | Google flight passenger name is missing. | Google requires passengerName on each flight pass object. | Set values.passengerName when issuing the flight pass. |
+| `IMAGE_FETCH_NETWORK_ERROR` | 502 | Could not download the image. | The image request failed before its bytes could be read. | Check the image URL and network access, or supply Apple image bytes directly. |
+| `IMAGE_FETCH_FAILED` | 502 | The image server rejected the download. | The image URL returned a non-success HTTP status. | Check that the URL is accessible and has not expired; inspect status for the response code. |
 
-```ts
-await pass.update({ serialNumber: "user-123", values: { points: "1500" } }); // push new values
-await pass.expire("user-123"); // mark expired
-await pass.delete("user-123"); // remove
-```
+</details>
 
-These operate on Google passes. Apple passes update through your own [pass web service](https://developer.apple.com/documentation/walletpasses) (on the roadmap), so `update` / `delete` are no-ops for Apple — you can void an Apple pass at issue time with `apple: { voided: true }` in `create()`.
-
-## Roadmap
-
-- [ ] Pass updates and push notifications (APNs + Google API)
-- [ ] CLI for quick pass generation
-- [X] Pass playground
-
-## Contributing
-
-PRs welcome. If you've dealt with wallet pass APIs before, you know why this needs to exist.
-
-## License
-
-[MIT](LICENSE) © [Oscar Treviño](https://github.com/oscartrevio)
+[All error codes](packages/passlet/src/errors.ts) · [Contributing](CONTRIBUTING.md) · [MIT license](LICENSE)

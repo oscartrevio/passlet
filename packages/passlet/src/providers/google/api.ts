@@ -1,10 +1,13 @@
 import { importPKCS8, SignJWT } from "jose";
-import { WalletError } from "../../errors";
+import { WalletError, type WalletErrorCode } from "../../errors";
 import type { GoogleCredentials } from "../../types/credentials";
 
 const WALLET_BASE = "https://walletobjects.googleapis.com/walletobjects/v1";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const WALLET_SCOPE = "https://www.googleapis.com/auth/wallet_object.issuer";
+const BEARER_TOKEN_RE = /^[A-Za-z0-9._~+/-]+=*$/;
+const RETRY_SECONDS_RE = /^\d+$/;
+const HTTP_DATE_PREFIX_RE = /^[A-Za-z]/;
 
 type WalletMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 type GoogleVertical =
@@ -25,13 +28,15 @@ const tokenCache = new Map<string, { token: string; expiresAt: number }>();
 export async function importGoogleKey(
 	credentials: GoogleCredentials
 ): Promise<CryptoKey> {
-	// Service-account JSON copied into env vars may retain literal "\n".
-	// PEM cannot contain backslashes, so unescaping leaves valid keys untouched.
-	const privateKey = credentials.privateKey.replace(/\\n/g, "\n");
 	try {
+		// Service-account JSON copied into env vars may retain literal "\n".
+		// PEM cannot contain backslashes, so unescaping leaves valid keys untouched.
+		const privateKey = credentials.privateKey.replace(/\\n/g, "\n");
 		return await importPKCS8(privateKey, "RS256");
 	} catch (cause) {
-		throw new WalletError("GOOGLE_INVALID_PRIVATE_KEY", undefined, { cause });
+		throw new WalletError("GOOGLE_INVALID_PRIVATE_KEY", undefined, {
+			cause: cause instanceof Error ? cause : undefined,
+		});
 	}
 }
 
@@ -55,10 +60,12 @@ async function getAccessToken(
 			.setAudience(TOKEN_URL)
 			.sign(privateKey);
 	} catch (cause) {
-		throw new WalletError("GOOGLE_SIGNING_FAILED", undefined, { cause });
+		throw new WalletError("GOOGLE_SIGNING_FAILED", undefined, {
+			cause: cause instanceof Error ? cause : undefined,
+		});
 	}
 
-	const response = await fetch(TOKEN_URL, {
+	const response = await googleFetch(TOKEN_URL, {
 		method: "POST",
 		headers: { "Content-Type": "application/x-www-form-urlencoded" },
 		body: new URLSearchParams({
@@ -67,20 +74,19 @@ async function getAccessToken(
 		}).toString(),
 	});
 
-	if (!response.ok) {
-		const text = await response.text();
-		throw new WalletError(
-			"GOOGLE_API_ERROR",
-			`Failed to obtain access token (${response.status}): ${extractGoogleDetail(text)}`
-		);
+	await assertOk(response, "GOOGLE_AUTH_FAILED");
+	const data = await readGoogleResponse(response);
+	const token = data.access_token;
+	if (typeof token !== "string" || !BEARER_TOKEN_RE.test(token)) {
+		throw new WalletError("GOOGLE_INVALID_RESPONSE", undefined, {
+			retryAfter: retryAfterSeconds(response),
+		});
 	}
-
-	const data = (await response.json()) as { access_token: string };
 	tokenCache.set(cacheKey, {
-		token: data.access_token,
+		token,
 		expiresAt: Date.now() + 55 * 60 * 1000,
 	});
-	return data.access_token;
+	return token;
 }
 
 async function walletRequest(
@@ -91,7 +97,7 @@ async function walletRequest(
 	body?: Record<string, unknown>
 ): Promise<Response> {
 	const accessToken = await getAccessToken(credentials, privateKey);
-	return fetch(`${WALLET_BASE}${path}`, {
+	return googleFetch(`${WALLET_BASE}${path}`, {
 		method,
 		headers: {
 			Authorization: `Bearer ${accessToken}`,
@@ -101,30 +107,115 @@ async function walletRequest(
 	});
 }
 
-function extractGoogleDetail(text: string): string {
+async function googleFetch(url: string, init: RequestInit): Promise<Response> {
 	try {
-		const body = JSON.parse(text) as { error?: { message?: string } };
-		if (body.error?.message) {
-			return body.error.message;
+		return await fetch(url, init);
+	} catch (cause) {
+		throw new WalletError("GOOGLE_NETWORK_ERROR", undefined, {
+			cause: cause instanceof Error ? cause : undefined,
+		});
+	}
+}
+
+async function readGoogleResponse(
+	response: Response
+): Promise<Record<string, unknown>> {
+	let data: unknown;
+	try {
+		data = await response.json();
+	} catch (cause) {
+		// JSON parser errors may quote the response body, including secrets.
+		if (cause instanceof SyntaxError) {
+			throw new WalletError("GOOGLE_INVALID_RESPONSE", undefined, {
+				retryAfter: retryAfterSeconds(response),
+			});
 		}
-	} catch {
-		// not JSON — fall through to raw text
+		throw new WalletError("GOOGLE_NETWORK_ERROR", undefined, {
+			retryAfter: retryAfterSeconds(response),
+			cause: cause instanceof Error ? cause : undefined,
+		});
 	}
-	return text;
+	if (!data || typeof data !== "object" || Array.isArray(data)) {
+		throw new WalletError("GOOGLE_INVALID_RESPONSE", undefined, {
+			retryAfter: retryAfterSeconds(response),
+		});
+	}
+	return data as Record<string, unknown>;
 }
 
-async function assertOk(response: Response): Promise<void> {
-	if (!response.ok) {
-		const text = await response.text();
-		const detail = extractGoogleDetail(text);
-		throw new WalletError(
-			"GOOGLE_API_ERROR",
-			`Google Wallet API error (${response.status}): ${detail}`
-		);
+function retryAfterSeconds(response: Response): number | undefined {
+	const value = response.headers.get("Retry-After")?.trim();
+	if (!value) {
+		return;
 	}
+	if (RETRY_SECONDS_RE.test(value)) {
+		const seconds = Number(value);
+		return Number.isFinite(seconds) ? seconds : undefined;
+	}
+	if (!HTTP_DATE_PREFIX_RE.test(value)) {
+		return;
+	}
+	const date = Date.parse(value);
+	return Number.isNaN(date)
+		? undefined
+		: Math.max(0, Math.ceil((date - Date.now()) / 1000));
 }
 
-// Ensure a Google Wallet class exists, creating or updating it as needed.
+const HTTP_ERROR_CODES: Partial<Record<number, WalletErrorCode>> = {
+	401: "GOOGLE_AUTH_FAILED",
+	403: "GOOGLE_ACCESS_DENIED",
+	404: "GOOGLE_NOT_FOUND",
+	409: "GOOGLE_CONFLICT",
+	429: "GOOGLE_RATE_LIMITED",
+};
+
+async function assertOk(
+	response: Response,
+	fallback: "GOOGLE_API_ERROR" | "GOOGLE_AUTH_FAILED" = "GOOGLE_API_ERROR"
+): Promise<void> {
+	if (response.ok) {
+		return;
+	}
+	const code =
+		response.status >= 500 && response.status <= 599
+			? "GOOGLE_UNAVAILABLE"
+			: (HTTP_ERROR_CODES[response.status] ?? fallback);
+	const error = new WalletError(code, undefined, {
+		status: response.status,
+		retryAfter: retryAfterSeconds(response),
+	});
+	// Discard untrusted diagnostics; cleanup must not hide the API failure.
+	await response.body?.cancel().catch(() => undefined);
+	throw error;
+}
+
+async function getClass(
+	classType: GoogleClassType,
+	classId: string,
+	credentials: GoogleCredentials,
+	privateKey: CryptoKey
+): Promise<Record<string, unknown> | null> {
+	const response = await walletRequest(
+		"GET",
+		`/${classType}/${classId}`,
+		credentials,
+		privateKey
+	);
+	if (response.status === 404) {
+		await response.body?.cancel().catch(() => undefined);
+		return null;
+	}
+	await assertOk(response);
+	const body = await readGoogleResponse(response);
+	if (body.id !== classId) {
+		throw new WalletError("GOOGLE_INVALID_RESPONSE", undefined, {
+			retryAfter: retryAfterSeconds(response),
+		});
+	}
+	return body;
+}
+
+// Issuance may create a missing class, but never rewrites a shared template.
 export async function ensureClass(
 	classType: GoogleClassType,
 	classId: string,
@@ -132,56 +223,49 @@ export async function ensureClass(
 	credentials: GoogleCredentials,
 	privateKey: CryptoKey
 ): Promise<void> {
-	const existing = await walletRequest(
-		"GET",
-		`/${classType}/${classId}`,
-		credentials,
-		privateKey
-	);
-
-	if (existing.ok) {
-		const rawClass: unknown = await existing.json();
-		if (!rawClass || typeof rawClass !== "object" || Array.isArray(rawClass)) {
-			throw new WalletError(
-				"GOOGLE_API_ERROR",
-				"Google Wallet API returned an invalid class payload"
-			);
-		}
-		// Google requires a full body for PUT; preserve attributes we do not own.
-		const updateBody = {
-			...(rawClass as Record<string, unknown>),
+	if (await getClass(classType, classId, credentials, privateKey)) {
+		return;
+	}
+	await assertOk(
+		await walletRequest("POST", `/${classType}`, credentials, privateKey, {
 			...classBody,
-		};
+			id: classId,
+		})
+	);
+}
 
-		// Updates accept only UNDER_REVIEW or DRAFT.
-		if ("reviewStatus" in updateBody && updateBody.reviewStatus !== "DRAFT") {
-			updateBody.reviewStatus = "UNDER_REVIEW";
-		}
-
+export async function publishClass(
+	classType: GoogleClassType,
+	classId: string,
+	classBody: Record<string, unknown>,
+	credentials: GoogleCredentials,
+	privateKey: CryptoKey
+): Promise<void> {
+	const existing = await getClass(classType, classId, credentials, privateKey);
+	if (!existing) {
 		await assertOk(
-			await walletRequest(
-				"PUT",
-				`/${classType}/${classId}`,
-				credentials,
-				privateKey,
-				{
-					id: classId,
-					...updateBody,
-				}
-			)
+			await walletRequest("POST", `/${classType}`, credentials, privateKey, {
+				...classBody,
+				id: classId,
+			})
 		);
 		return;
 	}
 
-	if (existing.status !== 404) {
-		await assertOk(existing);
+	// Google requires a full body for PUT; preserve attributes we do not own.
+	const updateBody = { ...existing, ...classBody, id: classId };
+	// Updates accept only UNDER_REVIEW or DRAFT.
+	if ("reviewStatus" in updateBody && updateBody.reviewStatus !== "DRAFT") {
+		updateBody.reviewStatus = "UNDER_REVIEW";
 	}
-
 	await assertOk(
-		await walletRequest("POST", `/${classType}`, credentials, privateKey, {
-			id: classId,
-			...classBody,
-		})
+		await walletRequest(
+			"PUT",
+			`/${classType}/${classId}`,
+			credentials,
+			privateKey,
+			updateBody
+		)
 	);
 }
 
@@ -201,7 +285,7 @@ export async function deleteObject(
 	if (response.status !== 404) {
 		await assertOk(response);
 	}
-	await response.body?.cancel();
+	await response.body?.cancel().catch(() => undefined);
 }
 
 export async function patchObject(
