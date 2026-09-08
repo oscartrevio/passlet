@@ -108,23 +108,21 @@ export function escapeStringsValue(value: string): string {
 }
 
 async function fetchAsBytes(url: string): Promise<Uint8Array> {
-	let response: Response;
 	try {
-		response = await fetch(url);
+		const response = await fetch(url);
+		if (!response.ok) {
+			await response.body?.cancel();
+			throw new WalletError("IMAGE_FETCH_FAILED", undefined, {
+				status: response.status,
+			});
+		}
+		return new Uint8Array(await response.arrayBuffer());
 	} catch (cause) {
-		throw new WalletError(
-			"IMAGE_FETCH_NETWORK_ERROR",
-			`Failed to fetch image: ${url} (network error)`,
-			{ cause }
-		);
+		if (cause instanceof WalletError) {
+			throw cause;
+		}
+		throw new WalletError("IMAGE_FETCH_NETWORK_ERROR", undefined, { cause });
 	}
-	if (!response.ok) {
-		throw new WalletError(
-			"IMAGE_FETCH_FAILED",
-			`Failed to fetch image: ${url} (${response.status})`
-		);
-	}
-	return new Uint8Array(await response.arrayBuffer());
 }
 
 async function resolveImageSetWithMode(

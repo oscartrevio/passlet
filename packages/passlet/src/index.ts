@@ -1,4 +1,8 @@
-export type { WalletErrorCode } from "./errors";
+export type {
+	WalletErrorCode,
+	WalletErrorOptions,
+	WalletValidationIssue,
+} from "./errors";
 export { WALLET_ERROR_CODES, WalletError } from "./errors";
 export { APPLE_PASS_CONTENT_TYPE, field, googleSaveUrl, Pass } from "./pass";
 export type {

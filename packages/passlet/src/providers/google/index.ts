@@ -12,7 +12,13 @@ import type {
 	UpdateOptions,
 } from "../../types/schemas";
 import type { GoogleClassType, GoogleObjectType } from "./api";
-import { deleteObject, ensureClass, importGoogleKey, patchObject } from "./api";
+import {
+	deleteObject,
+	ensureClass,
+	importGoogleKey,
+	patchObject,
+	publishClass,
+} from "./api";
 import {
 	imageUri,
 	localized,
@@ -626,14 +632,32 @@ function buildObjectBody(
 	};
 }
 
+export async function publishGooglePass(
+	pass: PassConfig,
+	credentials: GoogleCredentials
+): Promise<void> {
+	validateGoogleRequirements(pass);
+	const privateKey = await importGoogleKey(credentials);
+	const classType: GoogleClassType = transitOptions(pass)
+		? "transitClass"
+		: CLASS_TYPE[pass.type];
+	const classId = `${credentials.issuerId}.${pass.id}`;
+
+	await publishClass(
+		classType,
+		classId,
+		buildClassBody(pass),
+		credentials,
+		privateKey
+	);
+}
+
 export async function generateGooglePass(
 	pass: PassConfig,
 	createConfig: CreateConfig,
 	credentials: GoogleCredentials
 ): Promise<{ pass: string | null; warnings: string[] }> {
 	validateGoogleRequirements(pass);
-
-	const privateKey = await importGoogleKey(credentials);
 
 	const classType: GoogleClassType = transitOptions(pass)
 		? "transitClass"
@@ -646,9 +670,11 @@ export async function generateGooglePass(
 	const classId = `${credentials.issuerId}.${pass.id}`;
 
 	const classBody = buildClassBody(pass);
-	await ensureClass(classType, classId, classBody, credentials, privateKey);
-
 	const objectBody = buildObjectBody(pass, createConfig, classId, objectId);
+
+	const privateKey = await importGoogleKey(credentials);
+
+	await ensureClass(classType, classId, classBody, credentials, privateKey);
 
 	const payload = {
 		iss: credentials.clientEmail,
@@ -663,11 +689,16 @@ export async function generateGooglePass(
 		},
 	};
 
-	const jwt = await new SignJWT(payload)
-		.setProtectedHeader({ alg: "RS256" })
-		.sign(privateKey);
-
-	return { pass: jwt, warnings: [] };
+	try {
+		const jwt = await new SignJWT(payload)
+			.setProtectedHeader({ alg: "RS256" })
+			.sign(privateKey);
+		return { pass: jwt, warnings: [] };
+	} catch (cause) {
+		throw new WalletError("GOOGLE_SIGNING_FAILED", undefined, {
+			cause: cause instanceof Error ? cause : undefined,
+		});
+	}
 }
 
 export async function updateGooglePass(
