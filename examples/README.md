@@ -149,9 +149,9 @@ return the URL as JSON and let the client render an official
 - **Runtime.** Passlet signs with `node-forge` / `jszip` and needs Node APIs. In Next.js
   set `export const runtime = "nodejs"` (the Edge runtime will fail). On Cloudflare
   Workers you need `nodejs_compat`.
-- **Apple needs an `icon`.** Missing it throws `WalletError("APPLE_MISSING_ICON")`.
-  Google needs a `logo` **URL** (`GOOGLE_MISSING_LOGO`) — Google does not accept binary
-  uploads, only hosted images, and Apple slots take bytes, not URLs.
+- **Required images.** Apple needs `apple.icon`, as bytes or a URL. Google loyalty
+  and transit passes need `google.logo` as a public URL; Google does not accept image
+  uploads. Missing required images throw `APPLE_MISSING_ICON` or `GOOGLE_MISSING_LOGO`.
 - **Certificate mismatch.** `APPLE_PASS_TYPE_IDENTIFIER` and `APPLE_TEAM_ID` must match
   the certificate exactly. A mismatch still produces a `.pkpass`, but iOS silently
   refuses to add it — no error, just a dead file.
@@ -165,7 +165,10 @@ return the URL as JSON and let the client render an official
   label. Omit the key entirely to fall back to the template's default value.
 - **Check `warnings`.** `create()` resolves successfully with warnings for things like a
   missing optional image. They're the fastest signal that a pass will look wrong.
-- **Errors are typed.** Catch `WalletError` and switch on `err.code` (`PASS_CONFIG_INVALID`,
-  `CREATE_CONFIG_INVALID`, `APPLE_INVALID_SIGNER_CERT`, `GOOGLE_API_ERROR`, …) instead of
-  matching on message strings. Config errors surface at template construction — which, in
-  these examples, means at boot rather than mid-request.
+- **Template publication.** Google issuance creates missing classes but does not
+  overwrite existing ones. Call `pass.publish()` after changing shared template
+  configuration, from setup or deployment code rather than on each download.
+- **Errors are typed.** Catch `WalletError` around construction and async operations.
+  It exposes `code`, `status`, `message`, `why`, and `fix`, plus validation `issues`
+  and optional `retryAfter` seconds. Branch on `code`; keep underlying causes and
+  recipient data out of public responses.
