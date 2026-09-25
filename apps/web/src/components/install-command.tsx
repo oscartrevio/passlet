@@ -28,24 +28,28 @@ export function InstallCommand() {
 
 	return (
 		<div className="flex flex-col gap-2">
-			<div className="flex items-center gap-3">
+			<div className="-ml-1.5 flex items-center">
 				{(["npm", "pnpm", "yarn", "bun", "skill"] as InstallOption[]).map(
 					(p) => (
 						<Fragment key={p}>
 							<button
+								aria-pressed={pm === p}
 								className={cn(
-									"hit-area-2 cursor-pointer touch-manipulation font-medium text-xs transition-colors duration-150 ease-out",
+									"h-6 cursor-pointer touch-manipulation rounded-md px-1.5 font-medium text-xs transition-colors duration-150 ease-out",
 									pm === p
-										? "text-(--gray-a11)"
+										? "bg-(--gray-a3) text-(--gray-a11)"
 										: "text-(--gray-a8) hover:text-(--gray-a9)"
 								)}
 								onClick={() => setPm(p)}
 								type="button"
 							>
-								{p}{" "}
+								{p}
 							</button>
 							{p === "bun" && (
-								<Separator className="rounded-full" orientation="vertical" />
+								<Separator
+									className="mx-1.5 my-1 rounded-full"
+									orientation="vertical"
+								/>
 							)}
 						</Fragment>
 					)
