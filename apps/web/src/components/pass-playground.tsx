@@ -16,7 +16,7 @@ import {
 	type PatternType,
 } from "@/lib/data";
 import {
-	captureBannerBytes,
+	captureStripImages,
 	STRIP_H,
 	STRIP_PATHS,
 	STRIP_W,
@@ -286,7 +286,12 @@ export function PassPlayground({
 		setStatus({ kind: "creating" });
 		try {
 			const banner =
-				provider === "apple" ? await captureBannerBytes(pattern) : undefined;
+				provider === "apple"
+					? captureStripImages(pattern, {
+							background: activeColor.color,
+							pattern: activeColor.secondary,
+						})
+					: undefined;
 			const [result] = await Promise.all([
 				createPassAction({
 					provider,

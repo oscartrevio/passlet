@@ -2,6 +2,7 @@
 
 import { headers } from "next/headers";
 import { field, Wallet } from "passlet";
+import type { StripImages } from "@/lib/patterns";
 import { checkRateLimit, recordPassCreated } from "@/lib/rate-limit";
 import type { WalletProvider } from "@/types/pass";
 
@@ -14,7 +15,7 @@ function requiredEnv(name: string): string {
 }
 
 interface CreatePassInput {
-	banner?: string;
+	banner?: StripImages;
 	color: string;
 	memberName: string;
 	memberNo: string;
@@ -84,7 +85,11 @@ export async function createPassAction(
 		apple: {
 			logoText: "Passlet",
 			icon: Buffer.from(APPLE_ICON_BASE64, "base64"),
-			strip: input.banner ? Buffer.from(input.banner, "base64") : undefined,
+			strip: input.banner && {
+				base: Buffer.from(input.banner.base, "base64"),
+				retina: Buffer.from(input.banner.retina, "base64"),
+				superRetina: Buffer.from(input.banner.superRetina, "base64"),
+			},
 			foregroundColor: input.textColor,
 			labelColor: input.textColor,
 		},
