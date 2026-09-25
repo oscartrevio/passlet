@@ -8,6 +8,7 @@ import { motion, useAnimationControls, useReducedMotion } from "motion/react";
 import { type CSSProperties, type ReactNode, useRef, useState } from "react";
 import { createPassAction } from "@/actions/create-pass";
 import { setPassletColor } from "@/actions/set-color";
+import { usePassEasterEgg } from "@/components/use-pass-easter-egg";
 import { AppleWalletIcon, GoogleWalletIcon } from "@/components/wallet-icons";
 import {
 	COLORS,
@@ -16,7 +17,7 @@ import {
 	type PatternType,
 } from "@/lib/data";
 import {
-	captureBannerBytes,
+	captureStripImages,
 	STRIP_H,
 	STRIP_PATHS,
 	STRIP_W,
@@ -34,6 +35,12 @@ const TODAY = new Date().toLocaleDateString("en-US", {
 	month: "long",
 	day: "numeric",
 });
+
+// Both sides of the pass share one box; the back is pre-rotated so the flip
+// reveals it, and each side hides when it faces away. The shadow lives on the
+// faces (not the wrapper) so it turns with the card and hides with its side.
+const PASS_FACE =
+	"absolute inset-0 flex flex-col overflow-hidden rounded-lg border-overlay soft-shadow hover:hover-soft-shadow bg-(--pass-bg) text-(--pass-text) transition-[color,background-color,box-shadow] duration-250 backface-hidden";
 
 type CreateStatus =
 	| { kind: "idle" }
@@ -148,6 +155,20 @@ function Field({ label, value }: { label: string; value: string }) {
 	);
 }
 
+// The back of the pass: the wordmark pressed into the card (see the
+// pass-letterpress utility), under a soft light so the surface doesn't read as
+// flat paint.
+function PassBack() {
+	return (
+		<>
+			<div className="absolute inset-0 bg-[radial-gradient(120%_70%_at_25%_0%,rgb(255_255_255/0.12),transparent_65%)]" />
+			<span className="pass-letterpress absolute inset-0 grid place-items-center font-semibold text-[52px] tracking-tighter">
+				Passlet
+			</span>
+		</>
+	);
+}
+
 function EditableField({
 	label,
 	value,
@@ -168,7 +189,7 @@ function EditableField({
 			</span>
 			<input
 				className={cn(
-					"w-24 bg-transparent font-semibold text-(--pass-text) text-xs caret-(--pass-text) outline-none transition-colors duration-300 placeholder:text-(--pass-text-subtle) placeholder:transition-colors placeholder:duration-300",
+					"w-24 cursor-text bg-transparent font-semibold text-(--pass-text) text-xs caret-(--pass-text) outline-none transition-colors duration-300 placeholder:text-(--pass-text-subtle) placeholder:transition-colors placeholder:duration-300",
 					value.trim().length === 0 && "animate-pulse",
 					wiggle && "animate-[wiggle_0.3s_ease-in-out]"
 				)}
@@ -261,8 +282,13 @@ export function PassPlayground({
 		playSound("tap");
 	};
 
+	const { flip, flipped, handleTap } = usePassEasterEgg({
+		wobble: delightControls,
+		playSound,
+	});
+
 	const cardStyle = {
-		backgroundColor: activeColor.color,
+		"--pass-bg": activeColor.color,
 		"--pass-text": activeColor.text,
 		"--pass-text-muted": activeColor.muted,
 		"--pass-text-subtle": activeColor.subtle,
@@ -284,13 +310,24 @@ export function PassPlayground({
 		setStatus({ kind: "creating" });
 		try {
 			const banner =
-				provider === "apple" ? await captureBannerBytes(pattern) : undefined;
+				provider === "apple"
+					? captureStripImages(pattern, {
+							background: activeColor.color,
+							pattern: activeColor.secondary,
+						})
+					: undefined;
 			const [result] = await Promise.all([
 				createPassAction({
 					provider,
 					memberName: trimmedName,
 					memberNo,
 					since: TODAY,
+					created: new Date().toLocaleString("en-US", {
+						dateStyle: "long",
+						timeStyle: "short",
+					}),
+					colorValue: color,
+					pattern,
 					color: activeColor.color,
 					textColor: activeColor.text,
 					banner,
@@ -337,44 +374,56 @@ export function PassPlayground({
 		<div className="flex flex-col gap-5 md:flex-row md:items-stretch md:gap-4">
 			<motion.div
 				animate={delightControls}
-				className="relative mx-auto aspect-181/251 w-full max-w-[256px] select-none overflow-hidden rounded-lg border-overlay text-(--pass-text) transition-colors duration-250 md:mx-0 md:w-[256px]"
+				className="relative mx-auto aspect-181/251 w-full max-w-[256px] cursor-pointer select-none motion-reduce:cursor-auto md:mx-0 md:w-[256px]"
 				initial={false}
-				style={cardStyle}
+				onClick={handleTap}
+				style={{ ...cardStyle, transformPerspective: 800 }}
 			>
-				<div className="flex h-full flex-col">
-					<div className="flex items-start justify-between p-3">
-						<span className="font-semibold">Passlet</span>
-						<div className="flex flex-col items-end">
-							<span className="text-(--pass-text-subtle) text-[8px] uppercase tracking-tight">
-								ID
-							</span>
-							<span className="font-medium text-[11px] tabular-nums leading-[1.2]">
-								{memberNo}
-							</span>
+				<motion.div
+					animate={flip}
+					className="transform-3d size-full"
+					initial={false}
+					style={{ transformPerspective: 1200 }}
+				>
+					<div className={PASS_FACE} inert={flipped}>
+						<div className="flex items-start justify-between p-3">
+							<span className="font-semibold">Passlet</span>
+							<div className="flex flex-col items-end">
+								<span className="text-(--pass-text-subtle) text-[8px] uppercase tracking-tight">
+									ID
+								</span>
+								<span className="font-medium text-[11px] tabular-nums leading-[1.2]">
+									{memberNo}
+								</span>
+							</div>
+						</div>
+
+						<CardStrip pattern={pattern} />
+
+						<div className="flex flex-col gap-1 p-3">
+							<div className="flex justify-between">
+								<EditableField
+									label="Member"
+									onChange={setName}
+									placeholder="Your Name"
+									value={name}
+									wiggle={wiggleName}
+								/>
+								<Field label="Since" value={TODAY} />
+							</div>
+						</div>
+
+						<div className="mt-auto flex justify-center pb-3">
+							<div className="size-24 overflow-hidden rounded-sm bg-white">
+								{qrSlot}
+							</div>
 						</div>
 					</div>
 
-					<CardStrip pattern={pattern} />
-
-					<div className="flex flex-col gap-1 p-3">
-						<div className="flex justify-between">
-							<EditableField
-								label="Member"
-								onChange={setName}
-								placeholder="Your Name"
-								value={name}
-								wiggle={wiggleName}
-							/>
-							<Field label="Since" value={TODAY} />
-						</div>
+					<div className={cn(PASS_FACE, "rotate-y-180")} inert={!flipped}>
+						<PassBack />
 					</div>
-
-					<div className="mt-auto flex justify-center pb-3">
-						<div className="size-24 overflow-hidden rounded-sm bg-white">
-							{qrSlot}
-						</div>
-					</div>
-				</div>
+				</motion.div>
 			</motion.div>
 
 			<div className="flex min-w-0 flex-1 flex-col gap-4">
