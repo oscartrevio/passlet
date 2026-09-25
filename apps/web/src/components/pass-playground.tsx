@@ -488,10 +488,10 @@ export function PassPlayground({
 
 				<Button
 					aria-busy={creating}
-					// Keep empty-name clicks enabled to show validation feedback.
+					// Stays clickable while announced as disabled, so an empty-name
+					// click can still answer with the error sound and field wiggle.
 					aria-disabled={creating || !name.trim()}
-					className="mt-auto cursor-pointer rounded-full bg-(--gray-a12) font-medium font-sans! text-white tracking-tight transition-opacity duration-200 disabled:pointer-events-auto aria-disabled:cursor-not-allowed aria-disabled:opacity-50 not-disabled:aria-[disabled=false]:active:scale-95 not-disabled:aria-[disabled=false]:hover:bg-(--gray-a11)"
-					disabled={creating}
+					className="mt-auto font-sans! tracking-tight"
 					onClick={handleCreatePass}
 				>
 					<span className="relative size-5">
