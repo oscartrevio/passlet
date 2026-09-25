@@ -127,7 +127,10 @@ export async function createPassAction(
 		},
 	});
 
-	const serialNumber = `passlet-${Date.now()}`;
+	// The prefix keeps these objects apart from anything else on the same
+	// Google issuer; the pass itself only shows the number.
+	const serial = String(Date.now());
+	const serialNumber = `passlet-${serial}`;
 	const issued = await pass.create({
 		serialNumber,
 		values: {
@@ -136,7 +139,7 @@ export async function createPassAction(
 			since: input.since,
 			design: input.design,
 			created: input.created,
-			serial: serialNumber,
+			serial,
 		},
 		barcode: {
 			format: "QR",
