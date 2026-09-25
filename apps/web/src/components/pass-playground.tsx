@@ -5,7 +5,7 @@ import { cn } from "@passlet/ui/lib/utils";
 import type { SoundPatch } from "@web-kits/audio";
 import { usePatch } from "@web-kits/audio/react";
 import { motion, useAnimationControls, useReducedMotion } from "motion/react";
-import { type CSSProperties, type ReactNode, useState } from "react";
+import { type CSSProperties, type ReactNode, useRef, useState } from "react";
 import { createPassAction } from "@/actions/create-pass";
 import { setPassletColor } from "@/actions/set-color";
 import { AppleWalletIcon, GoogleWalletIcon } from "@/components/wallet-icons";
@@ -34,6 +34,25 @@ const TODAY = new Date().toLocaleDateString("en-US", {
 	month: "long",
 	day: "numeric",
 });
+
+type CreateStatus =
+	| { kind: "idle" }
+	| { kind: "creating" }
+	| { kind: "created"; provider: WalletProvider }
+	| { kind: "failed"; message: string };
+
+function createButtonLabel(status: CreateStatus): string {
+	switch (status.kind) {
+		case "creating":
+			return "Adding...";
+		case "created":
+			return status.provider === "apple"
+				? "Pass Downloaded"
+				: "Opened in Google Wallet";
+		default:
+			return "Add to Wallet";
+	}
+}
 
 function CardStrip({ pattern }: { pattern: PatternType }) {
 	return (
@@ -178,9 +197,11 @@ export function PassPlayground({
 	const [color, setColor] = useState<ColorValue>(initialColor);
 	const [pattern, setPattern] = useState<PatternType>("waves");
 	const [provider, setProvider] = useState<WalletProvider>("apple");
-	const [creating, setCreating] = useState(false);
+	const [status, setStatus] = useState<CreateStatus>({ kind: "idle" });
 	const [wiggleName, setWiggleName] = useState(false);
-	const [createError, setCreateError] = useState<string | null>(null);
+	const creating = status.kind === "creating";
+	const created = status.kind === "created";
+	const createdTimeoutRef = useRef<number>(undefined);
 	const shouldReduceMotion = useReducedMotion();
 	const delightControls = useAnimationControls();
 
@@ -218,7 +239,10 @@ export function PassPlayground({
 		playSound("select");
 		triggerDelight();
 		setPassletColor(value).catch(() => {
-			setCreateError("Unable to save your color preference.");
+			setStatus({
+				kind: "failed",
+				message: "Unable to save your color preference.",
+			});
 		});
 	};
 
@@ -258,8 +282,8 @@ export function PassPlayground({
 			setTimeout(() => setWiggleName(false), 300);
 			return;
 		}
-		setCreateError(null);
-		setCreating(true);
+		clearTimeout(createdTimeoutRef.current);
+		setStatus({ kind: "creating" });
 		try {
 			const banner =
 				provider === "apple" ? await captureBannerBytes(pattern) : undefined;
@@ -293,14 +317,19 @@ export function PassPlayground({
 				a.rel = "noopener noreferrer";
 				a.click();
 			}
+			setStatus({ kind: "created", provider });
+			createdTimeoutRef.current = window.setTimeout(
+				() => setStatus({ kind: "idle" }),
+				2500
+			);
 			playSound("success");
 		} catch (error) {
-			setCreateError(
-				error instanceof Error ? error.message : "Failed to create pass."
-			);
+			setStatus({
+				kind: "failed",
+				message:
+					error instanceof Error ? error.message : "Failed to create pass.",
+			});
 			playSound("error");
-		} finally {
-			setCreating(false);
 		}
 	};
 
@@ -451,9 +480,9 @@ export function PassPlayground({
 					</div>
 				</div>
 
-				{createError ? (
-					<p className="text-(--red-a11) text-xs leading-normal">
-						{createError}
+				{status.kind === "failed" ? (
+					<p className="text-(--red-a11) text-xs leading-normal" role="alert">
+						{status.message}
 					</p>
 				) : null}
 
@@ -465,17 +494,47 @@ export function PassPlayground({
 					disabled={creating}
 					onClick={handleCreatePass}
 				>
-					<svg
-						aria-hidden="true"
-						fill="currentColor"
-						height="20"
-						viewBox="0 0 640 640"
-						width="20"
-						xmlns="http://www.w3.org/2000/svg"
-					>
-						<path d="M128 96C92.7 96 64 124.7 64 160L64 448C64 483.3 92.7 512 128 512L512 512C547.3 512 576 483.3 576 448L576 256C576 220.7 547.3 192 512 192L136 192C122.7 192 112 181.3 112 168C112 154.7 122.7 144 136 144L520 144C533.3 144 544 133.3 544 120C544 106.7 533.3 96 520 96L128 96zM480 320C497.7 320 512 334.3 512 352C512 369.7 497.7 384 480 384C462.3 384 448 369.7 448 352C448 334.3 462.3 320 480 320z" />
-					</svg>
-					<span>{creating ? "Adding..." : "Add to Wallet"}</span>
+					<span className="relative size-5">
+						<span
+							className={cn(
+								"absolute inset-0 flex items-center justify-center text-(--green-a10) transition-[opacity,filter,scale] duration-300 ease-in-out will-change-[opacity,filter,scale]",
+								created
+									? "scale-100 opacity-100 blur-0"
+									: "scale-[0.25] opacity-0 blur-sm"
+							)}
+						>
+							<svg
+								aria-hidden="true"
+								fill="currentColor"
+								height="20"
+								viewBox="0 0 640 640"
+								width="20"
+								xmlns="http://www.w3.org/2000/svg"
+							>
+								<path d="M320 576C178.6 576 64 461.4 64 320C64 178.6 178.6 64 320 64C461.4 64 576 178.6 576 320C576 461.4 461.4 576 320 576zM438 209.7C427.3 201.9 412.3 204.3 404.5 215L285.1 379.2L233 327.1C223.6 317.7 208.4 317.7 199.1 327.1C189.8 336.5 189.7 351.7 199.1 361L271.1 433C276.1 438 282.9 440.5 289.9 440C296.9 439.5 303.3 435.9 307.4 430.2L443.3 243.2C451.1 232.5 448.7 217.5 438 209.7z" />
+							</svg>
+						</span>
+						<span
+							className={cn(
+								"flex items-center justify-center transition-[opacity,filter,scale] duration-300 ease-in-out will-change-[opacity,filter,scale]",
+								created
+									? "scale-[0.25] opacity-0 blur-sm"
+									: "scale-100 opacity-100 blur-0"
+							)}
+						>
+							<svg
+								aria-hidden="true"
+								fill="currentColor"
+								height="20"
+								viewBox="0 0 640 640"
+								width="20"
+								xmlns="http://www.w3.org/2000/svg"
+							>
+								<path d="M128 96C92.7 96 64 124.7 64 160L64 448C64 483.3 92.7 512 128 512L512 512C547.3 512 576 483.3 576 448L576 256C576 220.7 547.3 192 512 192L136 192C122.7 192 112 181.3 112 168C112 154.7 122.7 144 136 144L520 144C533.3 144 544 133.3 544 120C544 106.7 533.3 96 520 96L128 96zM480 320C497.7 320 512 334.3 512 352C512 369.7 497.7 384 480 384C462.3 384 448 369.7 448 352C448 334.3 462.3 320 480 320z" />
+							</svg>
+						</span>
+					</span>
+					<span aria-live="polite">{createButtonLabel(status)}</span>
 				</Button>
 			</div>
 		</div>

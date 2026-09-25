@@ -93,7 +93,7 @@ export default async function Home() {
 		rawColor && isColorValue(rawColor) ? rawColor : DEFAULT_COLOR;
 
 	return (
-		<div className="flex min-h-svh flex-col">
+		<main className="flex min-h-svh flex-col">
 			<div className="w-full bg-(--gray-a2) py-12">
 				<div className="mx-auto max-w-lg px-4">
 					<PassPlayground
@@ -142,13 +142,13 @@ export default async function Home() {
 							"Apple gets a signed .pkpass, Google gets a JWT.",
 						].map((step, i) => (
 							<li
-								className="flex items-center gap-1 font-medium text-(--gray-a11) text-sm"
+								className="flex items-baseline gap-1 font-medium text-(--gray-a11) text-sm"
 								key={step}
 							>
 								<span className="w-4 shrink-0 font-semibold text-(--gray-a8)">
 									{i + 1}.
 								</span>
-								{step}
+								<span className="text-pretty">{step}</span>
 							</li>
 						))}
 					</ol>
@@ -161,16 +161,16 @@ export default async function Home() {
 					<div className="flex flex-col gap-2.5">
 						{features.map(({ icon, label, description }) => (
 							<div
-								className="group hit-area-y-1.5 flex items-center justify-between"
+								className="group hit-area-y-1.5 flex items-start justify-between gap-1"
 								key={label}
 							>
-								<div className="flex items-center gap-1">
+								<div className="flex shrink-0 items-center gap-1">
 									{icon}
 									<span className="text-balance font-semibold text-(--gray-a12) text-sm">
 										{label}
 									</span>
 								</div>
-								<span className="text-right font-medium text-(--gray-a8) text-sm transition-colors duration-150 ease-out group-hover:text-(--gray-a9)">
+								<span className="text-balance text-right font-medium text-(--gray-a8) text-sm transition-colors duration-150 ease-out group-hover:text-(--gray-a9)">
 									{description}
 								</span>
 							</div>
@@ -178,7 +178,7 @@ export default async function Home() {
 					</div>
 				</div>
 
-				<div className="mt-auto flex items-center justify-between pb-[env(safe-area-inset-bottom)] font-medium">
+				<footer className="mt-auto flex items-center justify-between pb-[env(safe-area-inset-bottom)] font-medium">
 					<span className="text-(--gray-a8) text-xs">
 						Created by{" "}
 						<Link
@@ -198,8 +198,8 @@ export default async function Home() {
 					>
 						v{version} • GitHub
 					</Link>
-				</div>
+				</footer>
 			</div>
-		</div>
+		</main>
 	);
 }
