@@ -143,9 +143,7 @@ function Field({ label, value }: { label: string; value: string }) {
 			<span className="text-(--pass-text-muted) text-[8px] uppercase tracking-normal">
 				{label}
 			</span>
-			<span className="font-semibold text-(--pass-text) text-xs leading-tighter">
-				{value}
-			</span>
+			<span className="font-semibold text-(--pass-text) text-xs">{value}</span>
 		</div>
 	);
 }
@@ -164,13 +162,13 @@ function EditableField({
 	wiggle?: boolean;
 }) {
 	return (
-		<div className="flex flex-col">
+		<label className="flex flex-col">
 			<span className="text-(--pass-text-muted) text-[8px] uppercase tracking-normal">
 				{label}
 			</span>
 			<input
 				className={cn(
-					"w-24 bg-transparent font-semibold text-(--pass-text) text-xs leading-tighter caret-(--pass-text) outline-none transition-colors duration-300 placeholder:text-(--pass-text-subtle) placeholder:transition-colors placeholder:duration-300",
+					"w-24 bg-transparent font-semibold text-(--pass-text) text-xs caret-(--pass-text) outline-none transition-colors duration-300 placeholder:text-(--pass-text-subtle) placeholder:transition-colors placeholder:duration-300",
 					value.trim().length === 0 && "animate-pulse",
 					wiggle && "animate-[wiggle_0.3s_ease-in-out]"
 				)}
@@ -180,7 +178,7 @@ function EditableField({
 				type="text"
 				value={value}
 			/>
-		</div>
+		</label>
 	);
 }
 
@@ -327,7 +325,9 @@ export function PassPlayground({
 			setStatus({
 				kind: "failed",
 				message:
-					error instanceof Error ? error.message : "Failed to create pass.",
+					error instanceof Error
+						? error.message
+						: "Couldn't create your pass. Try again.",
 			});
 			playSound("error");
 		}
@@ -389,7 +389,7 @@ export function PassPlayground({
 								<button
 									aria-label={`Select ${c.label} color`}
 									aria-pressed={isSelected}
-									className="relative size-5 cursor-pointer rounded-sm border-overlay transition-transform duration-150 ease-out after:absolute after:-inset-1.5 after:content-[''] focus:outline-none focus-visible:ring-2 focus-visible:ring-current focus-visible:ring-offset-2 active:scale-95"
+									className="relative size-5 cursor-pointer rounded-sm border-overlay transition-transform duration-150 ease-out after:absolute after:-inset-1.5 after:content-[''] focus:outline-none focus-visible:ring-2 focus-visible:ring-current focus-visible:ring-offset-2 active:scale-[0.96]"
 									key={c.value}
 									onClick={() => handleColorChange(c.value)}
 									style={{
@@ -416,7 +416,7 @@ export function PassPlayground({
 								<button
 									aria-label={`Select ${p.label} pattern`}
 									aria-pressed={isSelected}
-									className="relative cursor-pointer overflow-hidden rounded border-overlay transition-transform duration-150 ease-out after:absolute after:-inset-1.5 after:content-[''] focus:outline-none active:scale-95"
+									className="relative cursor-pointer overflow-hidden rounded border-overlay transition-transform duration-150 ease-out after:absolute after:-inset-1.5 after:content-[''] focus:outline-none focus-visible:ring-(--gray-a6) focus-visible:ring-[6px] active:scale-[0.96]"
 									key={p.value}
 									onClick={() => handlePatternChange(p.value)}
 									style={{
@@ -444,7 +444,7 @@ export function PassPlayground({
 							aria-label="Select Apple Wallet"
 							aria-pressed={provider === "apple"}
 							className={cn(
-								"flex h-7 w-12 cursor-pointer items-center justify-center rounded-md border-shadow transition-all duration-150 ease-out focus:outline-none active:scale-95",
+								"flex h-7 w-12 cursor-pointer items-center justify-center rounded-md border-shadow transition-all duration-150 ease-out focus-visible:outline-(--gray-a8) focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.96]",
 								provider === "apple"
 									? "bg-(--gray-a12)"
 									: "bg-transparent hover:bg-(--gray-a4)"
@@ -463,7 +463,7 @@ export function PassPlayground({
 							aria-label="Select Google Wallet"
 							aria-pressed={provider === "google"}
 							className={cn(
-								"flex h-7 w-12 cursor-pointer items-center justify-center rounded-md border-shadow transition-all duration-150 ease-out focus:outline-none active:scale-95",
+								"flex h-7 w-12 cursor-pointer items-center justify-center rounded-md border-shadow transition-all duration-150 ease-out focus-visible:outline-(--gray-a8) focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.96]",
 								provider === "google"
 									? "bg-(--gray-a12)"
 									: "bg-transparent hover:bg-(--gray-a4)"
@@ -497,7 +497,7 @@ export function PassPlayground({
 					<span className="relative size-4">
 						<span
 							className={cn(
-								"absolute inset-0 flex items-center justify-center transition-[opacity,filter,scale] duration-300 ease-in-out will-change-[opacity,filter,scale]",
+								"absolute inset-0 flex items-center justify-center transition-[opacity,filter,scale] duration-300 ease-out will-change-[opacity,filter,scale]",
 								created
 									? "scale-100 opacity-100 blur-0"
 									: "scale-[0.25] opacity-0 blur-sm"
@@ -516,7 +516,7 @@ export function PassPlayground({
 						</span>
 						<span
 							className={cn(
-								"absolute inset-0 flex items-center justify-center transition-[opacity,filter,scale] duration-300 ease-in-out will-change-[opacity,filter,scale]",
+								"absolute inset-0 flex items-center justify-center transition-[opacity,filter,scale] duration-300 ease-out will-change-[opacity,filter,scale]",
 								created
 									? "scale-[0.25] opacity-0 blur-sm"
 									: "scale-100 opacity-100 blur-0"
