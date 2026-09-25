@@ -40,7 +40,7 @@ const TODAY = new Date().toLocaleDateString("en-US", {
 // reveals it, and each side hides when it faces away. The shadow lives on the
 // faces (not the wrapper) so it turns with the card and hides with its side.
 const PASS_FACE =
-	"absolute inset-0 flex flex-col overflow-hidden rounded-lg border-overlay border-shadow hover:hover-border-shadow bg-(--pass-bg) text-(--pass-text) transition-[color,background-color,box-shadow] duration-250 backface-hidden";
+	"absolute inset-0 flex flex-col overflow-hidden rounded-lg border-overlay soft-shadow hover:hover-soft-shadow bg-(--pass-bg) text-(--pass-text) transition-[color,background-color,box-shadow] duration-250 backface-hidden";
 
 type CreateStatus =
 	| { kind: "idle" }
