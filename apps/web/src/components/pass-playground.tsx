@@ -157,19 +157,15 @@ function Field({ label, value }: { label: string; value: string }) {
 	);
 }
 
-// The back of the pass: the wordmark pressed into the card. The letters are
-// shaded darker at the top and lighter at the bottom, like a recess catching
-// light from above; a dark hairline on the top edge and a light lip on the
-// bottom edge sell the depth. A soft light across the card keeps the surface
-// from reading as flat paint.
+// The back of the pass: the wordmark pressed into the card (see the
+// pass-letterpress utility), under a soft light so the surface doesn't read as
+// flat paint.
 function PassBack() {
 	return (
 		<>
 			<div className="absolute inset-0 bg-[radial-gradient(120%_70%_at_25%_0%,rgb(255_255_255/0.12),transparent_65%)]" />
-			<span className="absolute inset-0 grid place-items-center">
-				<span className="bg-[linear-gradient(180deg,color-mix(in_oklab,var(--pass-bg),black_16%),color-mix(in_oklab,var(--pass-bg),black_4%))] bg-clip-text font-semibold text-[52px] text-transparent tracking-tighter [filter:drop-shadow(0_-0.5px_0_rgb(0_0_0/0.3))_drop-shadow(0_1px_0_rgb(255_255_255/0.3))]">
-					Passlet
-				</span>
+			<span className="pass-letterpress absolute inset-0 grid place-items-center font-semibold text-[52px] tracking-tighter">
+				Passlet
 			</span>
 		</>
 	);
