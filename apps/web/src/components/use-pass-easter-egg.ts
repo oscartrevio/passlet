@@ -54,7 +54,10 @@ export function usePassEasterEgg({
 	};
 
 	const handleTap = (e: MouseEvent<HTMLElement>) => {
-		if (reduced || e.target instanceof HTMLInputElement) {
+		// The name field (and its label) is for typing, not tapping.
+		const inField =
+			e.target instanceof Element && e.target.closest("input, label");
+		if (reduced || inField) {
 			return;
 		}
 		if (flipped) {
