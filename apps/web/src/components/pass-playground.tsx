@@ -298,6 +298,14 @@ export function PassPlayground({
 					memberName: trimmedName,
 					memberNo,
 					since: TODAY,
+					created: new Date().toLocaleString("en-US", {
+						dateStyle: "long",
+						timeStyle: "short",
+					}),
+					design:
+						provider === "apple"
+							? `${activeColor.label} · ${PATTERNS.find((p) => p.value === pattern)?.label}`
+							: activeColor.label,
 					color: activeColor.color,
 					textColor: activeColor.text,
 					banner,
