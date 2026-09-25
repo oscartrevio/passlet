@@ -28,14 +28,14 @@ export function InstallCommand() {
 
 	return (
 		<div className="flex flex-col gap-2">
-			<div className="-ml-1.5 flex items-center">
+			<div className="flex items-center">
 				{(["npm", "pnpm", "yarn", "bun", "skill"] as InstallOption[]).map(
 					(p) => (
 						<Fragment key={p}>
 							<button
 								aria-pressed={pm === p}
 								className={cn(
-									"h-6 cursor-pointer touch-manipulation rounded-md px-1.5 font-medium text-xs transition-colors duration-150 ease-out",
+									"h-6 cursor-pointer touch-manipulation rounded-md px-3 font-medium text-xs transition-colors duration-150 ease-out",
 									pm === p
 										? "bg-(--gray-a3) text-(--gray-a11)"
 										: "text-(--gray-a8) hover:text-(--gray-a9)"
@@ -47,7 +47,7 @@ export function InstallCommand() {
 							</button>
 							{p === "bun" && (
 								<Separator
-									className="mx-1.5 my-1 rounded-full"
+									className="my-1 rounded-full"
 									orientation="vertical"
 								/>
 							)}
