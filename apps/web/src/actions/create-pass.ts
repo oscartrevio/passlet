@@ -98,7 +98,7 @@ export async function createPassAction(
 			field.back(
 				"terms",
 				"Terms",
-				"This is a demo pass. It opens no doors, earns no points and never expires. Handle with love."
+				"This is a demo pass. It opens no doors, earns no points and never expires. It just looks good in your Wallet."
 			),
 			field.back("builtBy", "Made by", {
 				value: "Oscar Treviño · oscartrevio.xyz",
