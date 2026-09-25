@@ -8,6 +8,7 @@ import { motion, useAnimationControls, useReducedMotion } from "motion/react";
 import { type CSSProperties, type ReactNode, useRef, useState } from "react";
 import { createPassAction } from "@/actions/create-pass";
 import { setPassletColor } from "@/actions/set-color";
+import { usePassEasterEgg } from "@/components/use-pass-easter-egg";
 import { AppleWalletIcon, GoogleWalletIcon } from "@/components/wallet-icons";
 import {
 	COLORS,
@@ -16,7 +17,7 @@ import {
 	type PatternType,
 } from "@/lib/data";
 import {
-	captureBannerBytes,
+	captureStripImages,
 	STRIP_H,
 	STRIP_PATHS,
 	STRIP_W,
@@ -34,6 +35,12 @@ const TODAY = new Date().toLocaleDateString("en-US", {
 	month: "long",
 	day: "numeric",
 });
+
+// Both sides of the pass share one box; the back is pre-rotated so the flip
+// reveals it, and each side hides when it faces away. The shadow lives on the
+// faces (not the wrapper) so it turns with the card and hides with its side.
+const PASS_FACE =
+	"absolute inset-0 flex flex-col overflow-hidden rounded-lg border-overlay soft-shadow hover:hover-soft-shadow bg-(--pass-bg) text-(--pass-text) transition-[color,background-color,box-shadow] duration-250 backface-hidden";
 
 type CreateStatus =
 	| { kind: "idle" }
@@ -143,10 +150,22 @@ function Field({ label, value }: { label: string; value: string }) {
 			<span className="text-(--pass-text-muted) text-[8px] uppercase tracking-normal">
 				{label}
 			</span>
-			<span className="font-semibold text-(--pass-text) text-xs leading-tighter">
-				{value}
-			</span>
+			<span className="font-semibold text-(--pass-text) text-xs">{value}</span>
 		</div>
+	);
+}
+
+// The back of the pass: the wordmark pressed into the card (see the
+// pass-letterpress utility), under a soft light so the surface doesn't read as
+// flat paint.
+function PassBack() {
+	return (
+		<>
+			<div className="absolute inset-0 bg-[radial-gradient(120%_70%_at_25%_0%,rgb(255_255_255/0.12),transparent_65%)]" />
+			<span className="pass-letterpress absolute inset-0 grid place-items-center font-semibold text-[52px] tracking-tighter">
+				Passlet
+			</span>
+		</>
 	);
 }
 
@@ -164,13 +183,13 @@ function EditableField({
 	wiggle?: boolean;
 }) {
 	return (
-		<div className="flex flex-col">
+		<label className="flex flex-col">
 			<span className="text-(--pass-text-muted) text-[8px] uppercase tracking-normal">
 				{label}
 			</span>
 			<input
 				className={cn(
-					"w-24 bg-transparent font-semibold text-(--pass-text) text-xs leading-tighter caret-(--pass-text) outline-none transition-colors duration-300 placeholder:text-(--pass-text-subtle) placeholder:transition-colors placeholder:duration-300",
+					"w-24 cursor-text bg-transparent font-semibold text-(--pass-text) text-xs caret-(--pass-text) outline-none transition-colors duration-300 placeholder:text-(--pass-text-subtle) placeholder:transition-colors placeholder:duration-300",
 					value.trim().length === 0 && "animate-pulse",
 					wiggle && "animate-[wiggle_0.3s_ease-in-out]"
 				)}
@@ -180,7 +199,7 @@ function EditableField({
 				type="text"
 				value={value}
 			/>
-		</div>
+		</label>
 	);
 }
 
@@ -263,8 +282,13 @@ export function PassPlayground({
 		playSound("tap");
 	};
 
+	const { flip, flipped, handleTap } = usePassEasterEgg({
+		wobble: delightControls,
+		playSound,
+	});
+
 	const cardStyle = {
-		backgroundColor: activeColor.color,
+		"--pass-bg": activeColor.color,
 		"--pass-text": activeColor.text,
 		"--pass-text-muted": activeColor.muted,
 		"--pass-text-subtle": activeColor.subtle,
@@ -286,13 +310,24 @@ export function PassPlayground({
 		setStatus({ kind: "creating" });
 		try {
 			const banner =
-				provider === "apple" ? await captureBannerBytes(pattern) : undefined;
+				provider === "apple"
+					? captureStripImages(pattern, {
+							background: activeColor.color,
+							pattern: activeColor.secondary,
+						})
+					: undefined;
 			const [result] = await Promise.all([
 				createPassAction({
 					provider,
 					memberName: trimmedName,
 					memberNo,
 					since: TODAY,
+					created: new Date().toLocaleString("en-US", {
+						dateStyle: "long",
+						timeStyle: "short",
+					}),
+					colorValue: color,
+					pattern,
 					color: activeColor.color,
 					textColor: activeColor.text,
 					banner,
@@ -327,57 +362,71 @@ export function PassPlayground({
 			setStatus({
 				kind: "failed",
 				message:
-					error instanceof Error ? error.message : "Failed to create pass.",
+					error instanceof Error
+						? error.message
+						: "Couldn't create your pass. Try again.",
 			});
 			playSound("error");
 		}
 	};
 
 	return (
-		<div className="flex flex-col gap-4 md:flex-row md:items-stretch">
+		<div className="flex flex-col gap-5 md:flex-row md:items-stretch md:gap-4">
 			<motion.div
 				animate={delightControls}
-				className="relative mx-auto aspect-181/251 w-full max-w-[256px] select-none overflow-hidden rounded-lg border-overlay text-(--pass-text) transition-colors duration-250 md:mx-0 md:w-[256px]"
+				className="relative mx-auto aspect-181/251 w-full max-w-[256px] cursor-pointer select-none motion-reduce:cursor-auto md:mx-0 md:w-[256px]"
 				initial={false}
-				style={cardStyle}
+				onClick={handleTap}
+				style={{ ...cardStyle, transformPerspective: 800 }}
 			>
-				<div className="flex h-full flex-col">
-					<div className="flex items-start justify-between p-3">
-						<span className="font-semibold">Passlet</span>
-						<div className="flex flex-col items-end">
-							<span className="text-(--pass-text-subtle) text-[8px] uppercase tracking-tight">
-								ID
-							</span>
-							<span className="font-medium text-[11px] tabular-nums leading-[1.2]">
-								{memberNo}
-							</span>
+				<motion.div
+					animate={flip}
+					className="transform-3d size-full"
+					initial={false}
+					style={{ transformPerspective: 1200 }}
+				>
+					<div className={PASS_FACE} inert={flipped}>
+						<div className="flex items-start justify-between p-3">
+							<span className="font-semibold">Passlet</span>
+							<div className="flex flex-col items-end">
+								<span className="text-(--pass-text-subtle) text-[8px] uppercase tracking-tight">
+									ID
+								</span>
+								<span className="font-medium text-[11px] tabular-nums leading-[1.2]">
+									{memberNo}
+								</span>
+							</div>
+						</div>
+
+						<CardStrip pattern={pattern} />
+
+						<div className="flex flex-col gap-1 p-3">
+							<div className="flex justify-between">
+								<EditableField
+									label="Member"
+									onChange={setName}
+									placeholder="Your Name"
+									value={name}
+									wiggle={wiggleName}
+								/>
+								<Field label="Since" value={TODAY} />
+							</div>
+						</div>
+
+						<div className="mt-auto flex justify-center pb-3">
+							<div className="size-24 overflow-hidden rounded-sm bg-white">
+								{qrSlot}
+							</div>
 						</div>
 					</div>
 
-					<CardStrip pattern={pattern} />
-
-					<div className="flex flex-col gap-1 p-3">
-						<div className="flex justify-between">
-							<EditableField
-								label="Member"
-								onChange={setName}
-								placeholder="Your Name"
-								value={name}
-								wiggle={wiggleName}
-							/>
-							<Field label="Since" value={TODAY} />
-						</div>
+					<div className={cn(PASS_FACE, "rotate-y-180")} inert={!flipped}>
+						<PassBack />
 					</div>
-
-					<div className="mt-auto flex justify-center pb-3">
-						<div className="size-24 overflow-hidden rounded-sm bg-white">
-							{qrSlot}
-						</div>
-					</div>
-				</div>
+				</motion.div>
 			</motion.div>
 
-			<div className="flex min-w-0 flex-1 flex-col gap-4 pt-1">
+			<div className="flex min-w-0 flex-1 flex-col gap-4">
 				<div className="flex flex-col gap-2">
 					<p className="font-medium text-(--gray-a8) text-xs">
 						Background Color
@@ -389,7 +438,7 @@ export function PassPlayground({
 								<button
 									aria-label={`Select ${c.label} color`}
 									aria-pressed={isSelected}
-									className="relative size-5 cursor-pointer rounded-sm border-overlay transition-transform duration-150 ease-out after:absolute after:-inset-1.5 after:content-[''] focus:outline-none focus-visible:ring-2 focus-visible:ring-current focus-visible:ring-offset-2 active:scale-95"
+									className="relative size-5 cursor-pointer rounded-sm border-overlay transition-transform duration-150 ease-out after:absolute after:-inset-1.5 after:content-[''] focus:outline-none focus-visible:ring-2 focus-visible:ring-current focus-visible:ring-offset-2 active:scale-[0.96]"
 									key={c.value}
 									onClick={() => handleColorChange(c.value)}
 									style={{
@@ -416,7 +465,7 @@ export function PassPlayground({
 								<button
 									aria-label={`Select ${p.label} pattern`}
 									aria-pressed={isSelected}
-									className="relative cursor-pointer overflow-hidden rounded border-overlay transition-transform duration-150 ease-out after:absolute after:-inset-1.5 after:content-[''] focus:outline-none active:scale-95"
+									className="relative cursor-pointer overflow-hidden rounded border-overlay transition-transform duration-150 ease-out after:absolute after:-inset-1.5 after:content-[''] focus:outline-none focus-visible:ring-(--gray-a6) focus-visible:ring-[6px] active:scale-[0.96]"
 									key={p.value}
 									onClick={() => handlePatternChange(p.value)}
 									style={{
@@ -444,7 +493,7 @@ export function PassPlayground({
 							aria-label="Select Apple Wallet"
 							aria-pressed={provider === "apple"}
 							className={cn(
-								"flex h-7 w-12 cursor-pointer items-center justify-center rounded-md border-shadow transition-all duration-150 ease-out focus:outline-none active:scale-95",
+								"flex h-7 w-12 cursor-pointer items-center justify-center rounded-md border-shadow transition-all duration-150 ease-out focus-visible:outline-(--gray-a8) focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.96]",
 								provider === "apple"
 									? "bg-(--gray-a12)"
 									: "bg-transparent hover:bg-(--gray-a4)"
@@ -463,7 +512,7 @@ export function PassPlayground({
 							aria-label="Select Google Wallet"
 							aria-pressed={provider === "google"}
 							className={cn(
-								"flex h-7 w-12 cursor-pointer items-center justify-center rounded-md border-shadow transition-all duration-150 ease-out focus:outline-none active:scale-95",
+								"flex h-7 w-12 cursor-pointer items-center justify-center rounded-md border-shadow transition-all duration-150 ease-out focus-visible:outline-(--gray-a8) focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.96]",
 								provider === "google"
 									? "bg-(--gray-a12)"
 									: "bg-transparent hover:bg-(--gray-a4)"
@@ -488,16 +537,16 @@ export function PassPlayground({
 
 				<Button
 					aria-busy={creating}
-					// Keep empty-name clicks enabled to show validation feedback.
+					// Stays clickable while announced as disabled, so an empty-name
+					// click can still answer with the error sound and field wiggle.
 					aria-disabled={creating || !name.trim()}
-					className="mt-auto cursor-pointer rounded-full bg-(--gray-a12) font-medium font-sans! text-white tracking-tight transition-opacity duration-200 disabled:pointer-events-auto aria-disabled:cursor-not-allowed aria-disabled:opacity-50 not-disabled:aria-[disabled=false]:active:scale-95 not-disabled:aria-[disabled=false]:hover:bg-(--gray-a11)"
-					disabled={creating}
+					className="mt-auto font-sans! tracking-tight"
 					onClick={handleCreatePass}
 				>
-					<span className="relative size-5">
+					<span className="relative size-4">
 						<span
 							className={cn(
-								"absolute inset-0 flex items-center justify-center text-(--green-a10) transition-[opacity,filter,scale] duration-300 ease-in-out will-change-[opacity,filter,scale]",
+								"absolute inset-0 flex items-center justify-center transition-[opacity,filter,scale] duration-300 ease-out will-change-[opacity,filter,scale]",
 								created
 									? "scale-100 opacity-100 blur-0"
 									: "scale-[0.25] opacity-0 blur-sm"
@@ -506,9 +555,9 @@ export function PassPlayground({
 							<svg
 								aria-hidden="true"
 								fill="currentColor"
-								height="20"
+								height="16"
 								viewBox="0 0 640 640"
-								width="20"
+								width="16"
 								xmlns="http://www.w3.org/2000/svg"
 							>
 								<path d="M320 576C178.6 576 64 461.4 64 320C64 178.6 178.6 64 320 64C461.4 64 576 178.6 576 320C576 461.4 461.4 576 320 576zM438 209.7C427.3 201.9 412.3 204.3 404.5 215L285.1 379.2L233 327.1C223.6 317.7 208.4 317.7 199.1 327.1C189.8 336.5 189.7 351.7 199.1 361L271.1 433C276.1 438 282.9 440.5 289.9 440C296.9 439.5 303.3 435.9 307.4 430.2L443.3 243.2C451.1 232.5 448.7 217.5 438 209.7z" />
@@ -516,7 +565,7 @@ export function PassPlayground({
 						</span>
 						<span
 							className={cn(
-								"flex items-center justify-center transition-[opacity,filter,scale] duration-300 ease-in-out will-change-[opacity,filter,scale]",
+								"absolute inset-0 flex items-center justify-center transition-[opacity,filter,scale] duration-300 ease-out will-change-[opacity,filter,scale]",
 								created
 									? "scale-[0.25] opacity-0 blur-sm"
 									: "scale-100 opacity-100 blur-0"
@@ -525,9 +574,9 @@ export function PassPlayground({
 							<svg
 								aria-hidden="true"
 								fill="currentColor"
-								height="20"
+								height="16"
 								viewBox="0 0 640 640"
-								width="20"
+								width="16"
 								xmlns="http://www.w3.org/2000/svg"
 							>
 								<path d="M128 96C92.7 96 64 124.7 64 160L64 448C64 483.3 92.7 512 128 512L512 512C547.3 512 576 483.3 576 448L576 256C576 220.7 547.3 192 512 192L136 192C122.7 192 112 181.3 112 168C112 154.7 122.7 144 136 144L520 144C533.3 144 544 133.3 544 120C544 106.7 533.3 96 520 96L128 96zM480 320C497.7 320 512 334.3 512 352C512 369.7 497.7 384 480 384C462.3 384 448 369.7 448 352C448 334.3 462.3 320 480 320z" />

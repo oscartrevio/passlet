@@ -5,7 +5,7 @@ function Button({ className, ...props }: ButtonPrimitive.Props) {
 	return (
 		<ButtonPrimitive
 			className={cn(
-				"inline-flex h-9 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-transparent bg-primary bg-clip-padding px-2.5 font-medium text-primary-foreground text-sm outline-none transition-colors select-none hover:bg-primary/80 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+				"inline-flex h-9 shrink-0 cursor-pointer select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-full bg-(--gray-a12) px-4 font-medium text-sm text-white outline-none transition-[opacity,scale,color] duration-150 ease-out hover:opacity-90 focus-visible:outline-2 focus-visible:outline-(--gray-a8) focus-visible:outline-offset-2 active:scale-[0.96] aria-disabled:cursor-default aria-disabled:text-white/50 aria-disabled:hover:opacity-100 aria-disabled:active:scale-100 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
 				className
 			)}
 			data-slot="button"

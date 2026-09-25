@@ -134,7 +134,7 @@ export default async function Home() {
 					<h2 className="text-balance font-semibold text-(--gray-a12) text-sm">
 						How it works
 					</h2>
-					<ol className="flex flex-col gap-2">
+					<ol className="flex flex-col gap-2.5">
 						{[
 							"Configure credentials once.",
 							"Define a pass.",
@@ -164,13 +164,13 @@ export default async function Home() {
 								className="group hit-area-y-1.5 flex items-start justify-between gap-1"
 								key={label}
 							>
-								<div className="flex shrink-0 items-center gap-1">
+								<div className="flex shrink-0 items-center gap-0.5">
 									{icon}
 									<span className="text-balance font-semibold text-(--gray-a12) text-sm">
 										{label}
 									</span>
 								</div>
-								<span className="text-balance text-right font-medium text-(--gray-a8) text-sm transition-colors duration-150 ease-out group-hover:text-(--gray-a9)">
+								<span className="text-balance text-end font-medium text-(--gray-a8) text-sm transition-colors duration-150 ease-out group-hover:text-(--gray-a9)">
 									{description}
 								</span>
 							</div>

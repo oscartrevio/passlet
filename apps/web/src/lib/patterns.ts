@@ -124,89 +124,71 @@ export const SWATCH_PATHS: Record<PatternType, string> = {
 	dots: buildDots(SWATCH_W, SWATCH_H, { targetSp: 18 }),
 };
 
-// Export a 750×196 PNG with offset shadows and transparent pattern interiors.
-export function captureBannerBytes(pattern: PatternType): Promise<string> {
-	const W = 750;
-	const H = 196;
-	const SW = STROKE_WIDTH * 2;
+// Apple gives store card strips 375×144 pt (Wallet fills the slot and crops
+// if a device uses a shorter one). Wallet only draws the image, so it has to
+// carry the same look as the on-page preview: the pass colour with the
+// pattern laid over it in the secondary colour at 50%. The pattern is built in
+// the preview's 256-wide coordinate space and scaled up, so stripes, dots and
+// squares keep the size they have on screen.
+const APPLE_STRIP_W = 375;
+const APPLE_STRIP_H = 144;
 
-	const pathBuilders: Record<PatternType, () => string> = {
-		waves: () => buildWaves(W, H, { targetWl: 70, targetSp: 40, amp: 10 }),
-		zigzag: () => buildZigzag(W, H, { targetWl: 48, targetSp: 40, amp: 12 }),
-		chessboard: () => buildChessboard(W, H, { targetSq: 40 }),
-		dots: () => buildDots(W, H, { targetSp: 48 }),
+export const PATTERN_BUILDERS: Record<
+	PatternType,
+	(W: number, H: number) => string
+> = {
+	waves: buildWaves,
+	zigzag: buildZigzag,
+	chessboard: buildChessboard,
+	dots: buildDots,
+};
+
+/** Base64 PNGs for strip.png, strip@2x.png and strip@3x.png. */
+export interface StripImages {
+	base: string;
+	retina: string;
+	superRetina: string;
+}
+
+export function captureStripImages(
+	pattern: PatternType,
+	colors: { background: string; pattern: string }
+): StripImages {
+	const previewH = (STRIP_W * APPLE_STRIP_H) / APPLE_STRIP_W;
+	const path = new Path2D(PATTERN_BUILDERS[pattern](STRIP_W, previewH));
+	return {
+		base: renderStrip(path, pattern, colors, 1),
+		retina: renderStrip(path, pattern, colors, 2),
+		superRetina: renderStrip(path, pattern, colors, 3),
 	};
-	const path = new Path2D(pathBuilders[pattern]());
-	const isStroke = STROKE_PATTERNS.has(pattern);
+}
 
-	const draw = (ctx: CanvasRenderingContext2D, color: string) => {
-		ctx.save();
-		if (isStroke) {
-			ctx.strokeStyle = color;
-			ctx.lineWidth = SW;
-			ctx.stroke(path);
-		} else {
-			ctx.fillStyle = color;
-			ctx.fill(path);
-		}
-		ctx.restore();
-	};
-
-	const offscreen = (fn: (ctx: CanvasRenderingContext2D) => void) => {
-		const el = document.createElement("canvas");
-		el.width = W;
-		el.height = H;
-		const ctx = el.getContext("2d");
-		if (!ctx) {
-			throw new Error("Canvas 2D context unavailable.");
-		}
-		fn(ctx);
-		return el;
-	};
-
-	const outerGlow = offscreen((ctx) => {
-		ctx.shadowColor = "rgba(255,255,255,0.15)";
-		ctx.shadowOffsetY = 2;
-		ctx.shadowBlur = 2;
-		draw(ctx, "white");
-		ctx.shadowColor = "transparent";
-		ctx.globalCompositeOperation = "destination-out";
-		draw(ctx, "white");
-	});
-
-	const insetShadow = offscreen((ctx) => {
-		ctx.shadowColor = "rgba(0,0,0,0.15)";
-		ctx.shadowOffsetY = -2;
-		ctx.shadowBlur = 2;
-		draw(ctx, "white");
-		ctx.shadowColor = "transparent";
-		ctx.globalCompositeOperation = "destination-out";
-		draw(ctx, "white");
-	});
-
+function renderStrip(
+	path: Path2D,
+	pattern: PatternType,
+	colors: { background: string; pattern: string },
+	scale: number
+): string {
 	const canvas = document.createElement("canvas");
-	canvas.width = W;
-	canvas.height = H;
+	canvas.width = APPLE_STRIP_W * scale;
+	canvas.height = APPLE_STRIP_H * scale;
 	const ctx = canvas.getContext("2d");
 	if (!ctx) {
 		throw new Error("Canvas 2D context unavailable.");
 	}
-	ctx.drawImage(outerGlow, 0, 0);
-	ctx.drawImage(insetShadow, 0, 0);
 
-	outerGlow.width = 0;
-	insetShadow.width = 0;
+	ctx.fillStyle = colors.background;
+	ctx.fillRect(0, 0, canvas.width, canvas.height);
+	ctx.scale(canvas.width / STRIP_W, canvas.width / STRIP_W);
+	ctx.globalAlpha = 0.5;
+	if (STROKE_PATTERNS.has(pattern)) {
+		ctx.strokeStyle = colors.pattern;
+		ctx.lineWidth = STROKE_WIDTH;
+		ctx.stroke(path);
+	} else {
+		ctx.fillStyle = colors.pattern;
+		ctx.fill(path);
+	}
 
-	return new Promise((resolve, reject) => {
-		canvas.toBlob((blob) => {
-			canvas.width = 0;
-			if (!blob) {
-				reject(new Error("Failed to export banner image."));
-				return;
-			}
-			const reader = new FileReader();
-			reader.onload = () => resolve((reader.result as string).split(",")[1]);
-			reader.readAsDataURL(blob);
-		}, "image/png");
-	});
+	return canvas.toDataURL("image/png").split(",")[1];
 }

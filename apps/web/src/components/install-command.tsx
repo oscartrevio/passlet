@@ -28,14 +28,14 @@ export function InstallCommand() {
 
 	return (
 		<div className="flex flex-col gap-2">
-			<div className="-ml-1.5 flex items-center">
+			<div className="flex items-center">
 				{(["npm", "pnpm", "yarn", "bun", "skill"] as InstallOption[]).map(
 					(p) => (
 						<Fragment key={p}>
 							<button
 								aria-pressed={pm === p}
 								className={cn(
-									"h-6 cursor-pointer touch-manipulation rounded-md px-1.5 font-medium text-xs transition-colors duration-150 ease-out",
+									"h-6 cursor-pointer touch-manipulation rounded-md px-3 font-medium text-xs transition-colors duration-150 ease-out focus-visible:outline-(--gray-a8) focus-visible:outline-2 focus-visible:outline-offset-2",
 									pm === p
 										? "bg-(--gray-a3) text-(--gray-a11)"
 										: "text-(--gray-a8) hover:text-(--gray-a9)"
@@ -64,14 +64,14 @@ export function InstallCommand() {
 				</div>
 				<button
 					aria-label="Copy install command"
-					className="group relative shrink-0 cursor-pointer touch-manipulation"
+					className="group relative shrink-0 cursor-pointer touch-manipulation rounded-sm focus-visible:outline-(--gray-a8) focus-visible:outline-2 focus-visible:outline-offset-4"
 					onClick={copy}
 					type="button"
 				>
 					<div className="hit-area-3 relative size-4.5">
 						<div
 							className={cn(
-								"absolute inset-0 flex items-center justify-center text-(--green-a10) transition-[opacity,filter,scale] duration-300 ease-in-out will-change-[opacity,filter,scale]",
+								"absolute inset-0 flex items-center justify-center text-(--green-a10) transition-[opacity,filter,scale] duration-300 ease-out will-change-[opacity,filter,scale]",
 								copied
 									? "scale-100 opacity-100 blur-0"
 									: "scale-[0.25] opacity-0 blur-sm"
@@ -90,7 +90,7 @@ export function InstallCommand() {
 						</div>
 						<div
 							className={cn(
-								"text-(--gray-a8) transition-[opacity,filter,scale,color] duration-300 ease-in-out will-change-[opacity,filter,scale] group-hover:text-(--gray-a9)",
+								"text-(--gray-a8) transition-[opacity,filter,scale,color] duration-300 ease-out will-change-[opacity,filter,scale] group-hover:text-(--gray-a9)",
 								copied
 									? "scale-[0.25] opacity-0 blur-sm"
 									: "scale-100 opacity-100 blur-0"
