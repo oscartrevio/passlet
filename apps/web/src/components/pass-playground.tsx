@@ -176,7 +176,7 @@ function EditableField({
 			</span>
 			<input
 				className={cn(
-					"w-24 bg-transparent font-semibold text-(--pass-text) text-xs leading-tighter caret-(--pass-text) outline-none transition-colors duration-300 placeholder:text-(--pass-text-subtle) placeholder:transition-colors placeholder:duration-300",
+					"w-24 cursor-text bg-transparent font-semibold text-(--pass-text) text-xs leading-tighter caret-(--pass-text) outline-none transition-colors duration-300 placeholder:text-(--pass-text-subtle) placeholder:transition-colors placeholder:duration-300",
 					value.trim().length === 0 && "animate-pulse",
 					wiggle && "animate-[wiggle_0.3s_ease-in-out]"
 				)}
@@ -348,7 +348,7 @@ export function PassPlayground({
 		<div className="flex flex-col gap-5 md:flex-row md:items-stretch md:gap-4">
 			<motion.div
 				animate={delightControls}
-				className="relative mx-auto aspect-181/251 w-full max-w-[256px] select-none md:mx-0 md:w-[256px]"
+				className="relative mx-auto aspect-181/251 w-full max-w-[256px] cursor-pointer select-none motion-reduce:cursor-auto md:mx-0 md:w-[256px]"
 				initial={false}
 				onClick={handleTap}
 				style={{ ...cardStyle, transformPerspective: 800 }}
