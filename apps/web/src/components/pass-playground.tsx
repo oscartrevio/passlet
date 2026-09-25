@@ -37,9 +37,10 @@ const TODAY = new Date().toLocaleDateString("en-US", {
 });
 
 // Both sides of the pass share one box; the back is pre-rotated so the flip
-// reveals it, and each side hides when it faces away.
+// reveals it, and each side hides when it faces away. The shadow lives on the
+// faces (not the wrapper) so it turns with the card and hides with its side.
 const PASS_FACE =
-	"absolute inset-0 flex flex-col overflow-hidden rounded-lg border-overlay bg-(--pass-bg) text-(--pass-text) transition-colors duration-250 backface-hidden";
+	"absolute inset-0 flex flex-col overflow-hidden rounded-lg border-overlay border-shadow hover:hover-border-shadow bg-(--pass-bg) text-(--pass-text) transition-[color,background-color,box-shadow] duration-250 backface-hidden";
 
 type CreateStatus =
 	| { kind: "idle" }
@@ -156,45 +157,19 @@ function Field({ label, value }: { label: string; value: string }) {
 	);
 }
 
-// The back of the pass: the code that makes this very pass, printed faintly
-// like a texture, with the wordmark pressed into the card on top.
-function PassBack({
-	memberName,
-	memberNo,
-}: {
-	memberName: string;
-	memberNo: string;
-}) {
-	const source = `const pass = wallet.loyalty({
-  id: "passlet",
-  name: "Passlet",
-  fields: [
-    field.header("memberId", "ID"),
-    field.secondary("member", "Member"),
-    field.secondary("since", "Since"),
-  ],
-});
-
-await pass.create({
-  serialNumber: "${memberNo}",
-  values: {
-    member: "${memberName}",
-    since: "${TODAY}",
-  },
-});`;
+// The back of the pass: the wordmark pressed into the card. The letters are
+// shaded darker at the top and lighter at the bottom, like a recess catching
+// light from above; a dark hairline on the top edge and a light lip on the
+// bottom edge sell the depth. A soft light across the card keeps the surface
+// from reading as flat paint.
+function PassBack() {
 	return (
 		<>
-			<pre
-				aria-hidden="true"
-				className="absolute inset-3 flex items-center overflow-hidden font-mono text-(--pass-text) text-[8.5px] leading-[1.6] opacity-20 [mask-image:radial-gradient(ellipse_75%_20%,transparent_55%,black)]"
-			>
-				{source}
-			</pre>
-			<span className="absolute inset-0 grid place-items-center font-semibold text-(--pass-bg) text-[44px] tracking-tight [text-shadow:0_1px_0_rgb(255_255_255/0.35),0_-1px_0_rgb(0_0_0/0.25)]">
-				Passlet
-			</span>
-			<span className="absolute inset-x-0 bottom-3 text-center text-(--pass-text-subtle) text-[8px] uppercase tracking-[0.14em]">
-				npm i passlet
+			<div className="absolute inset-0 bg-[radial-gradient(120%_70%_at_25%_0%,rgb(255_255_255/0.12),transparent_65%)]" />
+			<span className="absolute inset-0 grid place-items-center">
+				<span className="bg-[linear-gradient(180deg,color-mix(in_oklab,var(--pass-bg),black_16%),color-mix(in_oklab,var(--pass-bg),black_4%))] bg-clip-text font-semibold text-[52px] text-transparent tracking-tighter [filter:drop-shadow(0_-0.5px_0_rgb(0_0_0/0.3))_drop-shadow(0_1px_0_rgb(255_255_255/0.3))]">
+					Passlet
+				</span>
 			</span>
 		</>
 	);
@@ -439,10 +414,7 @@ export function PassPlayground({
 					</div>
 
 					<div className={cn(PASS_FACE, "rotate-y-180")} inert={!flipped}>
-						<PassBack
-							memberName={name.trim() || "Your Name"}
-							memberNo={memberNo}
-						/>
+						<PassBack />
 					</div>
 				</motion.div>
 			</motion.div>
