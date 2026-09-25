@@ -334,7 +334,7 @@ export function PassPlayground({
 	};
 
 	return (
-		<div className="flex flex-col gap-4 md:flex-row md:items-stretch">
+		<div className="flex flex-col gap-5 md:flex-row md:items-stretch md:gap-4">
 			<motion.div
 				animate={delightControls}
 				className="relative mx-auto aspect-181/251 w-full max-w-[256px] select-none overflow-hidden rounded-lg border-overlay text-(--pass-text) transition-colors duration-250 md:mx-0 md:w-[256px]"
@@ -377,7 +377,7 @@ export function PassPlayground({
 				</div>
 			</motion.div>
 
-			<div className="flex min-w-0 flex-1 flex-col gap-4 pt-1">
+			<div className="flex min-w-0 flex-1 flex-col gap-4">
 				<div className="flex flex-col gap-2">
 					<p className="font-medium text-(--gray-a8) text-xs">
 						Background Color

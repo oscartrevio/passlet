@@ -28,7 +28,7 @@ export function InstallCommand() {
 
 	return (
 		<div className="flex flex-col gap-2">
-			<div className="-ml-1.5 flex items-center">
+			<div className="-ms-1.5 flex items-center">
 				{(["npm", "pnpm", "yarn", "bun", "skill"] as InstallOption[]).map(
 					(p) => (
 						<Fragment key={p}>
