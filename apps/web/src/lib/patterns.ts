@@ -133,13 +133,15 @@ export const SWATCH_PATHS: Record<PatternType, string> = {
 const APPLE_STRIP_W = 375;
 const APPLE_STRIP_H = 144;
 
-const PATTERN_BUILDERS: Record<PatternType, (W: number, H: number) => string> =
-	{
-		waves: buildWaves,
-		zigzag: buildZigzag,
-		chessboard: buildChessboard,
-		dots: buildDots,
-	};
+export const PATTERN_BUILDERS: Record<
+	PatternType,
+	(W: number, H: number) => string
+> = {
+	waves: buildWaves,
+	zigzag: buildZigzag,
+	chessboard: buildChessboard,
+	dots: buildDots,
+};
 
 /** Base64 PNGs for strip.png, strip@2x.png and strip@3x.png. */
 export interface StripImages {

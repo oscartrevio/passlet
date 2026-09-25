@@ -2,6 +2,12 @@
 
 import { headers } from "next/headers";
 import { field, Wallet } from "passlet";
+import {
+	COLORS,
+	type ColorValue,
+	PATTERNS,
+	type PatternType,
+} from "@/lib/data";
 import type { StripImages } from "@/lib/patterns";
 import { checkRateLimit, recordPassCreated } from "@/lib/rate-limit";
 import { SITE_MANIFEST } from "@/lib/site";
@@ -19,12 +25,12 @@ function requiredEnv(name: string): string {
 interface CreatePassInput {
 	banner?: StripImages;
 	color: string;
+	colorValue: ColorValue;
 	/** When the pass was made, already formatted in the visitor's locale. */
 	created: string;
-	/** The colour and pattern picked in the playground, e.g. "Blue · Waves". */
-	design: string;
 	memberName: string;
 	memberNo: string;
+	pattern: PatternType;
 	provider: WalletProvider;
 	since: string;
 	textColor: string;
@@ -79,20 +85,32 @@ export async function createPassAction(
 			: { google: googleCredentials() }
 	);
 
+	const color = COLORS.find((c) => c.value === input.colorValue);
+	const pattern = PATTERNS.find((p) => p.value === input.pattern);
+	if (!(color && pattern)) {
+		throw new Error("Unknown colour or pattern.");
+	}
+	const google = input.provider === "google";
+	// Google fetches the hero image itself, so it has to be a public URL on
+	// whichever deployment made the pass.
+	const origin = `${headerList.get("x-forwarded-proto") ?? "https"}://${headerList.get("x-forwarded-host") ?? headerList.get("host")}`;
+
 	const pass = wallet.loyalty({
 		id: `passlet-${input.memberNo}`,
-		name: "Passlet",
+		// Google shows issuerName beside the logo and name as the big title, so
+		// "Passlet" twice there; Apple uses name as the organisation name.
+		name: google ? "Member card" : "Passlet",
 		color: input.color,
 		fields: [
 			field.header("memberId", "ID"),
 			field.secondary("member", "Member"),
 			field.secondary("since", "Since"),
 			// Back of the pass: Apple's (i) details screen, Google's text modules.
-			// Apple renders attributedValue (links); Google shows the plain value.
+			// Apple turns attributedValue into links; Google gets google.links.
 			field.back("design", "Your design"),
 			field.back("created", "Created"),
 			field.back("about", "About passlet", {
-				value: `One API for Apple Wallet and Google Wallet passes.\n${SITE_MANIFEST.url}\n${SITE_MANIFEST.github}`,
+				value: "One API for Apple Wallet and Google Wallet passes.",
 				attributedValue: `One API for Apple Wallet and Google Wallet passes.\n<a href="${SITE_MANIFEST.url}">Website</a> · <a href="${SITE_MANIFEST.github}">GitHub</a> · <a href="https://www.npmjs.com/package/passlet">npm</a>`,
 			}),
 			field.back(
@@ -101,7 +119,7 @@ export async function createPassAction(
 				"This is a demo pass. It opens no doors, earns no points and never expires. It just looks good in your Wallet."
 			),
 			field.back("builtBy", "Made by", {
-				value: "Oscar Treviño · oscartrevio.xyz",
+				value: "Oscar Treviño",
 				attributedValue: '<a href="https://oscartrevio.xyz">Oscar Treviño</a>',
 			}),
 			field.back("serial", "Serial number"),
@@ -124,6 +142,14 @@ export async function createPassAction(
 		},
 		google: {
 			logo: process.env.GOOGLE_LOGO_URL,
+			issuerName: "Passlet",
+			hero: `${origin}/hero/${color.value}/${pattern.value}`,
+			links: [
+				{ uri: SITE_MANIFEST.url, description: "Website" },
+				{ uri: SITE_MANIFEST.github, description: "GitHub" },
+				{ uri: "https://www.npmjs.com/package/passlet", description: "npm" },
+				{ uri: "https://oscartrevio.xyz", description: "Oscar Treviño" },
+			],
 		},
 	});
 
@@ -137,14 +163,15 @@ export async function createPassAction(
 			memberId: input.memberNo,
 			member: input.memberName,
 			since: input.since,
-			design: input.design,
+			design: `${color.label} · ${pattern.label}`,
 			created: input.created,
 			serial,
 		},
 		barcode: {
 			format: "QR",
 			value: "https://github.com/oscartrevio/passlet",
-			altText: "",
+			// Google's default card has no free text slot except under the QR.
+			altText: google ? `Member since ${input.since}` : "",
 		},
 	});
 

@@ -302,10 +302,8 @@ export function PassPlayground({
 						dateStyle: "long",
 						timeStyle: "short",
 					}),
-					design:
-						provider === "apple"
-							? `${activeColor.label} · ${PATTERNS.find((p) => p.value === pattern)?.label}`
-							: activeColor.label,
+					colorValue: color,
+					pattern,
 					color: activeColor.color,
 					textColor: activeColor.text,
 					banner,
