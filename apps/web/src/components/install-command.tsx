@@ -47,7 +47,7 @@ export function InstallCommand() {
 							</button>
 							{p === "bun" && (
 								<Separator
-									className="my-1 rounded-full"
+									className="mx-1.5 my-1 rounded-full"
 									orientation="vertical"
 								/>
 							)}
