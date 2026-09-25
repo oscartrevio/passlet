@@ -156,6 +156,50 @@ function Field({ label, value }: { label: string; value: string }) {
 	);
 }
 
+// The back of the pass: the code that makes this very pass, printed faintly
+// like a texture, with the wordmark pressed into the card on top.
+function PassBack({
+	memberName,
+	memberNo,
+}: {
+	memberName: string;
+	memberNo: string;
+}) {
+	const source = `const pass = wallet.loyalty({
+  id: "passlet",
+  name: "Passlet",
+  fields: [
+    field.header("memberId", "ID"),
+    field.secondary("member", "Member"),
+    field.secondary("since", "Since"),
+  ],
+});
+
+await pass.create({
+  serialNumber: "${memberNo}",
+  values: {
+    member: "${memberName}",
+    since: "${TODAY}",
+  },
+});`;
+	return (
+		<>
+			<pre
+				aria-hidden="true"
+				className="absolute inset-3 flex items-center overflow-hidden font-mono text-(--pass-text) text-[8.5px] leading-[1.6] opacity-20 [mask-image:radial-gradient(ellipse_75%_20%,transparent_55%,black)]"
+			>
+				{source}
+			</pre>
+			<span className="absolute inset-0 grid place-items-center font-semibold text-(--pass-bg) text-[44px] tracking-tight [text-shadow:0_1px_0_rgb(255_255_255/0.35),0_-1px_0_rgb(0_0_0/0.25)]">
+				Passlet
+			</span>
+			<span className="absolute inset-x-0 bottom-3 text-center text-(--pass-text-subtle) text-[8px] uppercase tracking-[0.14em]">
+				npm i passlet
+			</span>
+		</>
+	);
+}
+
 function EditableField({
 	label,
 	value,
@@ -395,19 +439,10 @@ export function PassPlayground({
 					</div>
 
 					<div className={cn(PASS_FACE, "rotate-y-180")} inert={!flipped}>
-						<div className="flex flex-col gap-3 p-3">
-							<span className="font-semibold">Passlet</span>
-							<Field label="Member" value={name.trim() || "Your Name"} />
-							<Field label="Member ID" value={memberNo} />
-							<Field label="Member since" value={TODAY} />
-							<Field
-								label="Made with"
-								value="passlet, one API for Apple Wallet and Google Wallet passes."
-							/>
-						</div>
-						<p className="mt-auto p-3 text-(--pass-text-subtle) text-[8px] uppercase tracking-tight">
-							Tap to flip back
-						</p>
+						<PassBack
+							memberName={name.trim() || "Your Name"}
+							memberNo={memberNo}
+						/>
 					</div>
 				</motion.div>
 			</motion.div>
