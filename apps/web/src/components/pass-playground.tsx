@@ -8,6 +8,7 @@ import { motion, useAnimationControls, useReducedMotion } from "motion/react";
 import { type CSSProperties, type ReactNode, useRef, useState } from "react";
 import { createPassAction } from "@/actions/create-pass";
 import { setPassletColor } from "@/actions/set-color";
+import { usePassEasterEgg } from "@/components/use-pass-easter-egg";
 import { AppleWalletIcon, GoogleWalletIcon } from "@/components/wallet-icons";
 import {
 	COLORS,
@@ -34,6 +35,11 @@ const TODAY = new Date().toLocaleDateString("en-US", {
 	month: "long",
 	day: "numeric",
 });
+
+// Both sides of the pass share one box; the back is pre-rotated so the flip
+// reveals it, and each side hides when it faces away.
+const PASS_FACE =
+	"absolute inset-0 flex flex-col overflow-hidden rounded-lg border-overlay bg-(--pass-bg) text-(--pass-text) transition-colors duration-250 backface-hidden";
 
 type CreateStatus =
 	| { kind: "idle" }
@@ -263,8 +269,13 @@ export function PassPlayground({
 		playSound("tap");
 	};
 
+	const { flip, flipped, handleTap } = usePassEasterEgg({
+		wobble: delightControls,
+		playSound,
+	});
+
 	const cardStyle = {
-		backgroundColor: activeColor.color,
+		"--pass-bg": activeColor.color,
 		"--pass-text": activeColor.text,
 		"--pass-text-muted": activeColor.muted,
 		"--pass-text-subtle": activeColor.subtle,
@@ -337,44 +348,68 @@ export function PassPlayground({
 		<div className="flex flex-col gap-5 md:flex-row md:items-stretch md:gap-4">
 			<motion.div
 				animate={delightControls}
-				className="relative mx-auto aspect-181/251 w-full max-w-[256px] select-none overflow-hidden rounded-lg border-overlay text-(--pass-text) transition-colors duration-250 md:mx-0 md:w-[256px]"
+				className="relative mx-auto aspect-181/251 w-full max-w-[256px] select-none md:mx-0 md:w-[256px]"
 				initial={false}
-				style={cardStyle}
+				onClick={handleTap}
+				style={{ ...cardStyle, transformPerspective: 800 }}
 			>
-				<div className="flex h-full flex-col">
-					<div className="flex items-start justify-between p-3">
-						<span className="font-semibold">Passlet</span>
-						<div className="flex flex-col items-end">
-							<span className="text-(--pass-text-subtle) text-[8px] uppercase tracking-tight">
-								ID
-							</span>
-							<span className="font-medium text-[11px] tabular-nums leading-[1.2]">
-								{memberNo}
-							</span>
+				<motion.div
+					animate={flip}
+					className="transform-3d size-full"
+					initial={false}
+					style={{ transformPerspective: 1200 }}
+				>
+					<div className={PASS_FACE} inert={flipped}>
+						<div className="flex items-start justify-between p-3">
+							<span className="font-semibold">Passlet</span>
+							<div className="flex flex-col items-end">
+								<span className="text-(--pass-text-subtle) text-[8px] uppercase tracking-tight">
+									ID
+								</span>
+								<span className="font-medium text-[11px] tabular-nums leading-[1.2]">
+									{memberNo}
+								</span>
+							</div>
+						</div>
+
+						<CardStrip pattern={pattern} />
+
+						<div className="flex flex-col gap-1 p-3">
+							<div className="flex justify-between">
+								<EditableField
+									label="Member"
+									onChange={setName}
+									placeholder="Your Name"
+									value={name}
+									wiggle={wiggleName}
+								/>
+								<Field label="Since" value={TODAY} />
+							</div>
+						</div>
+
+						<div className="mt-auto flex justify-center pb-3">
+							<div className="size-24 overflow-hidden rounded-sm bg-white">
+								{qrSlot}
+							</div>
 						</div>
 					</div>
 
-					<CardStrip pattern={pattern} />
-
-					<div className="flex flex-col gap-1 p-3">
-						<div className="flex justify-between">
-							<EditableField
-								label="Member"
-								onChange={setName}
-								placeholder="Your Name"
-								value={name}
-								wiggle={wiggleName}
+					<div className={cn(PASS_FACE, "rotate-y-180")} inert={!flipped}>
+						<div className="flex flex-col gap-3 p-3">
+							<span className="font-semibold">Passlet</span>
+							<Field label="Member" value={name.trim() || "Your Name"} />
+							<Field label="Member ID" value={memberNo} />
+							<Field label="Member since" value={TODAY} />
+							<Field
+								label="Made with"
+								value="passlet, one API for Apple Wallet and Google Wallet passes."
 							/>
-							<Field label="Since" value={TODAY} />
 						</div>
+						<p className="mt-auto p-3 text-(--pass-text-subtle) text-[8px] uppercase tracking-tight">
+							Tap to flip back
+						</p>
 					</div>
-
-					<div className="mt-auto flex justify-center pb-3">
-						<div className="size-24 overflow-hidden rounded-sm bg-white">
-							{qrSlot}
-						</div>
-					</div>
-				</div>
+				</motion.div>
 			</motion.div>
 
 			<div className="flex min-w-0 flex-1 flex-col gap-4">
