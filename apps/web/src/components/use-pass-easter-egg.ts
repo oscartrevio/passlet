@@ -25,6 +25,10 @@ const WOBBLE_DURATION_S = 0.4;
 
 const FLIP_SPRING = { type: "spring", stiffness: 160, damping: 19 } as const;
 const FLIP_LIFT_S = 0.6;
+// Once flipped, the back ignores taps until you have stopped tapping for this
+// long. Each ignored tap restarts the wait, so spamming through the flip can
+// never flip it straight back; the next deliberate tap does.
+const QUIET_BEFORE_FLIP_BACK_MS = 700;
 
 export function usePassEasterEgg({
 	wobble,
@@ -39,6 +43,8 @@ export function usePassEasterEgg({
 	const countRef = useRef(0);
 	const decayTimerRef = useRef<number>(undefined);
 	const resetTimerRef = useRef<number>(undefined);
+	const quietTimerRef = useRef<number>(undefined);
+	const canFlipBackRef = useRef(false);
 
 	const stopDecay = () => {
 		clearTimeout(decayTimerRef.current);
@@ -49,9 +55,18 @@ export function usePassEasterEgg({
 		() => () => {
 			clearTimeout(decayTimerRef.current);
 			clearTimeout(resetTimerRef.current);
+			clearTimeout(quietTimerRef.current);
 		},
 		[]
 	);
+
+	const waitForQuiet = () => {
+		canFlipBackRef.current = false;
+		clearTimeout(quietTimerRef.current);
+		quietTimerRef.current = window.setTimeout(() => {
+			canFlipBackRef.current = true;
+		}, QUIET_BEFORE_FLIP_BACK_MS);
+	};
 
 	// After 1.5 s idle the count drops by one every 0.8 s, and after 8 s it
 	// starts over, so a short pause keeps your progress but walking away doesn't.
@@ -74,6 +89,9 @@ export function usePassEasterEgg({
 		stopDecay();
 		countRef.current = 0;
 		setFlipped(toBack);
+		if (toBack) {
+			waitForQuiet();
+		}
 		playSound(toBack ? "expand" : "collapse");
 		flip.start({
 			rotateY: toBack ? 180 : 0,
@@ -93,7 +111,11 @@ export function usePassEasterEgg({
 			return;
 		}
 		if (flipped) {
-			turn(false);
+			if (canFlipBackRef.current) {
+				turn(false);
+			} else {
+				waitForQuiet();
+			}
 			return;
 		}
 
