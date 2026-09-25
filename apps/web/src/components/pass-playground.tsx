@@ -497,7 +497,7 @@ export function PassPlayground({
 					<span className="relative size-4">
 						<span
 							className={cn(
-								"absolute inset-0 flex items-center justify-center text-(--green-a10) transition-[opacity,filter,scale] duration-300 ease-in-out will-change-[opacity,filter,scale]",
+								"absolute inset-0 flex items-center justify-center transition-[opacity,filter,scale] duration-300 ease-in-out will-change-[opacity,filter,scale]",
 								created
 									? "scale-100 opacity-100 blur-0"
 									: "scale-[0.25] opacity-0 blur-sm"
