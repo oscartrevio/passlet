@@ -433,6 +433,50 @@ describe("Google failures", () => {
 	});
 });
 
+describe("inside Next.js", () => {
+	// Next.js's patched fetch returns one tee() branch of every body and never
+	// reads the other, so cancelling the returned body never settles.
+	const unreadBranches: ReadableStream[] = [];
+	function nextJsResponse(response: Response): Response {
+		if (!response.body) {
+			return response;
+		}
+		const [body, unread] = response.body.tee();
+		unreadBranches.push(unread);
+		return new Response(body, {
+			status: response.status,
+			headers: response.headers,
+		});
+	}
+
+	it("creates a missing class", async () => {
+		const stub = stubGoogleFetch(({ method }) =>
+			nextJsResponse(
+				method === "GET" ? new Response("", { status: 404 }) : Response.json({})
+			)
+		);
+		await ensureClass("loyaltyClass", CLASS_ID, {}, credentials, privateKey);
+		expect(calls(stub)).toEqual([
+			["GET", `/loyaltyClass/${CLASS_ID}`, undefined],
+			["POST", "/loyaltyClass", { id: CLASS_ID }],
+		]);
+	});
+
+	it("deletes an object", async () => {
+		stubGoogleFetch(() => nextJsResponse(Response.json({})));
+		await expect(
+			deleteObject("loyaltyObject", OBJECT_ID, credentials, privateKey)
+		).resolves.toBeUndefined();
+	});
+
+	it("surfaces a Google failure", async () => {
+		stubGoogleFetch(() => nextJsResponse(googleError(400, "Invalid")));
+		await expect(
+			patchObject("loyaltyObject", OBJECT_ID, {}, credentials, privateKey)
+		).rejects.toMatchObject({ code: "GOOGLE_API_ERROR", status: 400 });
+	});
+});
+
 describe("access token", () => {
 	it("exchanges one token per credentials and sends it as a bearer on every request", async () => {
 		const stub = stubGoogleFetch();
