@@ -24,7 +24,6 @@ function requiredEnv(name: string): string {
 
 interface CreatePassInput {
 	banner?: StripImages;
-	color: string;
 	colorValue: ColorValue;
 	/** When the pass was made, already formatted in the visitor's locale. */
 	created: string;
@@ -33,7 +32,6 @@ interface CreatePassInput {
 	pattern: PatternType;
 	provider: WalletProvider;
 	since: string;
-	textColor: string;
 }
 
 interface CreatePassResult {
@@ -96,11 +94,15 @@ export async function createPassAction(
 	const origin = `${headerList.get("x-forwarded-proto") ?? "https"}://${headerList.get("x-forwarded-host") ?? headerList.get("host")}`;
 
 	const pass = wallet.loyalty({
-		id: `passlet-${input.memberNo}`,
+		// Google keeps the colour and hero on the class, so each design gets one
+		// class shared by every visitor who picks it; the member number lives on
+		// the pass object. Existing classes are never rewritten, so the colours
+		// come from COLORS rather than the request.
+		id: `passlet-${color.value}-${pattern.value}`,
 		// Google shows issuerName beside the logo and name as the big title, so
 		// "Passlet" twice there; Apple uses name as the organisation name.
 		name: google ? "Member card" : "Passlet",
-		color: input.color,
+		color: color.color,
 		fields: [
 			field.header("memberId", "ID"),
 			field.secondary("member", "Member"),
@@ -137,8 +139,8 @@ export async function createPassAction(
 				retina: Buffer.from(input.banner.retina, "base64"),
 				superRetina: Buffer.from(input.banner.superRetina, "base64"),
 			},
-			foregroundColor: input.textColor,
-			labelColor: input.textColor,
+			foregroundColor: color.text,
+			labelColor: color.text,
 		},
 		google: {
 			logo: process.env.GOOGLE_LOGO_URL,

@@ -328,8 +328,6 @@ export function PassPlayground({
 					}),
 					colorValue: color,
 					pattern,
-					color: activeColor.color,
-					textColor: activeColor.text,
 					banner,
 				}),
 				new Promise<void>((resolve) => setTimeout(resolve, 400)),

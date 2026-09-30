@@ -1,4 +1,5 @@
 import { importPKCS8, SignJWT } from "jose";
+import { discardBody } from "../../discard-body";
 import { WalletError, type WalletErrorCode } from "../../errors";
 import type { GoogleCredentials } from "../../types/credentials";
 
@@ -74,7 +75,7 @@ async function getAccessToken(
 		}).toString(),
 	});
 
-	await assertOk(response, "GOOGLE_AUTH_FAILED");
+	assertOk(response, "GOOGLE_AUTH_FAILED");
 	const data = await readGoogleResponse(response);
 	const token = data.access_token;
 	if (typeof token !== "string" || !BEARER_TOKEN_RE.test(token)) {
@@ -169,10 +170,10 @@ const HTTP_ERROR_CODES: Partial<Record<number, WalletErrorCode>> = {
 	429: "GOOGLE_RATE_LIMITED",
 };
 
-async function assertOk(
+function assertOk(
 	response: Response,
 	fallback: "GOOGLE_API_ERROR" | "GOOGLE_AUTH_FAILED" = "GOOGLE_API_ERROR"
-): Promise<void> {
+): void {
 	if (response.ok) {
 		return;
 	}
@@ -185,7 +186,7 @@ async function assertOk(
 		retryAfter: retryAfterSeconds(response),
 	});
 	// Discard untrusted diagnostics; cleanup must not hide the API failure.
-	await response.body?.cancel().catch(() => undefined);
+	discardBody(response);
 	throw error;
 }
 
@@ -202,10 +203,10 @@ async function getClass(
 		privateKey
 	);
 	if (response.status === 404) {
-		await response.body?.cancel().catch(() => undefined);
+		discardBody(response);
 		return null;
 	}
-	await assertOk(response);
+	assertOk(response);
 	const body = await readGoogleResponse(response);
 	if (body.id !== classId) {
 		throw new WalletError("GOOGLE_INVALID_RESPONSE", undefined, {
@@ -226,7 +227,7 @@ export async function ensureClass(
 	if (await getClass(classType, classId, credentials, privateKey)) {
 		return;
 	}
-	await assertOk(
+	assertOk(
 		await walletRequest("POST", `/${classType}`, credentials, privateKey, {
 			...classBody,
 			id: classId,
@@ -243,7 +244,7 @@ export async function publishClass(
 ): Promise<void> {
 	const existing = await getClass(classType, classId, credentials, privateKey);
 	if (!existing) {
-		await assertOk(
+		assertOk(
 			await walletRequest("POST", `/${classType}`, credentials, privateKey, {
 				...classBody,
 				id: classId,
@@ -258,7 +259,7 @@ export async function publishClass(
 	if ("reviewStatus" in updateBody && updateBody.reviewStatus !== "DRAFT") {
 		updateBody.reviewStatus = "UNDER_REVIEW";
 	}
-	await assertOk(
+	assertOk(
 		await walletRequest(
 			"PUT",
 			`/${classType}/${classId}`,
@@ -283,9 +284,9 @@ export async function deleteObject(
 	);
 	// A missing object is already deleted, so deletion is idempotent.
 	if (response.status !== 404) {
-		await assertOk(response);
+		assertOk(response);
 	}
-	await response.body?.cancel().catch(() => undefined);
+	discardBody(response);
 }
 
 export async function patchObject(
@@ -306,5 +307,5 @@ export async function patchObject(
 		// that should trigger a field-update notification.
 		options?.notify ? { ...patch, notifyPreference: "NOTIFY_ON_UPDATE" } : patch
 	);
-	await assertOk(response);
+	assertOk(response);
 }

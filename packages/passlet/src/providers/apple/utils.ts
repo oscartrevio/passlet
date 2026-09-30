@@ -1,3 +1,4 @@
+import { discardBody } from "../../discard-body";
 import { WalletError } from "../../errors";
 import type {
 	BarcodeFormat,
@@ -111,7 +112,7 @@ async function fetchAsBytes(url: string): Promise<Uint8Array> {
 	try {
 		const response = await fetch(url);
 		if (!response.ok) {
-			await response.body?.cancel();
+			discardBody(response);
 			throw new WalletError("IMAGE_FETCH_FAILED", undefined, {
 				status: response.status,
 			});
