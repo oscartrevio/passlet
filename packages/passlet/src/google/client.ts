@@ -357,7 +357,13 @@ export async function upsertObject(
 	}
 	// A new object has no holder to notify, so the flag is not sent.
 	assertOk(
-		await walletRequest("POST", `/${objectType}`, credentials, privateKey, body)
+		await walletRequest(
+			"POST",
+			`/${objectType}`,
+			credentials,
+			privateKey,
+			insertBody(body)
+		)
 	);
 	return "created";
 }
@@ -380,12 +386,22 @@ export async function insertObject(
 		`/${objectType}`,
 		credentials,
 		privateKey,
-		body
+		insertBody(body)
 	);
 	if (response.status !== 409) {
 		assertOk(response);
 		return;
 	}
 	discardBody(response);
+	// The patch carries no state, so re-issuing an expired pass keeps it expired.
 	await patchObject(objectType, objectId, body, credentials, privateKey);
+}
+
+/**
+ * A new object starts ACTIVE; `state` is required on insert. Only inserts set
+ * it, so an update never revives a pass that expire() moved to EXPIRED.
+ * https://developers.google.com/wallet/reference/rest/v1/loyaltyobject
+ */
+function insertBody(body: Record<string, unknown>): Record<string, unknown> {
+	return { ...body, state: "ACTIVE" };
 }

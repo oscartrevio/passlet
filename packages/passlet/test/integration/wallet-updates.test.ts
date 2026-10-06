@@ -272,7 +272,6 @@ describe("wallet.update", () => {
 			[
 				"PATCH",
 				expect.objectContaining({
-					state: "ACTIVE",
 					loyaltyPoints: null,
 					textModulesData: null,
 				}),
@@ -280,7 +279,6 @@ describe("wallet.update", () => {
 			[
 				"PATCH",
 				expect.objectContaining({
-					state: "ACTIVE",
 					loyaltyPoints: { balance: { string: "250" } },
 					textModulesData: [{ header: "Tier", body: "Silver", id: "tier" }],
 				}),
@@ -290,6 +288,40 @@ describe("wallet.update", () => {
 		expect(Object.values(stub.body("POST", "/loyaltyObject"))).not.toContain(
 			null
 		);
+	});
+
+	// expire() moves the object to EXPIRED; a later content update must not
+	// bring it back, so only the insert ever sends a state.
+	it("keeps an expired Google pass expired across updates", async () => {
+		const stub = stubGoogleFetch(existingClasses);
+		let values: Record<string, string | null> = { points: "100" };
+		let template: PassTemplate | undefined;
+		const wallet = new Wallet({
+			google: googleCredentials(),
+			load: (): LoadedPass | null =>
+				template
+					? { content: { values }, template, updatedAt: new Date() }
+					: null,
+		});
+		template = wallet.loyalty(TEMPLATE);
+
+		await template.create({ serialNumber: SERIAL, values });
+		await template.expire(SERIAL);
+		values = { points: "250" };
+		await wallet.update(SERIAL);
+
+		const writes = stub.requests.filter((r) =>
+			r.path.startsWith("/loyaltyObject")
+		);
+		expect(writes.map((r) => [r.method, r.body?.state])).toEqual([
+			["POST", "ACTIVE"],
+			["PATCH", "EXPIRED"],
+			["PATCH", undefined],
+		]);
+		expect(writes[2]?.body).toMatchObject({
+			loyaltyPoints: { balance: { string: "250" } },
+		});
+		expect(writes[2]?.body).not.toHaveProperty("state");
 	});
 
 	it("still updates Google when Apple fails, then reports the Apple failure", async () => {

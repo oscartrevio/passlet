@@ -1,11 +1,7 @@
 import { WalletError } from "../errors";
 import type { ParsedContent } from "../schema/content";
 import type { FieldDef } from "../schema/parts";
-import type {
-	GoogleTransitOptions,
-	ParsedTemplate,
-	TemplateType,
-} from "../schema/template";
+import type { GoogleTransitOptions, ParsedTemplate } from "../schema/template";
 import {
 	buildAppLinkData,
 	buildModuleData,
@@ -75,8 +71,14 @@ function buildLoyaltyObjectFields(
 	};
 }
 
+// Flight: the `seat` field becomes boardingAndSeatingInfo.seatNumber, which
+// Google renders in the card's SEAT slot and is the field a notifyOnUpdate
+// PATCH announces to holders.
+// https://developers.google.com/wallet/tickets/boarding-passes/resources/template
+// https://developers.google.com/wallet/tickets/boarding-passes/use-cases/trigger-push-notifications
 function buildFlightObjectFields(
 	serialNumber: string,
+	fields: FieldDef[],
 	values: Record<string, string | null>
 ): Record<string, unknown> {
 	const passengerName = values.passengerName;
@@ -84,9 +86,12 @@ function buildFlightObjectFields(
 	if (!passengerName) {
 		throw new WalletError("GOOGLE_FLIGHT_MISSING_PASSENGER_NAME");
 	}
+	const seatNumber = resolveValueByKey(fields, values, "seat");
 	return {
 		passengerName,
 		reservationInfo: { confirmationCode: serialNumber },
+		boardingAndSeatingInfo:
+			seatNumber === undefined ? undefined : { seatNumber },
 	};
 }
 
@@ -167,10 +172,18 @@ const EVENT_SEAT_KEYS = ["seat", "row", "section", "gate"];
 
 // Well-known field keys that map to structured object fields and so must be
 // excluded from the generic textModulesData for that pass type.
-const STRUCTURED_FIELD_KEYS: Partial<Record<TemplateType, string[]>> = {
-	loyalty: ["member", "memberId", "points"],
-	eventTicket: EVENT_SEAT_KEYS,
-};
+function structuredFieldKeys(template: ParsedTemplate): string[] {
+	switch (template.type) {
+		case "loyalty":
+			return ["member", "memberId", "points"];
+		case "eventTicket":
+			return EVENT_SEAT_KEYS;
+		case "boardingPass":
+			return transitOptions(template) ? [] : ["seat"];
+		default:
+			return [];
+	}
+}
 
 // Only genericObject has header/subheader. Other verticals lead with the
 // primary field in textModulesData (up to ten entries), replacing infoModuleData.
@@ -188,7 +201,7 @@ function buildDisplayFields(
 			: [primaryField, ...fields.filter((f) => f !== primaryField)],
 		values,
 		generic ? ["primary"] : [],
-		STRUCTURED_FIELD_KEYS[template.type] ?? []
+		structuredFieldKeys(template)
 	);
 	const body: Record<string, unknown> = {
 		textModulesData: textModules.length > 0 ? textModules : undefined,
@@ -218,8 +231,9 @@ function buildDisplayFields(
 /**
  * The object as passlet owns it. Every field passlet can set for the object's
  * vertical is present, `undefined` when this content leaves it empty, so an
- * update can clear what the content no longer has. `state` is always ACTIVE;
- * fields passlet never sets are absent and left to Google.
+ * update can clear what the content no longer has. `state` is absent: the
+ * insert sets it, and an update keeps whatever state the object is in.
+ * Fields passlet never sets are absent and left to Google.
  */
 export function buildObjectBody(
 	template: ParsedTemplate,
@@ -246,7 +260,6 @@ export function buildObjectBody(
 	return {
 		id: objectId,
 		classId,
-		state: "ACTIVE",
 		// A Google object holds a single barcode — when several are supplied it
 		// takes the first entry.
 		barcode: googleBarcode
@@ -287,7 +300,7 @@ export function buildObjectBody(
 		...(template.type === "boardingPass" &&
 			(transit
 				? buildTransitObjectFields(template, transit, content, values)
-				: buildFlightObjectFields(content.serialNumber, values))),
+				: buildFlightObjectFields(content.serialNumber, fields, values))),
 		...(template.type === "giftCard" &&
 			buildGiftCardObjectFields(
 				template,

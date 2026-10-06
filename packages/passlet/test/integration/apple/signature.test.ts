@@ -88,7 +88,7 @@ describe("signManifest", () => {
 		);
 	});
 
-	it("embeds a detached SHA-1 signature made with the PEM key", async () => {
+	it("embeds a detached SHA-256 signature made with the PEM key", async () => {
 		const signed = parseSignature(
 			await signManifest({
 				manifest: MANIFEST,
@@ -100,8 +100,8 @@ describe("signManifest", () => {
 		expect(signed).toMatchObject({
 			certificateCount: 2,
 			detached: true,
-			digestAlgorithmOid: SHA1_OID,
-			messageDigestHex: createHash("sha1").update(MANIFEST).digest("hex"),
+			digestAlgorithmOid: SHA256_OID,
+			messageDigestHex: createHash("sha256").update(MANIFEST).digest("hex"),
 		});
 		expect(signed.verifies(certs.signerCert)).toBe(true);
 	});
@@ -249,7 +249,7 @@ describe("AppleProvider with credentials.signer", () => {
 		const signed = parseSignature((await readPkpass(bytes)).signature);
 
 		expect(signer.sign).toHaveBeenCalledTimes(1);
-		// SHA-256 is the external default; the in-memory path would use SHA-1.
+		// SHA-256 is the default for external signers, as for the in-memory key.
 		expect(signed.digestAlgorithmOid).toBe(SHA256_OID);
 		expect(signed.verifies(certs.signerCert)).toBe(true);
 	});
