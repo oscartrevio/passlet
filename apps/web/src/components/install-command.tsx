@@ -14,39 +14,53 @@ const COMMANDS: Record<InstallOption, string> = {
 	skill: "npx skills add oscartrevio/passlet",
 };
 
+type CopyState = "idle" | "copied" | "failed";
+
+const COPY_ANNOUNCEMENTS: Record<CopyState, string> = {
+	idle: "",
+	copied: "Install command copied",
+	failed: "Couldn't copy. Select the command and copy it manually.",
+};
+
 export function InstallCommand() {
 	const [pm, setPm] = useState<InstallOption>("npm");
-	const [copied, setCopied] = useState(false);
+	const [copyState, setCopyState] = useState<CopyState>("idle");
+	const copied = copyState === "copied";
 	const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
 	const copy = () => {
-		navigator.clipboard.writeText(COMMANDS[pm]);
-		setCopied(true);
 		clearTimeout(timeoutRef.current);
-		timeoutRef.current = setTimeout(() => setCopied(false), 2500);
+		navigator.clipboard.writeText(COMMANDS[pm]).then(
+			() => setCopyState("copied"),
+			() => setCopyState("failed")
+		);
+		timeoutRef.current = setTimeout(() => setCopyState("idle"), 2500);
 	};
 
 	return (
 		<div className="flex flex-col gap-2">
-			<div className="flex items-center">
+			<div
+				aria-label="Install method"
+				className="flex items-center"
+				role="radiogroup"
+			>
 				{(["npm", "pnpm", "yarn", "bun", "skill"] as InstallOption[]).map(
 					(p) => (
 						<Fragment key={p}>
-							<button
-								aria-pressed={pm === p}
-								className={cn(
-									"h-6 cursor-pointer touch-manipulation rounded-md px-3 font-medium text-xs transition-colors duration-150 ease-out focus-visible:outline-(--gray-a8) focus-visible:outline-2 focus-visible:outline-offset-2",
-									pm === p
-										? "bg-(--gray-a3) text-(--gray-a11)"
-										: "text-(--gray-a8) hover:text-(--gray-a9)"
-								)}
-								onClick={() => setPm(p)}
-								type="button"
-							>
+							<label className="relative flex h-6 cursor-pointer touch-manipulation items-center rounded-md px-3 font-medium text-(--gray-a11) text-xs transition-colors duration-150 ease-out not-has-checked:hover:text-(--gray-a12) has-checked:bg-(--gray-a3) has-checked:text-(--gray-a12) has-focus-visible:outline-(--gray-a11) has-focus-visible:outline-2 has-focus-visible:outline-offset-2 forced-colors:has-checked:bg-[Highlight] forced-colors:has-checked:text-[HighlightText]">
+								<input
+									checked={pm === p}
+									className="sr-only"
+									name="install-method"
+									onChange={() => setPm(p)}
+									type="radio"
+									value={p}
+								/>
 								{p}
-							</button>
+							</label>
 							{p === "bun" && (
 								<Separator
+									aria-hidden="true"
 									className="mx-1.5 my-1 rounded-full"
 									orientation="vertical"
 								/>
@@ -57,21 +71,21 @@ export function InstallCommand() {
 			</div>
 			<div className="hover:hover-border-shadow flex w-full items-center justify-between overflow-hidden rounded-xl border-shadow bg-white p-3 transition-shadow duration-200 ease-out">
 				<div className="flex items-center gap-1.5">
-					<span className="text-(--gray-a8) text-sm">$</span>
+					<span className="text-(--gray-a11) text-sm">$</span>
 					<div className="flex text-(--gray-a12) text-sm">
 						<span>{COMMANDS[pm]}</span>
 					</div>
 				</div>
 				<button
 					aria-label="Copy install command"
-					className="group relative shrink-0 cursor-pointer touch-manipulation rounded-sm focus-visible:outline-(--gray-a8) focus-visible:outline-2 focus-visible:outline-offset-4"
+					className="group relative shrink-0 cursor-pointer touch-manipulation rounded-sm focus-visible:outline-(--gray-a11) focus-visible:outline-2 focus-visible:outline-offset-4"
 					onClick={copy}
 					type="button"
 				>
 					<div className="hit-area-3 relative size-4.5">
 						<div
 							className={cn(
-								"absolute inset-0 flex items-center justify-center text-(--green-a10) transition-[opacity,filter,scale] duration-300 ease-out will-change-[opacity,filter,scale]",
+								"absolute inset-0 flex items-center justify-center text-(--green-a10) transition-[opacity,filter,scale] duration-300 ease-out will-change-[opacity,filter,scale] motion-reduce:scale-100 motion-reduce:blur-none",
 								copied
 									? "scale-100 opacity-100 blur-0"
 									: "scale-[0.25] opacity-0 blur-sm"
@@ -90,7 +104,7 @@ export function InstallCommand() {
 						</div>
 						<div
 							className={cn(
-								"text-(--gray-a8) transition-[opacity,filter,scale,color] duration-300 ease-out will-change-[opacity,filter,scale] group-hover:text-(--gray-a9)",
+								"text-(--gray-a11) transition-[opacity,filter,scale,color] duration-300 ease-out will-change-[opacity,filter,scale] group-hover:text-(--gray-a12) motion-reduce:scale-100 motion-reduce:blur-none",
 								copied
 									? "scale-[0.25] opacity-0 blur-sm"
 									: "scale-100 opacity-100 blur-0"
@@ -109,6 +123,9 @@ export function InstallCommand() {
 						</div>
 					</div>
 				</button>
+				<span className="sr-only" role="status">
+					{COPY_ANNOUNCEMENTS[copyState]}
+				</span>
 			</div>
 		</div>
 	);

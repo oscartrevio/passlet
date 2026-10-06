@@ -18,7 +18,10 @@
 	outline-offset: -1px;
 }
 
+/* The transparent border is invisible until forced-colors mode drops the
+   box-shadow, where it becomes the surface's only edge. */
 @utility border-shadow {
+	border: 1px solid transparent;
 	box-shadow:
 		0px 0px 0px 1px rgba(0, 0, 0, 0.06),
 		0px 1px 2px -1px rgba(0, 0, 0, 0.06),

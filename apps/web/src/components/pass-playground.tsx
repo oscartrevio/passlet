@@ -149,7 +149,7 @@ function PatternSwatch({
 function Field({ label, value }: { label: string; value: string }) {
 	return (
 		<div className="flex flex-col">
-			<span className="text-(--pass-text-muted) text-[8px] uppercase tracking-normal">
+			<span className="text-(--pass-text) text-[8px] uppercase tracking-normal">
 				{label}
 			</span>
 			<span className="font-semibold text-(--pass-text) text-xs">{value}</span>
@@ -186,16 +186,18 @@ function EditableField({
 }) {
 	return (
 		<label className="flex flex-col">
-			<span className="text-(--pass-text-muted) text-[8px] uppercase tracking-normal">
+			<span className="text-(--pass-text) text-[8px] uppercase tracking-normal">
 				{label}
 			</span>
 			<input
+				autoComplete="name"
 				className={cn(
-					"w-24 cursor-text bg-transparent font-semibold text-(--pass-text) text-xs caret-(--pass-text) outline-none transition-colors duration-300 placeholder:text-(--pass-text-subtle) placeholder:transition-colors placeholder:duration-300",
-					value.trim().length === 0 && "animate-pulse",
-					wiggle && "animate-[wiggle_0.3s_ease-in-out]"
+					"w-24 cursor-text rounded-xs bg-transparent font-semibold text-(--pass-text) text-xs caret-(--pass-text) transition-colors duration-300 placeholder:text-(--pass-text-subtle) placeholder:transition-colors placeholder:duration-300 focus-visible:outline-(--pass-text) focus-visible:outline-2 focus-visible:outline-offset-2",
+					value.trim().length === 0 && "motion-safe:animate-pulse",
+					wiggle && "motion-safe:animate-[wiggle_0.3s_ease-in-out]"
 				)}
 				maxLength={24}
+				name="name"
 				onChange={(e) => onChange(e.target.value)}
 				placeholder={placeholder}
 				type="text"
@@ -288,7 +290,6 @@ export function PassPlayground({
 	const cardStyle = {
 		"--pass-bg": activeColor.color,
 		"--pass-text": activeColor.text,
-		"--pass-text-muted": activeColor.muted,
 		"--pass-text-subtle": activeColor.subtle,
 		"--pass-secondary": activeColor.secondary,
 	} as CSSProperties;
@@ -361,10 +362,16 @@ export function PassPlayground({
 	};
 
 	return (
-		<div className="flex flex-col gap-5 md:flex-row md:items-stretch md:gap-4">
+		<form
+			className="flex flex-col gap-5 md:flex-row md:items-stretch md:gap-4"
+			onSubmit={(e) => {
+				e.preventDefault();
+				handleCreatePass();
+			}}
+		>
 			<motion.div
 				animate={delightControls}
-				className="relative mx-auto aspect-181/251 w-full max-w-[256px] cursor-pointer select-none motion-reduce:cursor-auto md:mx-0 md:w-[256px]"
+				className="relative mx-auto aspect-181/251 w-full max-w-64 cursor-pointer select-none motion-reduce:cursor-auto md:mx-0 md:w-64"
 				initial={false}
 				onClick={handleTap}
 				style={{ ...cardStyle, transformPerspective: 800 }}
@@ -379,7 +386,7 @@ export function PassPlayground({
 						<div className="flex items-start justify-between p-3">
 							<span className="font-semibold">Passlet</span>
 							<div className="flex flex-col items-end">
-								<span className="text-(--pass-text-subtle) text-[8px] uppercase tracking-tight">
+								<span className="text-(--pass-text) text-[8px] uppercase tracking-tight">
 									ID
 								</span>
 								<span className="font-medium text-[11px] tabular-nums leading-[1.2]">
@@ -418,104 +425,114 @@ export function PassPlayground({
 
 			<div className="flex min-w-0 flex-1 flex-col gap-4">
 				<div className="flex flex-col gap-2">
-					<p className="font-medium text-(--gray-a8) text-xs">
+					<p
+						className="font-medium text-(--gray-a11) text-xs"
+						id="pass-color-label"
+					>
 						Background Color
 					</p>
-					<div className="flex flex-wrap gap-1.5">
+					<div
+						aria-labelledby="pass-color-label"
+						className="flex flex-wrap gap-1.5"
+						role="radiogroup"
+					>
 						{COLORS.map((c) => {
 							const isSelected = color === c.value;
 							return (
-								<button
-									aria-label={`Select ${c.label} color`}
-									aria-pressed={isSelected}
-									className="relative size-5 cursor-pointer rounded-sm border-overlay transition-transform duration-150 ease-out after:absolute after:-inset-1.5 after:content-[''] focus:outline-none focus-visible:ring-2 focus-visible:ring-current focus-visible:ring-offset-2 active:scale-[0.96]"
+								<label
+									className="relative size-5 cursor-pointer rounded-sm border-overlay transition-transform duration-150 ease-out forced-color-adjust-none after:absolute after:-inset-[3px] after:content-[''] active:scale-[0.96] has-checked:shadow-[inset_0_0_0_2px_#F5F5F5,0_0_0_2px_var(--gray-a12)] has-focus-visible:outline-(--gray-a11) has-focus-visible:outline-2 has-focus-visible:outline-offset-4 forced-colors:has-checked:shadow-[inset_0_0_0_2px_Canvas,0_0_0_2px_CanvasText] forced-colors:has-focus-visible:outline-[color:Highlight]"
 									key={c.value}
-									onClick={() => handleColorChange(c.value)}
-									style={{
-										backgroundColor: c.color,
-										color: c.color,
-										...(isSelected && {
-											boxShadow: `inset 0 0 0 2px #F5F5F5, 0 0 0 2px ${c.color}`,
-										}),
-									}}
+									style={{ backgroundColor: c.color }}
 									title={c.label}
-									type="button"
-								/>
+								>
+									<input
+										checked={isSelected}
+										className="sr-only"
+										name="pass-color"
+										onChange={() => handleColorChange(c.value)}
+										type="radio"
+										value={c.value}
+									/>
+									<span className="sr-only">{c.label}</span>
+								</label>
 							);
 						})}
 					</div>
 				</div>
 
 				<div className="flex flex-col gap-2">
-					<p className="font-medium text-(--gray-a8) text-xs">Pattern</p>
-					<div className="flex gap-1.5">
+					<p
+						className="font-medium text-(--gray-a11) text-xs"
+						id="pass-pattern-label"
+					>
+						Pattern
+					</p>
+					<div
+						aria-labelledby="pass-pattern-label"
+						className="flex gap-1.5"
+						role="radiogroup"
+					>
 						{PATTERNS.map((p) => {
 							const isSelected = pattern === p.value;
 							return (
-								<button
-									aria-label={`Select ${p.label} pattern`}
-									aria-pressed={isSelected}
-									className="relative cursor-pointer overflow-hidden rounded border-overlay transition-transform duration-150 ease-out after:absolute after:-inset-1.5 after:content-[''] focus:outline-none focus-visible:ring-(--gray-a6) focus-visible:ring-[6px] active:scale-[0.96]"
+								<label
+									className="relative cursor-pointer overflow-hidden rounded border-overlay transition-transform duration-150 ease-out forced-color-adjust-none active:scale-[0.96] has-checked:shadow-[0_0_0_2px_var(--gray-a12)] has-focus-visible:outline-(--gray-a11) has-focus-visible:outline-2 has-focus-visible:outline-offset-4 forced-colors:has-checked:shadow-[0_0_0_2px_CanvasText] forced-colors:has-focus-visible:outline-[color:Highlight]"
 									key={p.value}
-									onClick={() => handlePatternChange(p.value)}
-									style={{
-										outline: isSelected
-											? "2px solid #1E1E1E"
-											: "2px solid transparent",
-										outlineOffset: 2,
-									}}
 									title={p.label}
-									type="button"
 								>
+									<input
+										checked={isSelected}
+										className="sr-only"
+										name="pass-pattern"
+										onChange={() => handlePatternChange(p.value)}
+										type="radio"
+										value={p.value}
+									/>
+									<span className="sr-only">{p.label}</span>
 									<PatternSwatch pattern={p.value} selected={isSelected} />
-								</button>
+								</label>
 							);
 						})}
 					</div>
 				</div>
 
 				<div className="flex flex-col gap-2">
-					<p className="font-medium text-(--gray-a8) text-xs">
+					<p
+						className="font-medium text-(--gray-a11) text-xs"
+						id="pass-provider-label"
+					>
 						Wallet Provider
 					</p>
-					<div className="flex gap-1.5">
-						<button
-							aria-label="Select Apple Wallet"
-							aria-pressed={provider === "apple"}
-							className={cn(
-								"flex h-7 w-12 cursor-pointer items-center justify-center rounded-md border-shadow transition-all duration-150 ease-out focus-visible:outline-(--gray-a8) focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.96]",
-								provider === "apple"
-									? "bg-(--gray-a12)"
-									: "bg-transparent hover:bg-(--gray-a4)"
-							)}
-							onClick={() => handleProviderChange("apple")}
-							type="button"
-						>
-							<AppleWalletIcon
-								className={
-									provider === "apple" ? "text-white" : "text-(--gray-a12)"
-								}
+					<div
+						aria-labelledby="pass-provider-label"
+						className="flex gap-1.5"
+						role="radiogroup"
+					>
+						<label className="relative flex h-7 w-12 cursor-pointer items-center justify-center rounded-md border-shadow text-(--gray-a12) transition-[scale,background-color,color] duration-150 ease-out not-has-checked:hover:bg-(--gray-a4) active:scale-[0.96] has-checked:bg-(--gray-a12) has-checked:text-white has-focus-visible:outline-(--gray-a11) has-focus-visible:outline-2 has-focus-visible:outline-offset-2 forced-colors:has-checked:bg-[Highlight] forced-colors:has-checked:text-[HighlightText]">
+							<input
+								checked={provider === "apple"}
+								className="sr-only"
+								name="pass-provider"
+								onChange={() => handleProviderChange("apple")}
+								type="radio"
+								value="apple"
 							/>
-						</button>
+							<span className="sr-only">Apple Wallet</span>
+							<AppleWalletIcon />
+						</label>
 
-						<button
-							aria-label="Select Google Wallet"
-							aria-pressed={provider === "google"}
-							className={cn(
-								"flex h-7 w-12 cursor-pointer items-center justify-center rounded-md border-shadow transition-all duration-150 ease-out focus-visible:outline-(--gray-a8) focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.96]",
-								provider === "google"
-									? "bg-(--gray-a12)"
-									: "bg-transparent hover:bg-(--gray-a4)"
-							)}
-							onClick={() => handleProviderChange("google")}
-							type="button"
-						>
-							<GoogleWalletIcon
-								className={
-									provider === "google" ? "text-white" : "text-(--gray-a12)"
-								}
+						<label className="relative flex h-7 w-12 cursor-pointer items-center justify-center rounded-md border-shadow text-(--gray-a12) transition-[scale,background-color,color] duration-150 ease-out not-has-checked:hover:bg-(--gray-a4) active:scale-[0.96] has-checked:bg-(--gray-a12) has-checked:text-white has-focus-visible:outline-(--gray-a11) has-focus-visible:outline-2 has-focus-visible:outline-offset-2 forced-colors:has-checked:bg-[Highlight] forced-colors:has-checked:text-[HighlightText]">
+							<input
+								checked={provider === "google"}
+								className="sr-only"
+								name="pass-provider"
+								onChange={() => handleProviderChange("google")}
+								type="radio"
+								value="google"
 							/>
-						</button>
+							<span className="sr-only">Google Wallet</span>
+							<GoogleWalletIcon />
+						</label>
 					</div>
 				</div>
 
@@ -525,12 +542,12 @@ export function PassPlayground({
 					// click can still answer with the error sound and field wiggle.
 					aria-disabled={creating || !name.trim()}
 					className="mt-auto font-sans! tracking-tight"
-					onClick={handleCreatePass}
+					type="submit"
 				>
 					<span className="relative size-4">
 						<span
 							className={cn(
-								"absolute inset-0 flex items-center justify-center transition-[opacity,filter,scale] duration-300 ease-out will-change-[opacity,filter,scale]",
+								"absolute inset-0 flex items-center justify-center transition-[opacity,filter,scale] duration-300 ease-out will-change-[opacity,filter,scale] motion-reduce:scale-100 motion-reduce:blur-none",
 								created
 									? "scale-100 opacity-100 blur-0"
 									: "scale-[0.25] opacity-0 blur-sm"
@@ -549,7 +566,7 @@ export function PassPlayground({
 						</span>
 						<span
 							className={cn(
-								"absolute inset-0 flex items-center justify-center transition-[opacity,filter,scale] duration-300 ease-out will-change-[opacity,filter,scale]",
+								"absolute inset-0 flex items-center justify-center transition-[opacity,filter,scale] duration-300 ease-out will-change-[opacity,filter,scale] motion-reduce:scale-100 motion-reduce:blur-none",
 								created
 									? "scale-[0.25] opacity-0 blur-sm"
 									: "scale-100 opacity-100 blur-0"
@@ -570,6 +587,6 @@ export function PassPlayground({
 					<span aria-live="polite">{createButtonLabel(status)}</span>
 				</Button>
 			</div>
-		</div>
+		</form>
 	);
 }
