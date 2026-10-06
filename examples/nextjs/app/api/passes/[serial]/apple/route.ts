@@ -13,15 +13,11 @@ export async function GET(
 	const { serial } = await params;
 
 	try {
-		const { apple, warnings } = await rewardsCard.create({
+		const { apple } = await rewardsCard.create({
 			serialNumber: serial,
 			values: { points: "1250" },
 			barcode: { format: "QR", value: serial, altText: serial },
 		});
-
-		if (warnings.length > 0) {
-			console.warn("[passlet]", warnings);
-		}
 
 		if (!apple) {
 			return new Response("Apple Wallet is not configured", { status: 501 });

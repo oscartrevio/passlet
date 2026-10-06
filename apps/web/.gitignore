@@ -58,3 +58,7 @@ dev-dist
 .dev.vars*
 
 .open-next
+
+# Written by `next build` (Next.js 16.3+)
+AGENTS.md
+CLAUDE.md

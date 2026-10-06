@@ -2,7 +2,14 @@ import { createHash } from "node:crypto";
 import JSZip from "jszip";
 import forge from "node-forge";
 import { inject } from "vitest";
-import type { AppleCredentials } from "../../src/types/credentials";
+import { AppleProvider } from "../../src/apple/index";
+import type { PassContent } from "../../src/schema/content";
+import type {
+	AppleCredentials,
+	PassRegistration,
+	PassRegistrations,
+} from "../../src/schema/settings";
+import type { TemplateConfig } from "../../src/schema/template";
 
 export const PASS_TYPE_IDENTIFIER = "pass.com.test.example";
 export const TEAM_ID = "ABCD1234EF";
@@ -17,7 +24,7 @@ export const PNG = new Uint8Array([
 	0xae, 0x42, 0x60, 0x82,
 ]);
 
-/** Icon with the @2x variant Apple expects, so generation emits no warnings. */
+/** Icon with the @2x variant Apple recommends for Retina displays. */
 export const ICON = { base: PNG, retina: PNG };
 
 /**
@@ -38,6 +45,66 @@ export function appleCredentials(): AppleCredentials & { signerKey: string } {
 		passTypeIdentifier: PASS_TYPE_IDENTIFIER,
 		teamId: TEAM_ID,
 		...inject("appleCerts"),
+	};
+}
+
+/** Sign one `.pkpass` through the Apple provider, without a web service. */
+export function issueApplePass(
+	template: TemplateConfig,
+	content: PassContent,
+	credentials: AppleCredentials
+): Promise<Uint8Array> {
+	const provider = new AppleProvider(credentials, {
+		resolve: () => {
+			throw new Error("no web service to render for");
+		},
+	});
+	return provider.issue({ template, content });
+}
+
+export type MemoryRegistrations = PassRegistrations & {
+	rows: () => PassRegistration[];
+};
+
+/** Registrations kept in memory, with `rows()` to inspect them. */
+export function memoryRegistrations(
+	initial: PassRegistration[] = []
+): MemoryRegistrations {
+	const rows = new Map(
+		initial.map((row) => [
+			`${row.deviceLibraryIdentifier}\0${row.serialNumber}`,
+			row,
+		])
+	);
+	return {
+		add: (row) => {
+			const key = `${row.deviceLibraryIdentifier}\0${row.serialNumber}`;
+			const created = !rows.has(key);
+			rows.set(key, row);
+			return Promise.resolve(created);
+		},
+		devices: (serialNumber) =>
+			Promise.resolve(
+				[...rows.values()]
+					.filter((row) => row.serialNumber === serialNumber)
+					.map(({ deviceLibraryIdentifier, pushToken }) => ({
+						deviceLibraryIdentifier,
+						pushToken,
+					}))
+			),
+		remove: (deviceLibraryIdentifier, serialNumber) => {
+			rows.delete(`${deviceLibraryIdentifier}\0${serialNumber}`);
+			return Promise.resolve();
+		},
+		rows: () => [...rows.values()],
+		serialNumbers: (deviceLibraryIdentifier) =>
+			Promise.resolve(
+				[...rows.values()]
+					.filter(
+						(row) => row.deviceLibraryIdentifier === deviceLibraryIdentifier
+					)
+					.map((row) => row.serialNumber)
+			),
 	};
 }
 

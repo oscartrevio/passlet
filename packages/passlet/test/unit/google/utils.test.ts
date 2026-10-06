@@ -4,7 +4,7 @@ import {
 	toGoogleBarcodeType,
 	toLocalDateTime,
 	translationsFor,
-} from "../../../src/providers/google/utils";
+} from "../../../src/google/utils";
 
 describe("toLocalDateTime", () => {
 	it.each([

@@ -51,15 +51,12 @@ const app = express();
 app.get("/passes/:serial/apple", async (req: Request, res: Response) => {
 	const serial = req.params.serial;
 
-	const { apple, warnings } = await rewardsCard.create({
+	const { apple } = await rewardsCard.create({
 		serialNumber: serial,
 		values: { points: "1250" },
 		barcode: { format: "QR", value: serial, altText: serial },
 	});
 
-	if (warnings.length > 0) {
-		console.warn("[passlet]", warnings);
-	}
 	if (!apple) {
 		res.status(501).send("Apple Wallet is not configured");
 		return;
@@ -79,15 +76,12 @@ app.get("/passes/:serial/apple", async (req: Request, res: Response) => {
 app.get("/passes/:serial/google", async (req: Request, res: Response) => {
 	const serial = req.params.serial;
 
-	const { google, warnings } = await rewardsCard.create({
+	const { google } = await rewardsCard.create({
 		serialNumber: serial,
 		values: { points: "1250" },
 		barcode: { format: "QR", value: serial },
 	});
 
-	if (warnings.length > 0) {
-		console.warn("[passlet]", warnings);
-	}
 	if (!google) {
 		res.status(501).send("Google Wallet is not configured");
 		return;

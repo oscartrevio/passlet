@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { buildStringsLines } from "../../../src/providers/apple/index";
-import type { FieldDef, PassConfig } from "../../../src/types/schemas";
+import {
+	buildStringsLines,
+	escapeStringsValue,
+} from "../../../src/apple/strings";
+import type { FieldDef } from "../../../src/schema/parts";
+import type { TemplateConfig } from "../../../src/schema/template";
 
-type LoyaltyPass = Extract<PassConfig, { type: "loyalty" }>;
+type LoyaltyPass = Extract<TemplateConfig, { type: "loyalty" }>;
 
 function loyalty(overrides: Partial<LoyaltyPass> = {}): LoyaltyPass {
 	return {
@@ -73,5 +77,12 @@ describe("buildStringsLines", () => {
 		expect(buildStringsLines(pass, {}, { name: 'Say "Hola"\nAdiós' })).toEqual([
 			'"The \\"Best\\" Pass" = "Say \\"Hola\\"\\nAdiós";',
 		]);
+	});
+});
+
+describe("escapeStringsValue", () => {
+	it("escapes backslashes, quotes and line breaks for pass.strings", () => {
+		// Backslashes go first: escaping quotes first would double the added one.
+		expect(escapeStringsValue('a\\b "c"\nd\re')).toBe('a\\\\b \\"c\\"\\nd\\re');
 	});
 });

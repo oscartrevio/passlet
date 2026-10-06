@@ -46,7 +46,7 @@ type CreateStatus =
 	| { kind: "idle" }
 	| { kind: "creating" }
 	| { kind: "created"; provider: WalletProvider }
-	| { kind: "failed"; message: string };
+	| { kind: "failed" };
 
 function createButtonLabel(status: CreateStatus): string {
 	switch (status.kind) {
@@ -56,6 +56,8 @@ function createButtonLabel(status: CreateStatus): string {
 			return status.provider === "apple"
 				? "Pass Downloaded"
 				: "Opened in Google Wallet";
+		case "failed":
+			return "Couldn't Add Pass";
 		default:
 			return "Add to Wallet";
 	}
@@ -220,7 +222,7 @@ export function PassPlayground({
 	const [wiggleName, setWiggleName] = useState(false);
 	const creating = status.kind === "creating";
 	const created = status.kind === "created";
-	const createdTimeoutRef = useRef<number>(undefined);
+	const labelResetRef = useRef<number>(undefined);
 	const shouldReduceMotion = useReducedMotion();
 	const delightControls = useAnimationControls();
 
@@ -257,12 +259,8 @@ export function PassPlayground({
 		setColor(value);
 		playSound("select");
 		triggerDelight();
-		setPassletColor(value).catch(() => {
-			setStatus({
-				kind: "failed",
-				message: "Unable to save your color preference.",
-			});
-		});
+		// Best-effort preference; the playground works without the cookie.
+		setPassletColor(value).catch(() => undefined);
 	};
 
 	const handlePatternChange = (value: PatternType) => {
@@ -306,7 +304,7 @@ export function PassPlayground({
 			setTimeout(() => setWiggleName(false), 300);
 			return;
 		}
-		clearTimeout(createdTimeoutRef.current);
+		clearTimeout(labelResetRef.current);
 		setStatus({ kind: "creating" });
 		try {
 			const banner =
@@ -351,21 +349,15 @@ export function PassPlayground({
 				a.click();
 			}
 			setStatus({ kind: "created", provider });
-			createdTimeoutRef.current = window.setTimeout(
-				() => setStatus({ kind: "idle" }),
-				2500
-			);
 			playSound("success");
-		} catch (error) {
-			setStatus({
-				kind: "failed",
-				message:
-					error instanceof Error
-						? error.message
-						: "Couldn't create your pass. Try again.",
-			});
+		} catch {
+			setStatus({ kind: "failed" });
 			playSound("error");
 		}
+		labelResetRef.current = window.setTimeout(
+			() => setStatus({ kind: "idle" }),
+			2500
+		);
 	};
 
 	return (
@@ -526,12 +518,6 @@ export function PassPlayground({
 						</button>
 					</div>
 				</div>
-
-				{status.kind === "failed" ? (
-					<p className="text-(--red-a11) text-xs leading-normal" role="alert">
-						{status.message}
-					</p>
-				) : null}
 
 				<Button
 					aria-busy={creating}

@@ -37,7 +37,6 @@ interface CreatePassInput {
 interface CreatePassResult {
 	appleBytes?: number[];
 	googleJwt?: string;
-	warnings: string[];
 }
 
 const APPLE_ICON_BASE64 =
@@ -122,7 +121,7 @@ export async function createPassAction(
 			),
 			field.back("builtBy", "Made by", {
 				value: "Oscar Treviño",
-				attributedValue: '<a href="https://oscartrevio.xyz">Oscar Treviño</a>',
+				attributedValue: '<a href="https://www.oscartrev.io">Oscar Treviño</a>',
 			}),
 			field.back("serial", "Serial number"),
 			field.back(
@@ -150,7 +149,7 @@ export async function createPassAction(
 				{ uri: SITE_MANIFEST.url, description: "Website" },
 				{ uri: SITE_MANIFEST.github, description: "GitHub" },
 				{ uri: "https://www.npmjs.com/package/passlet", description: "npm" },
-				{ uri: "https://oscartrevio.xyz", description: "Oscar Treviño" },
+				{ uri: "https://www.oscartrev.io", description: "Oscar Treviño" },
 			],
 		},
 	});
@@ -186,6 +185,5 @@ export async function createPassAction(
 				: undefined,
 		googleJwt:
 			input.provider === "google" ? (issued.google ?? undefined) : undefined,
-		warnings: issued.warnings,
 	};
 }

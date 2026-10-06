@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildObjectBody } from "../../../src/providers/google/index";
+import { buildObjectBody } from "../../../src/google/object-body";
+import type { PassContent } from "../../../src/schema/content";
 import type {
-	CreateConfig,
 	GoogleTransitOptions,
-	PassConfig,
-} from "../../../src/types/schemas";
+	TemplateConfig,
+} from "../../../src/schema/template";
 import { FIXTURES, type FixtureName } from "../../support/fixtures";
 import { ISSUER_ID, LOGO_URL } from "../../support/google";
 import {
@@ -19,7 +19,7 @@ function en(value: string) {
 	return { defaultValue: { language: "en-US", value } };
 }
 
-function build(pass: PassConfig, create: CreateConfig) {
+function build(pass: TemplateConfig, create: PassContent) {
 	return buildObjectBody(
 		pass,
 		create,
@@ -28,9 +28,9 @@ function build(pass: PassConfig, create: CreateConfig) {
 	);
 }
 
-function transitPass(transit: GoogleTransitOptions): PassConfig {
+function transitPass(transit: GoogleTransitOptions): TemplateConfig {
 	const pass = FIXTURES.transit.pass;
-	if (pass.type !== "flight") {
+	if (pass.type !== "boardingPass") {
 		throw new Error("transit fixture must be a flight pass");
 	}
 	return { ...pass, google: { logo: LOGO_URL, transit } };
@@ -63,7 +63,7 @@ const GOLDEN: Record<FixtureName, Golden> = {
 			],
 		},
 	},
-	event: {
+	eventTicket: {
 		resource: "eventTicketObject",
 		required: BASE_REQUIRED,
 		body: {
@@ -82,7 +82,7 @@ const GOLDEN: Record<FixtureName, Golden> = {
 			textModulesData: [{ header: "Venue", body: "Central Park", id: "venue" }],
 		},
 	},
-	flight: {
+	boardingPass: {
 		resource: "flightObject",
 		required: [...BASE_REQUIRED, "passengerName", "reservationInfo"],
 		body: {
@@ -111,6 +111,8 @@ const GOLDEN: Record<FixtureName, Golden> = {
 			ticketNumber: "TK-9001",
 			// transitObject pluralises the passenger field.
 			passengerNames: "Jane Doe",
+			// Google's REST API requires it alongside passengerNames.
+			passengerType: "SINGLE_PASSENGER",
 			// TicketLeg times accept an offset, unlike flightClass local times.
 			ticketLeg: {
 				originName: en("PAD"),
@@ -240,7 +242,7 @@ describe("buildObjectBody", () => {
 
 	it("throws GOOGLE_FLIGHT_MISSING_PASSENGER_NAME when no passengerName value is supplied", () => {
 		expect(() =>
-			build(FIXTURES.flight.pass, { serialNumber: "flight-002" })
+			build(FIXTURES.boardingPass.pass, { serialNumber: "flight-002" })
 		).toThrow(
 			expect.objectContaining({ code: "GOOGLE_FLIGHT_MISSING_PASSENGER_NAME" })
 		);

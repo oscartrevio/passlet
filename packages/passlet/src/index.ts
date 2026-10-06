@@ -4,46 +4,60 @@ export type {
 	WalletValidationIssue,
 } from "./errors";
 export { WALLET_ERROR_CODES, WalletError } from "./errors";
-export { APPLE_PASS_CONTENT_TYPE, field, googleSaveUrl, Pass } from "./pass";
-export type {
-	AppleCredentials,
-	AppleExternalSigner,
-	GoogleCredentials,
-	IssuedPass,
-	WalletCredentials,
-} from "./types/credentials";
+export {
+	APPLE_PASS_CONTENT_TYPE,
+	APPLE_PASSES_CONTENT_TYPE,
+	field,
+	googleSaveUrl,
+} from "./field";
+export { toNodeListener } from "./node";
+export type { PassContent, RotatingBarcode } from "./schema/content";
 export type {
 	AppLinkData,
 	Barcode,
 	BarcodeFormat,
-	CouponPassConfig,
-	CreateConfig,
 	DataDetectorType,
 	DateStyle,
-	EventPassConfig,
 	FieldDef,
-	FlightPassConfig,
-	GenericPassConfig,
-	GiftCardPassConfig,
 	GoogleImageModule,
 	GoogleLink,
 	GoogleModules,
 	GooglePassMessage,
-	GoogleTransitOptions,
 	GoogleValueAddedModule,
 	ImageSet,
 	ImageSource,
 	LocaleCode,
 	Locales,
 	Location,
-	LoyaltyPassConfig,
 	NumberStyle,
-	PassConfig,
-	PassType,
-	RotatingBarcode,
 	SemanticTags,
 	TextAlignment,
 	TranslationMap,
-	UpdateOptions,
-} from "./types/schemas";
+} from "./schema/parts";
+export type {
+	AppleCredentials,
+	AppleExternalSigner,
+	AppleWebService,
+	GoogleCredentials,
+	IssuedBundle,
+	IssuedPass,
+	LoadedPass,
+	LoadPass,
+	PassRegistration,
+	PassRegistrations,
+	UpdateResult,
+	WalletConfig,
+} from "./schema/settings";
+export type {
+	BoardingPassTemplateConfig,
+	CouponTemplateConfig,
+	EventTicketTemplateConfig,
+	GenericTemplateConfig,
+	GiftCardTemplateConfig,
+	GoogleTransitOptions,
+	LoyaltyTemplateConfig,
+	TemplateConfig,
+	TemplateType,
+} from "./schema/template";
+export { PassTemplate } from "./template";
 export { Wallet } from "./wallet";

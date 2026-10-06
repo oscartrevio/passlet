@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
-import {
-	buildPassJson,
-	validateAppleRequirements,
-} from "../../../src/providers/apple/index";
-import type { CreateConfig, PassConfig } from "../../../src/types/schemas";
+import { validateAppleRequirements } from "../../../src/apple/index";
+import { buildPassJson } from "../../../src/apple/pass-json";
+import type { PassContent } from "../../../src/schema/content";
+import type { TemplateConfig } from "../../../src/schema/template";
 import {
 	ICON,
 	PASS_TYPE_IDENTIFIER,
@@ -22,14 +21,14 @@ type SlotsJson = Record<
 	Json[]
 > & { transitType?: string };
 
-type LoyaltyPass = Extract<PassConfig, { type: "loyalty" }>;
-type EventPass = Extract<PassConfig, { type: "event" }>;
-type FlightPass = Extract<PassConfig, { type: "flight" }>;
+type LoyaltyPass = Extract<TemplateConfig, { type: "loyalty" }>;
+type EventTicketConfig = Extract<TemplateConfig, { type: "eventTicket" }>;
+type BoardingPassConfig = Extract<TemplateConfig, { type: "boardingPass" }>;
 
-const CREATE: CreateConfig = { serialNumber: "s1" };
+const CREATE: PassContent = { serialNumber: "s1" };
 
 /** pass.json as it lands in the archive — keys left undefined are gone. */
-function passJson(pass: PassConfig, create: CreateConfig = CREATE): Json {
+function passJson(pass: TemplateConfig, create: PassContent = CREATE): Json {
 	return JSON.parse(
 		JSON.stringify(buildPassJson(pass, create, UNSIGNED_APPLE_CREDENTIALS))
 	);
@@ -46,13 +45,13 @@ function loyalty(overrides: Partial<LoyaltyPass> = {}): LoyaltyPass {
 }
 
 /** Apple files loyalty field slots under storeCard. */
-function storeCard(pass: LoyaltyPass, create?: CreateConfig): SlotsJson {
+function storeCard(pass: LoyaltyPass, create?: PassContent): SlotsJson {
 	return passJson(pass, create).storeCard as SlotsJson;
 }
 
-function event(overrides: Partial<EventPass> = {}): EventPass {
+function event(overrides: Partial<EventTicketConfig> = {}): EventTicketConfig {
 	return {
-		type: "event",
+		type: "eventTicket",
 		id: "e1",
 		name: "Show",
 		startsAt: "2026-07-15T20:00:00Z",
@@ -61,8 +60,8 @@ function event(overrides: Partial<EventPass> = {}): EventPass {
 	};
 }
 
-const FLIGHT: FlightPass = {
-	type: "flight",
+const FLIGHT: BoardingPassConfig = {
+	type: "boardingPass",
 	id: "f1",
 	name: "AA 100",
 	transitType: "air",
@@ -121,7 +120,7 @@ const PASS_JSON: Record<FixtureName, Json> = {
 	},
 
 	// Poster tickets use eventLogoText; Apple ignores logoText for this style.
-	event: {
+	eventTicket: {
 		formatVersion: 1,
 		passTypeIdentifier: PASS_TYPE_IDENTIFIER,
 		serialNumber: "event-001",
@@ -174,7 +173,7 @@ const PASS_JSON: Record<FixtureName, Json> = {
 
 	// boardingPass — transitType is required and lives inside the pass-type
 	// dictionary, not at the top level.
-	flight: {
+	boardingPass: {
 		formatVersion: 1,
 		passTypeIdentifier: PASS_TYPE_IDENTIFIER,
 		serialNumber: "flight-001",
@@ -647,23 +646,17 @@ describe("semantics and relevantDates", () => {
 });
 
 describe("validateAppleRequirements", () => {
-	it.each<[string, PassConfig]>([
+	it.each<[string, TemplateConfig]>([
 		["APPLE_MISSING_ICON", loyalty()],
 		[
 			"APPLE_BOARDING_MISSING_TRANSIT_TYPE",
 			{
-				type: "flight",
+				type: "boardingPass",
 				id: "f1",
 				name: "Flight",
 				fields: [],
 				apple: { icon: ICON },
 			},
-		],
-		[
-			"APPLE_MISSING_AUTH_TOKEN",
-			loyalty({
-				apple: { icon: ICON, webServiceURL: "https://example.com/passes" },
-			}),
 		],
 		[
 			"APPLE_APP_LAUNCH_URL_REQUIRES_STORE_IDS",

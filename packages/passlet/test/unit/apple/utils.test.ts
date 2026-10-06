@@ -1,23 +1,20 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-	escapeStringsValue,
 	hexToRgb,
 	isLegacyBarcodeFormat,
-	resolveImageSet,
-	resolveRequiredImageSet,
 	toAppleBarcodeFormat,
 	toAppleDataDetectorTypes,
 	toAppleDateStyle,
 	toAppleMessageEncoding,
 	toAppleNumberStyle,
 	toAppleTextAlignment,
-} from "../../../src/providers/apple/utils";
+} from "../../../src/apple/utils";
 import type {
 	BarcodeFormat,
 	DateStyle,
 	NumberStyle,
 	TextAlignment,
-} from "../../../src/types/schemas";
+} from "../../../src/schema/parts";
 
 describe("hexToRgb", () => {
 	it.each([
@@ -90,64 +87,5 @@ describe("field style constants", () => {
 			"PKDataDetectorTypeAddress",
 			"PKDataDetectorTypeCalendarEvent",
 		]);
-	});
-});
-
-describe("escapeStringsValue", () => {
-	it("escapes backslashes, quotes and line breaks for pass.strings", () => {
-		// Backslashes go first: escaping quotes first would double the added one.
-		expect(escapeStringsValue('a\\b "c"\nd\re')).toBe('a\\\\b \\"c\\"\\nd\\re');
-	});
-});
-
-describe("image failures", () => {
-	const imageUrl = "https://images.example/icon.png?token=private-image-token";
-	afterEach(() => vi.unstubAllGlobals());
-
-	it("reports HTTP status without exposing signed image URLs", async () => {
-		vi.stubGlobal(
-			"fetch",
-			vi.fn(() =>
-				Promise.resolve(new Response("private-response", { status: 403 }))
-			)
-		);
-		await expect(
-			resolveRequiredImageSet("icon", imageUrl)
-		).rejects.toMatchObject({
-			code: "IMAGE_FETCH_FAILED",
-			status: 403,
-			message: expect.not.stringContaining("private"),
-		});
-		const warnings: string[] = [];
-		await expect(resolveImageSet("logo", imageUrl, warnings)).resolves.toEqual(
-			{}
-		);
-		expect(warnings).toEqual([expect.stringContaining("logo.png")]);
-		expect(warnings.join()).not.toContain("private");
-	});
-
-	it("classifies interrupted image bodies as network failures", async () => {
-		const cause = new Error("connection reset");
-		vi.stubGlobal(
-			"fetch",
-			vi.fn(() =>
-				Promise.resolve(
-					new Response(
-						new ReadableStream({
-							start(controller) {
-								controller.error(cause);
-							},
-						})
-					)
-				)
-			)
-		);
-		await expect(
-			resolveRequiredImageSet("icon", imageUrl)
-		).rejects.toMatchObject({
-			code: "IMAGE_FETCH_NETWORK_ERROR",
-			status: 502,
-			cause,
-		});
 	});
 });

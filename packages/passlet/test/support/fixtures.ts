@@ -1,18 +1,21 @@
 // One full-fidelity pass per vertical, carrying both Apple and Google options
 // so unit, integration and e2e tiers all issue the same passes.
-import type { CreateConfig, PassConfig } from "../../src/types/schemas";
+import type { PassContent } from "../../src/schema/content";
+import type { TemplateConfig } from "../../src/schema/template";
+import type { PassTemplate } from "../../src/template";
+import type { Wallet } from "../../src/wallet";
 import { ICON, PNG } from "./apple";
 import { LOGO_URL } from "./google";
 
 export interface Fixture {
-	create: CreateConfig;
-	pass: PassConfig;
+	create: PassContent;
+	pass: TemplateConfig;
 }
 
 export type FixtureName =
 	| "loyalty"
-	| "event"
-	| "flight"
+	| "eventTicket"
+	| "boardingPass"
 	| "transit"
 	| "coupon"
 	| "giftCard"
@@ -67,9 +70,9 @@ export function fixtures({
 		},
 
 		// Poster event ticket: Apple uses eventLogoText and drops logoText.
-		event: {
+		eventTicket: {
 			pass: {
-				type: "event",
+				type: "eventTicket",
 				id: "fx-event",
 				name: "Summer Festival",
 				color: "#6a0572",
@@ -111,9 +114,9 @@ export function fixtures({
 		},
 
 		// Air: Apple boardingPass, Google flightClass (IATA codes required).
-		flight: {
+		boardingPass: {
 			pass: {
-				type: "flight",
+				type: "boardingPass",
 				id: "fx-flight",
 				name: "AA 100",
 				color: "#003087",
@@ -143,7 +146,7 @@ export function fixtures({
 		// Rail: Apple boardingPass, Google transitClass via google.transit.
 		transit: {
 			pass: {
-				type: "flight",
+				type: "boardingPass",
 				id: "fx-transit",
 				name: "Northern Line",
 				color: "#c60c30",
@@ -243,3 +246,24 @@ export function fixtures({
 }
 
 export const FIXTURES = fixtures();
+
+/** A fixture's template, built through the wallet factory for its type. */
+export function walletTemplate(
+	wallet: Wallet,
+	config: TemplateConfig
+): PassTemplate {
+	switch (config.type) {
+		case "loyalty":
+			return wallet.loyalty(config);
+		case "eventTicket":
+			return wallet.eventTicket(config);
+		case "boardingPass":
+			return wallet.boardingPass(config);
+		case "coupon":
+			return wallet.coupon(config);
+		case "giftCard":
+			return wallet.giftCard(config);
+		default:
+			return wallet.generic(config);
+	}
+}

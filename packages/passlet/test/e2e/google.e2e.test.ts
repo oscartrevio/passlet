@@ -2,15 +2,19 @@
 // from .env: explicit class publication must succeed and the save JWT must name the
 // object and class the API knows. Skips cleanly when GOOGLE_ISSUER_ID is absent.
 import { beforeAll, describe, expect, it } from "vitest";
-import { googleSaveUrl, Pass, type WalletCredentials } from "../../src/index";
-import type { GoogleObjectType } from "../../src/providers/google/api";
-import { type FixtureName, fixtures } from "../support/fixtures";
-import { decodeJwtObject } from "../support/google";
+import type { GoogleObjectType } from "../../src/google/client";
+import { googleSaveUrl, Wallet, type WalletConfig } from "../../src/index";
+import {
+	type FixtureName,
+	fixtures,
+	walletTemplate,
+} from "../support/fixtures";
+import { decodeJwt, decodeJwtObject } from "../support/google";
 
 const CASES: { name: FixtureName; objectType: GoogleObjectType }[] = [
 	{ name: "loyalty", objectType: "loyaltyObject" },
-	{ name: "event", objectType: "eventTicketObject" },
-	{ name: "flight", objectType: "flightObject" },
+	{ name: "eventTicket", objectType: "eventTicketObject" },
+	{ name: "boardingPass", objectType: "flightObject" },
 	{ name: "transit", objectType: "transitObject" },
 	{ name: "coupon", objectType: "offerObject" },
 	{ name: "giftCard", objectType: "giftCardObject" },
@@ -31,7 +35,7 @@ describe.skipIf(!process.env.GOOGLE_ISSUER_ID)(
 		// Google fetches class logos, so a public URL from .env replaces the
 		// example.com placeholder when one is configured.
 		const FIXTURES = fixtures({ logo: process.env.GOOGLE_LOGO_URL });
-		let credentials: WalletCredentials;
+		let credentials: WalletConfig;
 		let issuerId: string;
 
 		beforeAll(() => {
@@ -53,7 +57,7 @@ describe.skipIf(!process.env.GOOGLE_ISSUER_ID)(
 		}) => {
 			const { pass, create } = FIXTURES[name];
 			const serialNumber = `e2e-${create.serialNumber}`;
-			const template = new Pass(pass, credentials);
+			const template = walletTemplate(new Wallet(credentials), pass);
 			await template.publish();
 			const issued = await template.create({
 				...create,
@@ -63,7 +67,6 @@ describe.skipIf(!process.env.GOOGLE_ISSUER_ID)(
 			if (!jwt) {
 				throw new Error("no Google pass was issued");
 			}
-			expect(issued.warnings).toEqual([]);
 			expect(decodeJwtObject(jwt, objectType)).toMatchObject({
 				id: `${issuerId}.${serialNumber}`,
 				classId: `${issuerId}.${pass.id}`,
@@ -73,12 +76,44 @@ describe.skipIf(!process.env.GOOGLE_ISSUER_ID)(
 			).toBe(true);
 		});
 
-		// update/expire need an object a holder has saved to their wallet, so
-		// only the idempotent delete is exercised here.
-		it("deletes a never-saved object without error", async () => {
-			await expect(
-				new Pass(FIXTURES.generic.pass, credentials).delete("e2e-never-saved")
-			).resolves.toBeUndefined();
+		it("createBundle writes two objects of different templates and signs one JWT naming both", async () => {
+			const wallet = new Wallet(credentials);
+			const { eventTicket, boardingPass } = FIXTURES;
+			const { google: jwt } = await wallet.createBundle([
+				{
+					template: walletTemplate(wallet, eventTicket.pass),
+					content: {
+						...eventTicket.create,
+						serialNumber: "e2e-many-event",
+						group: "e2e-many",
+					},
+				},
+				{
+					template: walletTemplate(wallet, boardingPass.pass),
+					content: {
+						...boardingPass.create,
+						serialNumber: "e2e-many-flight",
+						group: "e2e-many",
+					},
+				},
+			]);
+			if (!jwt) {
+				throw new Error("no Google pass was issued");
+			}
+			expect(decodeJwt(jwt).claims.payload).toEqual({
+				eventTicketObjects: [
+					{
+						id: `${issuerId}.e2e-many-event`,
+						classId: `${issuerId}.${eventTicket.pass.id}`,
+					},
+				],
+				flightObjects: [
+					{
+						id: `${issuerId}.e2e-many-flight`,
+						classId: `${issuerId}.${boardingPass.pass.id}`,
+					},
+				],
+			});
 		});
 	}
 );

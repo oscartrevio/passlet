@@ -183,7 +183,7 @@ export default async function Home() {
 						Created by{" "}
 						<Link
 							className="transition-colors hover:text-(--gray-a9)"
-							href="https://oscartrevio.xyz"
+							href="https://www.oscartrev.io"
 							rel="noopener noreferrer"
 							target="_blank"
 						>
