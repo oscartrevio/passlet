@@ -103,7 +103,7 @@ The [wiki](https://github.com/oscartrevio/passlet/wiki) covers everything past t
 
 Runnable servers for Express, Hono and Next.js are in [examples](examples/README.md). Agents can read [llms.txt](https://passlet.oscartrev.io/llms.txt) or install the [skill](https://passlet.oscartrev.io/skill.md).
 
-Upgrading from v2? Follow [MIGRATION.md](MIGRATION.md).
+Upgrading from v2? Follow the [3.0.0 release notes](https://github.com/oscartrevio/passlet/releases/tag/passlet%403.0.0).
 
 ## Contributing
 
