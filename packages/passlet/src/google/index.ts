@@ -1,14 +1,15 @@
 import type { KeyObject } from "node:crypto";
 import { WalletError, type WalletValidationIssue } from "../errors";
 import type { PassItem, Provider } from "../providers";
-import type { PassContent } from "../schema/content";
+import type { ParsedContent } from "../schema/content";
 import type { GoogleCredentials } from "../schema/settings";
-import type { TemplateConfig, TemplateType } from "../schema/template";
+import type { ParsedTemplate, TemplateType } from "../schema/template";
 import { buildClassBody } from "./class-body";
 import type { GoogleObjectType } from "./client";
 import {
 	ensureClass,
 	importGoogleKey,
+	insertObject,
 	patchObject,
 	publishClass,
 	upsertObject,
@@ -40,13 +41,13 @@ const OBJECT_TYPE = {
 // https://developers.google.com/wallet/reference/rest/v1/genericobject
 const SERIAL_RE = /^[A-Za-z0-9._-]+$/;
 
-function objectType(template: TemplateConfig): GoogleObjectType {
+function objectType(template: ParsedTemplate): GoogleObjectType {
 	return transitOptions(template)
 		? "transitObject"
 		: OBJECT_TYPE[template.type];
 }
 
-export function validateGoogleRequirements(template: TemplateConfig): void {
+export function validateGoogleRequirements(template: ParsedTemplate): void {
 	// Google loyalty classes require a programLogo URL — the API returns 400 without it
 	if (template.type === "loyalty" && !template.google?.logo) {
 		throw new WalletError(
@@ -85,7 +86,7 @@ interface ObjectWrite {
 	classId: string;
 	objectId: string;
 	objectType: GoogleObjectType;
-	template: TemplateConfig;
+	template: ParsedTemplate;
 }
 
 /**
@@ -103,7 +104,7 @@ export class GoogleProvider implements Provider<string, "updated" | "created"> {
 	 * Template requirements that need no flight data, so configuration errors
 	 * surface before the first request. The rest are checked at issue time.
 	 */
-	checkTemplate(template: TemplateConfig): void {
+	checkTemplate(template: ParsedTemplate): void {
 		// Google loyalty classes require a programLogo URL — the API returns 400 without it.
 		if (template.type === "loyalty" && !template.google?.logo) {
 			throw new WalletError("GOOGLE_MISSING_LOGO");
@@ -119,7 +120,7 @@ export class GoogleProvider implements Provider<string, "updated" | "created"> {
 		}
 	}
 
-	checkContent(content: PassContent): void {
+	checkContent(content: ParsedContent): void {
 		if (SERIAL_RE.test(content.serialNumber)) {
 			return;
 		}
@@ -156,7 +157,7 @@ export class GoogleProvider implements Provider<string, "updated" | "created"> {
 		const writes = items.map((item) => this.prepare(item));
 		await this.ensureClasses(writes, privateKey);
 		for (const { objectType: type, objectId, body } of writes) {
-			await upsertObject(type, objectId, body, this.credentials, privateKey);
+			await insertObject(type, objectId, body, this.credentials, privateKey);
 		}
 
 		// One array of `{ id, classId }` refs per object type.
@@ -228,7 +229,7 @@ export class GoogleProvider implements Provider<string, "updated" | "created"> {
 		writes: readonly ObjectWrite[],
 		privateKey: KeyObject
 	): Promise<void> {
-		const classes = new Map<string, TemplateConfig>();
+		const classes = new Map<string, ParsedTemplate>();
 		for (const { classId, template } of writes) {
 			if (!classes.has(classId)) {
 				classes.set(classId, template);
@@ -246,7 +247,7 @@ export class GoogleProvider implements Provider<string, "updated" | "created"> {
 	}
 
 	/** Overwrite the template's class with its current content. */
-	async publish(template: TemplateConfig): Promise<void> {
+	async publish(template: ParsedTemplate): Promise<void> {
 		validateGoogleRequirements(template);
 		const privateKey = importGoogleKey(this.credentials);
 		await publishClass(
@@ -259,7 +260,7 @@ export class GoogleProvider implements Provider<string, "updated" | "created"> {
 	}
 
 	/** Move a pass's object to the `EXPIRED` state. */
-	async expire(template: TemplateConfig, serialNumber: string): Promise<void> {
+	async expire(template: ParsedTemplate, serialNumber: string): Promise<void> {
 		const privateKey = importGoogleKey(this.credentials);
 		await patchObject(
 			objectType(template),

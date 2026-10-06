@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { validateAppleRequirements } from "../../../src/apple/index";
 import { buildPassJson } from "../../../src/apple/pass-json";
-import type { PassContent } from "../../../src/schema/content";
-import type { TemplateConfig } from "../../../src/schema/template";
+import type { ParsedContent } from "../../../src/schema/content";
+import type { ParsedTemplate } from "../../../src/schema/template";
 import {
 	ICON,
 	PASS_TYPE_IDENTIFIER,
@@ -21,14 +21,14 @@ type SlotsJson = Record<
 	Json[]
 > & { transitType?: string };
 
-type LoyaltyPass = Extract<TemplateConfig, { type: "loyalty" }>;
-type EventTicketConfig = Extract<TemplateConfig, { type: "eventTicket" }>;
-type BoardingPassConfig = Extract<TemplateConfig, { type: "boardingPass" }>;
+type LoyaltyPass = Extract<ParsedTemplate, { type: "loyalty" }>;
+type EventTicketConfig = Extract<ParsedTemplate, { type: "eventTicket" }>;
+type BoardingPassConfig = Extract<ParsedTemplate, { type: "boardingPass" }>;
 
-const CREATE: PassContent = { serialNumber: "s1" };
+const CREATE: ParsedContent = { serialNumber: "s1" };
 
 /** pass.json as it lands in the archive — keys left undefined are gone. */
-function passJson(pass: TemplateConfig, create: PassContent = CREATE): Json {
+function passJson(pass: ParsedTemplate, create: ParsedContent = CREATE): Json {
 	return JSON.parse(
 		JSON.stringify(buildPassJson(pass, create, UNSIGNED_APPLE_CREDENTIALS))
 	);
@@ -45,7 +45,7 @@ function loyalty(overrides: Partial<LoyaltyPass> = {}): LoyaltyPass {
 }
 
 /** Apple files loyalty field slots under storeCard. */
-function storeCard(pass: LoyaltyPass, create?: PassContent): SlotsJson {
+function storeCard(pass: LoyaltyPass, create?: ParsedContent): SlotsJson {
 	return passJson(pass, create).storeCard as SlotsJson;
 }
 
@@ -646,7 +646,7 @@ describe("semantics and relevantDates", () => {
 });
 
 describe("validateAppleRequirements", () => {
-	it.each<[string, TemplateConfig]>([
+	it.each<[string, ParsedTemplate]>([
 		["APPLE_MISSING_ICON", loyalty()],
 		[
 			"APPLE_BOARDING_MISSING_TRANSIT_TYPE",

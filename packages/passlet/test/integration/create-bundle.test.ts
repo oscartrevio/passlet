@@ -282,9 +282,9 @@ describe("wallet.createBundle on Google", () => {
 			["POST", "/loyaltyClass"],
 			["GET", `/flightClass/${flightClass}`],
 			["POST", "/flightClass"],
-			["PATCH", `/loyaltyObject/${ISSUER_ID}.g-1`],
-			["PATCH", `/flightObject/${ISSUER_ID}.g-2`],
-			["PATCH", `/loyaltyObject/${ISSUER_ID}.g-3`],
+			["POST", "/loyaltyObject"],
+			["POST", "/flightObject"],
+			["POST", "/loyaltyObject"],
 		]);
 		if (!jwt) {
 			throw new Error("no JWT issued");
@@ -354,10 +354,10 @@ describe("content.group", () => {
 				content: { ...loyalty.create, group: "trip-1" },
 			},
 		]);
-		expect(stub.body("PATCH", "/flightObject/").groupingInfo).toEqual({
+		expect(stub.body("POST", "/flightObject").groupingInfo).toEqual({
 			groupingId: "trip-1",
 		});
-		expect(stub.body("PATCH", "/loyaltyObject/").groupingInfo).toEqual({
+		expect(stub.body("POST", "/loyaltyObject").groupingInfo).toEqual({
 			groupingId: "trip-1",
 		});
 	});

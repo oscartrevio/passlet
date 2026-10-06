@@ -3,13 +3,13 @@ import JSZip from "jszip";
 import forge from "node-forge";
 import { inject } from "vitest";
 import { AppleProvider } from "../../src/apple/index";
-import type { PassContent } from "../../src/schema/content";
+import type { ParsedContent } from "../../src/schema/content";
 import type {
 	AppleCredentials,
 	PassRegistration,
 	PassRegistrations,
 } from "../../src/schema/settings";
-import type { TemplateConfig } from "../../src/schema/template";
+import type { ParsedTemplate } from "../../src/schema/template";
 
 export const PASS_TYPE_IDENTIFIER = "pass.com.test.example";
 export const TEAM_ID = "ABCD1234EF";
@@ -50,8 +50,8 @@ export function appleCredentials(): AppleCredentials & { signerKey: string } {
 
 /** Sign one `.pkpass` through the Apple provider, without a web service. */
 export function issueApplePass(
-	template: TemplateConfig,
-	content: PassContent,
+	template: ParsedTemplate,
+	content: ParsedContent,
 	credentials: AppleCredentials
 ): Promise<Uint8Array> {
 	const provider = new AppleProvider(credentials, {

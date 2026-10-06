@@ -18,7 +18,7 @@ import type {
 	LoyaltyTemplateConfig,
 	TemplateConfig,
 } from "./schema/template";
-import { checkContent, PassTemplate } from "./template";
+import { PassTemplate, parseContent } from "./template";
 
 // "You can have up to 10 passes or 150 MB for a bundle of passes."
 // https://developer.apple.com/documentation/walletpasses/distributing-and-updating-a-pass
@@ -142,16 +142,16 @@ export class Wallet {
 					`items[${index}].template was not created by this Wallet`
 				);
 			}
-			checkContent(this.providers, content);
+			const parsed = parseContent(this.providers, content);
 			// Wallet identifies a pass by its serial number; a repeat overwrites.
-			if (serials.has(content.serialNumber)) {
+			if (serials.has(parsed.serialNumber)) {
 				throw new WalletError(
 					"PASS_BUNDLE_INVALID",
 					`items[${index}].content.serialNumber repeats an earlier item`
 				);
 			}
-			serials.add(content.serialNumber);
-			return { template: template.config, content };
+			serials.add(parsed.serialNumber);
+			return { template: template.config, content: parsed };
 		});
 		return await runProviders(
 			this.providers,
@@ -204,8 +204,12 @@ export class Wallet {
 
 	// The serial being served wins over any serialNumber left in loaded content.
 	private item(loaded: LoadedPass, serialNumber: string): PassItem {
-		const content = { ...loaded.content, serialNumber };
-		checkContent(this.providers, content);
-		return { template: loaded.template.config, content };
+		return {
+			template: loaded.template.config,
+			content: parseContent(this.providers, {
+				...loaded.content,
+				serialNumber,
+			}),
+		};
 	}
 }

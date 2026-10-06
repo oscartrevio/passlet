@@ -1,20 +1,28 @@
-import type { z } from "zod";
+import type * as z from "zod/mini";
 import {
 	WalletError,
 	type WalletErrorCode,
 	type WalletValidationIssue,
 } from "./errors";
 import { type Providers, runProviders } from "./providers";
-import { type PassContent, passContentSchema } from "./schema/content";
+import {
+	type ParsedContent,
+	type PassContent,
+	passContentSchema,
+} from "./schema/content";
 import type { IssuedPass } from "./schema/settings";
-import { type TemplateConfig, templateConfigSchema } from "./schema/template";
+import {
+	type ParsedTemplate,
+	type TemplateConfig,
+	templateConfigSchema,
+} from "./schema/template";
 
 function configError(
 	code: Extract<
 		WalletErrorCode,
 		"PASS_CONFIG_INVALID" | "CREATE_CONFIG_INVALID"
 	>,
-	error: z.ZodError
+	error: z.core.$ZodError
 ): WalletError {
 	const issues: WalletValidationIssue[] = error.issues.map(
 		({ path, message }) => ({
@@ -32,14 +40,21 @@ function configError(
 	);
 }
 
-/** Validate recipient content, including each configured platform's rules. */
-export function checkContent(providers: Providers, content: PassContent): void {
+/**
+ * Parse recipient content, defaults applied, and check each configured
+ * platform's rules against it.
+ */
+export function parseContent(
+	providers: Providers,
+	content: PassContent
+): ParsedContent {
 	const result = passContentSchema.safeParse(content);
 	if (!result.success) {
 		throw configError("CREATE_CONFIG_INVALID", result.error);
 	}
 	providers.apple?.checkContent();
-	providers.google?.checkContent(content);
+	providers.google?.checkContent(result.data);
+	return result.data;
 }
 
 /**
@@ -54,8 +69,11 @@ export function checkContent(providers: Providers, content: PassContent): void {
  * missing it.
  */
 export class PassTemplate {
-	/** The template this was built from, as passed to the {@link Wallet} factory. */
-	readonly config: TemplateConfig;
+	/**
+	 * The template this was built from, as passed to the {@link Wallet}
+	 * factory, with every default applied.
+	 */
+	readonly config: ParsedTemplate;
 	private readonly providers: Providers;
 
 	constructor(config: TemplateConfig, providers: Providers) {
@@ -63,9 +81,9 @@ export class PassTemplate {
 		if (!result.success) {
 			throw configError("PASS_CONFIG_INVALID", result.error);
 		}
-		providers.apple?.checkTemplate(config);
-		providers.google?.checkTemplate(config);
-		this.config = config;
+		providers.apple?.checkTemplate(result.data);
+		providers.google?.checkTemplate(result.data);
+		this.config = result.data;
 		this.providers = providers;
 	}
 
@@ -82,8 +100,10 @@ export class PassTemplate {
 	 * @throws {WalletError} `CREATE_CONFIG_INVALID` if `content` fails validation.
 	 */
 	async create(content: PassContent): Promise<IssuedPass> {
-		checkContent(this.providers, content);
-		const item = { template: this.config, content };
+		const item = {
+			template: this.config,
+			content: parseContent(this.providers, content),
+		};
 		return await runProviders(
 			this.providers,
 			(apple) => apple.issue(item),

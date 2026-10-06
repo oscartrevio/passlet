@@ -7,7 +7,7 @@ import type {
 	LoadPass,
 	UpdateResult,
 } from "../schema/settings";
-import type { TemplateConfig } from "../schema/template";
+import type { ParsedTemplate } from "../schema/template";
 import { sendPassUpdates } from "./apns";
 import { appleAuthToken } from "./auth-token";
 import { collectImages } from "./images";
@@ -40,7 +40,7 @@ export interface AppleProviderOptions {
 	sendPassUpdates?: typeof sendPassUpdates;
 }
 
-export function validateAppleRequirements(template: TemplateConfig): void {
+export function validateAppleRequirements(template: ParsedTemplate): void {
 	if (!template.apple?.icon) {
 		throw new WalletError("APPLE_MISSING_ICON");
 	}
@@ -142,7 +142,7 @@ export class AppleProvider implements Provider<Uint8Array, AppleUpdate> {
 		});
 	}
 
-	checkTemplate(template: TemplateConfig): void {
+	checkTemplate(template: ParsedTemplate): void {
 		if (!template.apple?.icon) {
 			throw new WalletError("APPLE_MISSING_ICON");
 		}
@@ -169,7 +169,7 @@ export class AppleProvider implements Provider<Uint8Array, AppleUpdate> {
 			validateAppleRequirements(template);
 		}
 		const images = new Map<
-			TemplateConfig,
+			ParsedTemplate,
 			Promise<Record<string, Uint8Array>>
 		>();
 		const passes = await Promise.all(

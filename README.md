@@ -89,7 +89,7 @@ Only using one wallet? Leave out the other provider's credentials and options. G
 - **Keys can stay in your KMS.** Apple passes can be signed by AWS KMS, Google Cloud KMS or an HSM through an external signer.
 - **Localized.** One `locales` map becomes Apple `.lproj` strings and Google translations.
 - **Errors you can act on.** Every `WalletError` has a stable `code` plus `why` and `fix`.
-- **One small dependency.** Signing and packaging use Node's built-in `crypto` and `zlib`. The only dependency is `zod`.
+- **No dependencies.** Signing and packaging use Node's built-in `crypto` and `zlib`, and validation ships inside the package.
 
 ## Documentation
 

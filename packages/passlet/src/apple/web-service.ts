@@ -1,4 +1,5 @@
-import { z } from "zod";
+// biome-ignore lint/performance/noNamespaceImport: the namespace tree-shakes; zod/mini's named `z` export bundles all of zod.
+import * as z from "zod/mini";
 import type {
 	LoadedPass,
 	LoadPass,
@@ -32,7 +33,9 @@ const AUTHORIZATION = /^ApplePass +(\S+)$/i;
 // Apple's PushToken object. APNs device tokens are hex; rejecting anything
 // else keeps request input from shaping the `/3/device/{pushToken}` path we
 // later push to.
-const PushToken = z.object({ pushToken: z.string().regex(/^[0-9a-f]+$/i) });
+const PushToken = z.object({
+	pushToken: z.string().check(z.regex(/^[0-9a-f]+$/i)),
+});
 
 // Apple's LogEntries object.
 const LogEntries = z.object({ logs: z.array(z.string()) });

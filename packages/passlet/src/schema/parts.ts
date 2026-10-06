@@ -1,18 +1,24 @@
-import { z } from "zod";
+// biome-ignore lint/performance/noNamespaceImport: the namespace tree-shakes; zod/mini's named `z` export bundles all of zod.
+import * as z from "zod/mini";
 
-export const hexColor = z
-	.string()
-	.regex(/^#[0-9a-fA-F]{6}$/, 'must be a 6-digit hex color like "#1a1a1a"')
-	.optional();
+export const hexColor = z.optional(
+	z
+		.string()
+		.check(
+			z.regex(/^#[0-9a-fA-F]{6}$/, 'must be a 6-digit hex color like "#1a1a1a"')
+		)
+);
 
 // BCP 47 language tag: primary subtag (2-3 lowercase letters) followed by optional subtags.
 // Examples: "en", "en-US", "zh-Hans", "zh-Hans-CN", "es-419"
 const BCP47_RE = /^[a-z]{2,3}(-[A-Za-z0-9]+)*$/;
 export const localeCodeSchema = z
 	.string()
-	.regex(
-		BCP47_RE,
-		'must be a BCP 47 language tag (e.g. "en-US", "es", "zh-Hans")'
+	.check(
+		z.regex(
+			BCP47_RE,
+			'must be a BCP 47 language tag (e.g. "en-US", "es", "zh-Hans")'
+		)
 	);
 
 export const localDateTime = (message: string) =>
@@ -24,16 +30,16 @@ const imageValue = z.union([
 ]);
 
 // Resolution variants: retina is @2x; superRetina is @3x.
-export const imageSet = z
-	.union([
+export const imageSet = z.optional(
+	z.union([
 		imageValue,
 		z.object({
 			base: imageValue,
-			retina: imageValue.optional(),
-			superRetina: imageValue.optional(),
+			retina: z.optional(imageValue),
+			superRetina: z.optional(imageValue),
 		}),
 	])
-	.optional();
+);
 
 export const dateStyleSchema = z.enum([
 	"none",
@@ -81,38 +87,39 @@ export const fieldDefSchema = z
 		key: z.string(),
 		// Apple documents PassFieldContent.label as optional. Google's
 		// textModulesData header falls back to the field key when it is omitted.
-		label: z.string().optional(),
-		value: z.string().optional(),
+		label: z.optional(z.string()),
+		value: z.optional(z.string()),
 		// Apple: attributedValue — the field value with HTML markup. Only the <a>
 		// tag and its href attribute are supported, and it overrides value.
 		// Not used on watchOS. Apple-only — ignored by Google.
-		attributedValue: z.string().optional(),
+		attributedValue: z.optional(z.string()),
 		// Apple: dataDetectorTypes — back fields only. Omit to keep Apple's default
 		// (all detectors); pass an empty array to disable them entirely.
-		dataDetectorTypes: z.array(dataDetectorTypeSchema).optional(),
+		dataDetectorTypes: z.optional(z.array(dataDetectorTypeSchema)),
 		// Apple: ignoresTimeZone — renders the date/time in the time zone carried by
 		// value instead of the device's. Defaults to false.
-		ignoresTimeZone: z.boolean().optional(),
+		ignoresTimeZone: z.optional(z.boolean()),
 		// Apple: isRelative — renders the date as a relative date ("in 3 days").
 		// Defaults to false. Neither key affects pass relevance.
-		isRelative: z.boolean().optional(),
+		isRelative: z.optional(z.boolean()),
 		// Apple: field-level semantics dictionary, merged over the tags passlet
 		// derives from the pass config (user-supplied values win).
-		semantics: semanticTagsSchema.optional(),
+		semantics: z.optional(semanticTagsSchema),
 		// Apple shows a change notification only if the message contains the "%@"
 		// placeholder, which it replaces with the new value.
-		changeMessage: z
-			.string()
-			.refine((v) => v.includes("%@"), {
-				message: 'changeMessage must contain the "%@" placeholder',
-			})
-			.optional(),
-		dateStyle: dateStyleSchema.optional(),
-		timeStyle: dateStyleSchema.optional(),
-		numberStyle: numberStyleSchema.optional(),
-		currencyCode: z.string().optional(),
-		textAlignment: textAlignmentSchema.optional(),
-		row: z.union([z.literal(0), z.literal(1)]).optional(),
+		changeMessage: z.optional(
+			z.string().check(
+				z.refine((v) => v.includes("%@"), {
+					message: 'changeMessage must contain the "%@" placeholder',
+				})
+			)
+		),
+		dateStyle: z.optional(dateStyleSchema),
+		timeStyle: z.optional(dateStyleSchema),
+		numberStyle: z.optional(numberStyleSchema),
+		currencyCode: z.optional(z.string()),
+		textAlignment: z.optional(textAlignmentSchema),
+		row: z.optional(z.union([z.literal(0), z.literal(1)])),
 	})
 	.check((ctx) => {
 		// When a static value is given, Apple needs it in the right shape for the
@@ -178,9 +185,9 @@ export const barcodeFormatSchema = z.enum([
 ]);
 
 export const barcodeSchema = z.object({
-	format: barcodeFormatSchema.default("QR"),
-	value: z.string().min(1, "barcode.value must not be empty"),
-	altText: z.string().optional(),
+	format: z._default(barcodeFormatSchema, "QR"),
+	value: z.string().check(z.minLength(1, "barcode.value must not be empty")),
+	altText: z.optional(z.string()),
 });
 
 // Bluetooth Low Energy beacon — shows the pass on lock screen when nearby
@@ -188,11 +195,11 @@ export const beaconSchema = z.object({
 	// Required: device UUID of the Bluetooth Low Energy beacon
 	proximityUUID: z.uuid(),
 	// 16-bit major value to narrow the region of the beacon
-	major: z.number().int().min(0).max(65_535).optional(),
+	major: z.optional(z.int().check(z.minimum(0), z.maximum(65_535))),
 	// 16-bit minor value to further narrow the region of the beacon
-	minor: z.number().int().min(0).max(65_535).optional(),
+	minor: z.optional(z.int().check(z.minimum(0), z.maximum(65_535))),
 	// Text shown on lock screen when the pass becomes relevant near this beacon
-	relevantText: z.string().optional(),
+	relevantText: z.optional(z.string()),
 });
 
 // Entry for relevantDates (replaces the deprecated relevantDate).
@@ -219,42 +226,42 @@ export const relevantDateSchema = z.union([
 export const googleMessageSchema = z.object({
 	header: z.string(),
 	body: z.string(),
-	id: z.string().optional(),
+	id: z.optional(z.string()),
 	// TEXT (default, in-app only) or TEXT_AND_NOTIFY (in-app + Android push).
 	// Google's EXPIRATION_NOTIFICATION value is documented as unsupported, so it
 	// is intentionally not offered here.
-	messageType: z.enum(["TEXT", "TEXT_AND_NOTIFY"]).default("TEXT"),
-	displayInterval: z
-		.object({
-			start: z.object({ date: z.iso.datetime() }).optional(),
-			end: z.object({ date: z.iso.datetime() }).optional(),
+	messageType: z._default(z.enum(["TEXT", "TEXT_AND_NOTIFY"]), "TEXT"),
+	displayInterval: z.optional(
+		z.object({
+			start: z.optional(z.object({ date: z.iso.datetime() })),
+			end: z.optional(z.object({ date: z.iso.datetime() })),
 		})
-		.optional(),
+	),
 });
 
 // App deep link shown on the pass — supports Android, iOS, and web targets.
 const googleAppLinkInfoSchema = z.object({
 	// Deep link URI (e.g. intent:// for Android, https:// scheme for iOS universal links)
 	uri: z.url(),
-	title: z.string().optional(),
-	description: z.string().optional(),
-	logoUrl: z.url().optional(),
+	title: z.optional(z.string()),
+	description: z.optional(z.string()),
+	logoUrl: z.optional(z.url()),
 });
 
 export const googleAppLinkDataSchema = z.object({
-	android: googleAppLinkInfoSchema.optional(),
-	ios: googleAppLinkInfoSchema.optional(),
-	web: googleAppLinkInfoSchema.optional(),
+	android: z.optional(googleAppLinkInfoSchema),
+	ios: z.optional(googleAppLinkInfoSchema),
+	web: z.optional(googleAppLinkInfoSchema),
 });
 
 // A single row of Google's linksModuleData. The URI must carry a scheme —
 // Google accepts web (https:), map (geo:), telephone (tel:) and email (mailto:).
 const googleLinkSchema = z.object({
-	uri: z.string().min(1, "google.links[].uri must not be empty"),
+	uri: z.string().check(z.minLength(1, "google.links[].uri must not be empty")),
 	// Shown as the link's title. Google recommends 20 characters or fewer so the
 	// whole string fits on smaller screens.
-	description: z.string().optional(),
-	id: z.string().optional(),
+	description: z.optional(z.string()),
+	id: z.optional(z.string()),
 });
 
 // A single entry of Google's imageModulesData — a 100%-width image in the pass
@@ -262,34 +269,39 @@ const googleLinkSchema = z.object({
 const googleImageModuleSchema = z.object({
 	// URL only — Google Wallet does not accept binary uploads
 	url: z.url(),
-	id: z.string().optional(),
+	id: z.optional(z.string()),
 });
 
 // A single entry of Google's valueAddedModuleData — a tappable card linking to a
 // related service (parking, merchandise, food ordering). header and uri are required.
 const googleValueAddedSchema = z.object({
 	// Google truncates past 60 characters
-	header: z.string().min(1, "google.valueAdded[].header must not be empty"),
+	header: z
+		.string()
+		.check(z.minLength(1, "google.valueAdded[].header must not be empty")),
 	// Web link or Android deep link opened when the module is tapped
-	uri: z.string().min(1, "google.valueAdded[].uri must not be empty"),
+	uri: z
+		.string()
+		.check(z.minLength(1, "google.valueAdded[].uri must not be empty")),
 	// Google truncates past 50 characters
-	body: z.string().optional(),
+	body: z.optional(z.string()),
 	// Recommended ratio is 1:1 — Google resizes to fit
-	imageUrl: z.url().optional(),
+	imageUrl: z.optional(z.url()),
 	// Lower values render first; unset sorts last
-	sortIndex: z.number().int().optional(),
+	sortIndex: z.optional(z.int()),
 });
 
 export const googleModulesSchema = z.object({
 	// Google: linksModuleData.uris
-	links: z.array(googleLinkSchema).optional(),
+	links: z.optional(z.array(googleLinkSchema)),
 	// Google: imageModulesData
-	images: z.array(googleImageModuleSchema).optional(),
+	images: z.optional(z.array(googleImageModuleSchema)),
 	// Google: valueAddedModuleData — a maximum of ten per class and per object
-	valueAdded: z
-		.array(googleValueAddedSchema)
-		.max(10, "google.valueAdded accepts at most 10 modules")
-		.optional(),
+	valueAdded: z.optional(
+		z
+			.array(googleValueAddedSchema)
+			.check(z.maxLength(10, "google.valueAdded accepts at most 10 modules"))
+	),
 });
 
 // Location — geo-relevance for lock screen suggestions.
@@ -301,10 +313,10 @@ export const locationSchema = z.object({
 	latitude: z.number(),
 	longitude: z.number(),
 	// Apple: altitude in meters above sea level (optional)
-	altitude: z.number().optional(),
+	altitude: z.optional(z.number()),
 	// Apple: text shown on lock screen when the pass becomes relevant near this location
 	// Google: no equivalent — ignored
-	relevantText: z.string().optional(),
+	relevantText: z.optional(z.string()),
 });
 
 /** A BCP 47 language tag. Common values are suggested without restricting valid strings. */
@@ -356,25 +368,118 @@ export type LocaleCode =
 export type TranslationMap = Record<string, string>;
 
 export type Locales = Record<string, TranslationMap>;
-export type Location = z.infer<typeof locationSchema>;
+export interface Location {
+	altitude?: number;
+	latitude: number;
+	longitude: number;
+	relevantText?: string;
+}
 export type ImageSource = string | Uint8Array;
 export type ImageSet =
 	| ImageSource
 	| { base: ImageSource; retina?: ImageSource; superRetina?: ImageSource };
-export type BarcodeFormat = z.infer<typeof barcodeFormatSchema>;
-export type Barcode = z.infer<typeof barcodeSchema>;
+export type BarcodeFormat =
+	| "QR"
+	| "PDF417"
+	| "Aztec"
+	| "Code128"
+	| "Code39"
+	| "Codabar"
+	| "EAN13"
+	| "ITF";
+export interface Barcode {
+	altText?: string;
+	/** Defaults to `"QR"`. */
+	format?: BarcodeFormat;
+	value: string;
+}
+/** A barcode as validated, with its format default applied. */
+export interface ParsedBarcode extends Barcode {
+	format: BarcodeFormat;
+}
 export interface GoogleImage {
 	sourceUri: { uri: string };
 }
-export type DateStyle = z.infer<typeof dateStyleSchema>;
-export type NumberStyle = z.infer<typeof numberStyleSchema>;
-export type TextAlignment = z.infer<typeof textAlignmentSchema>;
-export type DataDetectorType = z.infer<typeof dataDetectorTypeSchema>;
-export type SemanticTags = z.infer<typeof semanticTagsSchema>;
-export type FieldDef = z.infer<typeof fieldDefSchema>;
-export type GooglePassMessage = z.infer<typeof googleMessageSchema>;
-export type AppLinkData = z.infer<typeof googleAppLinkDataSchema>;
-export type GoogleLink = z.infer<typeof googleLinkSchema>;
-export type GoogleImageModule = z.infer<typeof googleImageModuleSchema>;
-export type GoogleValueAddedModule = z.infer<typeof googleValueAddedSchema>;
-export type GoogleModules = z.infer<typeof googleModulesSchema>;
+export type DateStyle = "none" | "short" | "medium" | "long" | "full";
+export type NumberStyle = "decimal" | "percent" | "scientific" | "spellOut";
+export type TextAlignment = "left" | "center" | "right" | "natural";
+export type DataDetectorType =
+	| "phoneNumber"
+	| "link"
+	| "address"
+	| "calendarEvent";
+export type SemanticTags = Record<string, unknown>;
+export interface FieldDef {
+	attributedValue?: string;
+	changeMessage?: string;
+	currencyCode?: string;
+	dataDetectorTypes?: DataDetectorType[];
+	dateStyle?: DateStyle;
+	ignoresTimeZone?: boolean;
+	isRelative?: boolean;
+	key: string;
+	label?: string;
+	numberStyle?: NumberStyle;
+	row?: 0 | 1;
+	semantics?: SemanticTags;
+	slot: "header" | "primary" | "secondary" | "auxiliary" | "back";
+	textAlignment?: TextAlignment;
+	timeStyle?: DateStyle;
+	value?: string;
+}
+export type RelevantDate =
+	| { date: string }
+	| { startDate: string; endDate: string };
+export interface Beacon {
+	major?: number;
+	minor?: number;
+	proximityUUID: string;
+	relevantText?: string;
+}
+export interface GooglePassMessage {
+	body: string;
+	displayInterval?: {
+		start?: { date: string };
+		end?: { date: string };
+	};
+	header: string;
+	id?: string;
+	/** Defaults to `"TEXT"`. */
+	messageType?: "TEXT" | "TEXT_AND_NOTIFY";
+}
+/** A message as validated, with its type default applied. */
+export interface ParsedGooglePassMessage extends GooglePassMessage {
+	messageType: "TEXT" | "TEXT_AND_NOTIFY";
+}
+export interface AppLinkInfo {
+	description?: string;
+	logoUrl?: string;
+	title?: string;
+	uri: string;
+}
+export interface AppLinkData {
+	android?: AppLinkInfo;
+	ios?: AppLinkInfo;
+	web?: AppLinkInfo;
+}
+export interface GoogleLink {
+	description?: string;
+	id?: string;
+	uri: string;
+}
+export interface GoogleImageModule {
+	id?: string;
+	url: string;
+}
+export interface GoogleValueAddedModule {
+	body?: string;
+	header: string;
+	imageUrl?: string;
+	sortIndex?: number;
+	uri: string;
+}
+export interface GoogleModules {
+	images?: GoogleImageModule[];
+	links?: GoogleLink[];
+	valueAdded?: GoogleValueAddedModule[];
+}

@@ -4,9 +4,9 @@ import {
 	escapeStringsValue,
 } from "../../../src/apple/strings";
 import type { FieldDef } from "../../../src/schema/parts";
-import type { TemplateConfig } from "../../../src/schema/template";
+import type { ParsedTemplate } from "../../../src/schema/template";
 
-type LoyaltyPass = Extract<TemplateConfig, { type: "loyalty" }>;
+type LoyaltyPass = Extract<ParsedTemplate, { type: "loyalty" }>;
 
 function loyalty(overrides: Partial<LoyaltyPass> = {}): LoyaltyPass {
 	return {

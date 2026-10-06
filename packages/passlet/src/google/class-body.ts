@@ -1,4 +1,4 @@
-import type { TemplateConfig } from "../schema/template";
+import type { ParsedTemplate } from "../schema/template";
 import {
 	buildAppLinkData,
 	buildModuleData,
@@ -33,7 +33,7 @@ const TRANSIT_TYPE_FROM_PASS = {
 // Flight vertical: transitClass (train, bus, tram, ferry) or the air-only
 // flightClass, which represents a single flight and so carries its schedule.
 function buildBoardingPassClassFields(
-	template: Extract<TemplateConfig, { type: "boardingPass" }>
+	template: Extract<ParsedTemplate, { type: "boardingPass" }>
 ): Record<string, unknown> {
 	const transit = template.google?.transit;
 	if (transit) {
@@ -70,7 +70,7 @@ function buildBoardingPassClassFields(
 }
 
 function buildClassTypeFields(
-	template: TemplateConfig
+	template: ParsedTemplate
 ): Record<string, unknown> {
 	if (template.type === "loyalty") {
 		return { programName: template.name };
@@ -154,7 +154,7 @@ function applyFlightCarrierImages(
 // dropped by the API, so the image never renders.
 function applyClassImages(
 	body: Record<string, unknown>,
-	template: TemplateConfig,
+	template: ParsedTemplate,
 	logo: unknown,
 	wideLogo: unknown
 ): void {
@@ -185,7 +185,7 @@ function applyClassImages(
 }
 
 export function buildClassBody(
-	template: TemplateConfig
+	template: ParsedTemplate
 ): Record<string, unknown> {
 	const logo = imageUri(template.google?.logo);
 	const wideLogo = imageUri(template.google?.wideLogo);
