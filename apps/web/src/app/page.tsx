@@ -145,7 +145,7 @@ export default async function Home() {
 								className="flex items-baseline gap-1 font-medium text-(--gray-a11) text-sm"
 								key={step}
 							>
-								<span className="w-4 shrink-0 font-semibold text-(--gray-a8)">
+								<span className="w-4 shrink-0 font-semibold text-(--gray-a11)">
 									{i + 1}.
 								</span>
 								<span className="text-pretty">{step}</span>
@@ -170,7 +170,7 @@ export default async function Home() {
 										{label}
 									</span>
 								</div>
-								<span className="text-balance text-end font-medium text-(--gray-a8) text-sm transition-colors duration-150 ease-out group-hover:text-(--gray-a9)">
+								<span className="text-balance text-end font-medium text-(--gray-a11) text-sm transition-colors duration-150 ease-out group-hover:text-(--gray-a12)">
 									{description}
 								</span>
 							</div>
@@ -179,10 +179,10 @@ export default async function Home() {
 				</div>
 
 				<footer className="mt-auto flex items-center justify-between pb-[env(safe-area-inset-bottom)] font-medium">
-					<span className="text-(--gray-a8) text-xs">
+					<span className="text-(--gray-a11) text-xs">
 						Created by{" "}
 						<Link
-							className="transition-colors hover:text-(--gray-a9)"
+							className="transition-colors hover:text-(--gray-a12)"
 							href="https://www.oscartrev.io"
 							rel="noopener noreferrer"
 							target="_blank"
@@ -191,7 +191,7 @@ export default async function Home() {
 						</Link>
 					</span>
 					<Link
-						className="text-(--gray-a8) text-xs transition-colors hover:text-(--gray-a9)"
+						className="text-(--gray-a11) text-xs transition-colors hover:text-(--gray-a12)"
 						href="https://github.com/oscartrevio/passlet"
 						rel="noopener noreferrer"
 						target="_blank"

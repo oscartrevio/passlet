@@ -1,14 +1,7 @@
-import { cn } from "@passlet/ui/lib/utils";
-
-interface WalletIconProps {
-	className?: string;
-}
-
-export function AppleWalletIcon({ className }: WalletIconProps) {
+export function AppleWalletIcon() {
 	return (
 		<svg
 			aria-hidden="true"
-			className={cn(className)}
 			fill="currentColor"
 			height="20"
 			viewBox="0 0 640 640"
@@ -20,11 +13,10 @@ export function AppleWalletIcon({ className }: WalletIconProps) {
 	);
 }
 
-export function GoogleWalletIcon({ className }: WalletIconProps) {
+export function GoogleWalletIcon() {
 	return (
 		<svg
 			aria-hidden="true"
-			className={cn(className)}
 			fill="currentColor"
 			height="16"
 			viewBox="0 0 640 640"
