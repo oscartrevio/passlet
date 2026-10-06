@@ -4,7 +4,7 @@ import { buildClassBody } from "../../../src/google/class-body";
 import { validateGoogleRequirements } from "../../../src/google/index";
 import type {
 	GoogleTransitOptions,
-	TemplateConfig,
+	ParsedTemplate,
 } from "../../../src/schema/template";
 import { FIXTURES, type FixtureName } from "../../support/fixtures";
 import { LOGO_URL } from "../../support/google";
@@ -14,7 +14,7 @@ import {
 	type GoogleResource,
 } from "../../support/google-schema";
 
-type BoardingPassConfig = Extract<TemplateConfig, { type: "boardingPass" }>;
+type BoardingPassConfig = Extract<ParsedTemplate, { type: "boardingPass" }>;
 
 const LOGO = { sourceUri: { uri: LOGO_URL } };
 
@@ -273,7 +273,7 @@ describe("buildClassBody", () => {
 		function transitPass(
 			transitType: BoardingPassConfig["transitType"],
 			transit: GoogleTransitOptions = {}
-		): TemplateConfig {
+		): ParsedTemplate {
 			return {
 				type: "boardingPass",
 				id: "fx-transit",

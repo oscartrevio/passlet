@@ -1,4 +1,4 @@
-import type { TemplateConfig } from "../schema/template";
+import type { ParsedTemplate } from "../schema/template";
 
 // pass.strings uses NeXTSTEP/plist escaping, not JSON escaping.
 export function escapeStringsValue(value: string): string {
@@ -15,7 +15,7 @@ export function escapeStringsValue(value: string): string {
 const VALUE_SUFFIX = "_value";
 
 function stringsLiteral(
-	template: TemplateConfig,
+	template: ParsedTemplate,
 	values: Record<string, string | null>,
 	key: string
 ): string | undefined {
@@ -36,7 +36,7 @@ function stringsLiteral(
 }
 
 export function buildStringsLines(
-	template: TemplateConfig,
+	template: ParsedTemplate,
 	values: Record<string, string | null>,
 	translations: Record<string, string>
 ): string[] {

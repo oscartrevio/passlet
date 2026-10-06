@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { buildObjectBody } from "../../../src/google/object-body";
-import type { PassContent } from "../../../src/schema/content";
+import type { ParsedContent } from "../../../src/schema/content";
 import type {
 	GoogleTransitOptions,
-	TemplateConfig,
+	ParsedTemplate,
 } from "../../../src/schema/template";
 import { FIXTURES, type FixtureName } from "../../support/fixtures";
 import { ISSUER_ID, LOGO_URL } from "../../support/google";
@@ -19,7 +19,7 @@ function en(value: string) {
 	return { defaultValue: { language: "en-US", value } };
 }
 
-function build(pass: TemplateConfig, create: PassContent) {
+function build(pass: ParsedTemplate, create: ParsedContent) {
 	return buildObjectBody(
 		pass,
 		create,
@@ -28,7 +28,7 @@ function build(pass: TemplateConfig, create: PassContent) {
 	);
 }
 
-function transitPass(transit: GoogleTransitOptions): TemplateConfig {
+function transitPass(transit: GoogleTransitOptions): ParsedTemplate {
 	const pass = FIXTURES.transit.pass;
 	if (pass.type !== "boardingPass") {
 		throw new Error("transit fixture must be a flight pass");

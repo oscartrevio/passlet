@@ -335,3 +335,31 @@ export async function upsertObject(
 	);
 	return "created";
 }
+
+/**
+ * Create an object, updating it instead if Google already has one. Inserting
+ * first suits issuing, where the object is usually new: one request instead
+ * of a 404 patch plus an insert. Google answers 409 for an existing ID.
+ * https://developers.google.com/wallet/retail/loyalty-cards/resources/error-codes
+ */
+export async function insertObject(
+	objectType: GoogleObjectType,
+	objectId: string,
+	body: Record<string, unknown>,
+	credentials: GoogleCredentials,
+	privateKey: KeyObject
+): Promise<void> {
+	const response = await walletRequest(
+		"POST",
+		`/${objectType}`,
+		credentials,
+		privateKey,
+		body
+	);
+	if (response.status !== 409) {
+		assertOk(response);
+		return;
+	}
+	discardBody(response);
+	await patchObject(objectType, objectId, body, credentials, privateKey);
+}

@@ -1,7 +1,7 @@
-import type { PassContent } from "../schema/content";
-import type { Barcode, FieldDef } from "../schema/parts";
+import type { ParsedContent } from "../schema/content";
+import type { FieldDef, ParsedBarcode, RelevantDate } from "../schema/parts";
 import type { AppleCredentials } from "../schema/settings";
-import type { TemplateConfig, TemplateType } from "../schema/template";
+import type { ParsedTemplate, TemplateType } from "../schema/template";
 import {
 	hexToRgb,
 	isLegacyBarcodeFormat,
@@ -23,7 +23,7 @@ const PASS_TYPE_KEY: Record<TemplateType, string> = {
 };
 
 const TRANSIT_TYPE: Record<
-	NonNullable<Extract<TemplateConfig, { type: "boardingPass" }>["transitType"]>,
+	NonNullable<Extract<ParsedTemplate, { type: "boardingPass" }>["transitType"]>,
 	string
 > = {
 	air: "PKTransitTypeAir",
@@ -122,8 +122,8 @@ function buildSlots(
 	return slots;
 }
 
-type EventTicketConfig = Extract<TemplateConfig, { type: "eventTicket" }>;
-type BoardingPassConfig = Extract<TemplateConfig, { type: "boardingPass" }>;
+type EventTicketConfig = Extract<ParsedTemplate, { type: "eventTicket" }>;
+type BoardingPassConfig = Extract<ParsedTemplate, { type: "boardingPass" }>;
 
 function buildEventTicketAppleFields(
 	template: EventTicketConfig
@@ -288,7 +288,7 @@ function buildEventTicketSemantics(
 }
 
 // Poster event tickets use eventLogoText instead of logoText.
-function resolveLogoText(template: TemplateConfig): string | undefined {
+function resolveLogoText(template: ParsedTemplate): string | undefined {
 	if (
 		template.type === "eventTicket" &&
 		(template.apple?.eventLogoText ||
@@ -301,7 +301,7 @@ function resolveLogoText(template: TemplateConfig): string | undefined {
 
 // Explicit semantic tags override derived values for every pass type.
 function buildSemantics(
-	template: TemplateConfig,
+	template: ParsedTemplate,
 	values: Record<string, string | null>
 ): Record<string, unknown> | undefined {
 	let derived: Record<string, unknown> | undefined;
@@ -318,11 +318,9 @@ function buildSemantics(
 	return Object.keys(merged).length > 0 ? merged : undefined;
 }
 
-type RelevantDate = { date: string } | { startDate: string; endDate: string };
-
 // Explicit relevance dates override event/flight times.
 function deriveRelevantDates(
-	template: TemplateConfig
+	template: ParsedTemplate
 ): RelevantDate[] | undefined {
 	if (template.apple?.relevantDates) {
 		return template.apple.relevantDates;
@@ -342,14 +340,14 @@ function deriveRelevantDates(
 
 // `barcodes` (plural) wins when both are given; a lone `barcode` becomes a
 // single-entry array so the modern key is always populated.
-function resolveBarcodes(content: PassContent): Barcode[] | undefined {
+function resolveBarcodes(content: ParsedContent): ParsedBarcode[] | undefined {
 	if (content.barcodes?.length) {
 		return content.barcodes;
 	}
 	return content.barcode ? [content.barcode] : undefined;
 }
 
-function toAppleBarcode(barcode: Barcode): Record<string, unknown> {
+function toAppleBarcode(barcode: ParsedBarcode): Record<string, unknown> {
 	return {
 		message: barcode.value,
 		format: toAppleBarcodeFormat(barcode.format),
@@ -359,8 +357,8 @@ function toAppleBarcode(barcode: Barcode): Record<string, unknown> {
 }
 
 function buildAppleCommonFields(
-	template: TemplateConfig,
-	content: PassContent
+	template: ParsedTemplate,
+	content: ParsedContent
 ): Record<string, unknown> {
 	const a = template.apple;
 	const barcodes = resolveBarcodes(content);
@@ -414,8 +412,8 @@ export interface AppleUpdateTarget {
 }
 
 export function buildPassJson(
-	template: TemplateConfig,
-	content: PassContent,
+	template: ParsedTemplate,
+	content: ParsedContent,
 	credentials: AppleCredentials,
 	update?: AppleUpdateTarget
 ): Record<string, unknown> {

@@ -5,6 +5,10 @@ export default defineConfig({
 	format: ["esm", "cjs"],
 	dts: true,
 	clean: true,
-	sourcemap: true,
 	treeshake: true,
+	// zod is bundled so passlet installs with no runtime dependencies.
+	noExternal: ["zod"],
+	banner: {
+		js: "/*! Bundles zod (https://zod.dev) — Copyright (c) 2025 Colin McDonnell — MIT License */",
+	},
 });

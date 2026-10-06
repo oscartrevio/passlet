@@ -1,9 +1,9 @@
 import { WalletError } from "../errors";
-import type { PassContent } from "../schema/content";
+import type { ParsedContent } from "../schema/content";
 import type { FieldDef } from "../schema/parts";
 import type {
 	GoogleTransitOptions,
-	TemplateConfig,
+	ParsedTemplate,
 	TemplateType,
 } from "../schema/template";
 import {
@@ -93,9 +93,9 @@ function buildFlightObjectFields(
 // Transit: transitObject requires tripType. Origin/destination and times are
 // carried by ticketLeg rather than the class, unlike the flight vertical.
 function buildTransitObjectFields(
-	template: Extract<TemplateConfig, { type: "boardingPass" }>,
+	template: Extract<ParsedTemplate, { type: "boardingPass" }>,
 	transit: GoogleTransitOptions,
-	content: PassContent,
+	content: ParsedContent,
 	values: Record<string, string | null>
 ): Record<string, unknown> {
 	const originName = transit.originName ?? template.origin;
@@ -123,7 +123,7 @@ function buildTransitObjectFields(
 }
 
 function buildGiftCardObjectFields(
-	template: Extract<TemplateConfig, { type: "giftCard" }>,
+	template: Extract<ParsedTemplate, { type: "giftCard" }>,
 	fields: FieldDef[],
 	values: Record<string, string | null>,
 	serialNumber: string
@@ -173,7 +173,7 @@ const STRUCTURED_FIELD_KEYS: Partial<Record<TemplateType, string[]>> = {
 // primary field in textModulesData (up to ten entries), replacing infoModuleData.
 // https://developers.google.com/wallet/reference/rest/v1/genericobject
 function buildDisplayFields(
-	template: TemplateConfig,
+	template: ParsedTemplate,
 	values: Record<string, string | null>
 ): Record<string, unknown> {
 	const { fields, locales } = template;
@@ -211,8 +211,8 @@ function buildDisplayFields(
 }
 
 export function buildObjectBody(
-	template: TemplateConfig,
-	content: PassContent,
+	template: ParsedTemplate,
+	content: ParsedContent,
 	classId: string,
 	objectId: string
 ): Record<string, unknown> {

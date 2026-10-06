@@ -1,7 +1,7 @@
 import { WalletError } from "../errors";
 import { discardBody } from "../http";
 import type { ImageSet } from "../schema/parts";
-import type { TemplateConfig } from "../schema/template";
+import type { ParsedTemplate } from "../schema/template";
 
 async function fetchAsBytes(url: string): Promise<Uint8Array> {
 	try {
@@ -53,7 +53,7 @@ export async function resolveImageSet(
 
 /** Every image file a template's Apple options name, keyed by archive path. */
 export async function collectImages(
-	template: TemplateConfig
+	template: ParsedTemplate
 ): Promise<Record<string, Uint8Array>> {
 	const apple = template.apple;
 	if (!apple?.icon) {

@@ -1,20 +1,20 @@
 import type { AppleProvider } from "./apple/index";
 import type { GoogleProvider } from "./google/index";
-import type { PassContent } from "./schema/content";
-import type { TemplateConfig } from "./schema/template";
+import type { ParsedContent } from "./schema/content";
+import type { ParsedTemplate } from "./schema/template";
 
 /** One pass to render: the template it comes from and its recipient's content. */
 export interface PassItem {
-	content: PassContent;
-	template: TemplateConfig;
+	content: ParsedContent;
+	template: ParsedTemplate;
 }
 
 /** What every wallet platform does with templates and passes. */
 export interface Provider<Issued, Updated> {
 	/** Reject content this platform cannot issue, e.g. Google's serial characters. */
-	checkContent(content: PassContent): void;
+	checkContent(content: ParsedContent): void;
 	/** Reject a template this platform cannot render. Runs at construction. */
-	checkTemplate(template: TemplateConfig): void;
+	checkTemplate(template: ParsedTemplate): void;
 	/** Issue one pass: Apple signs a `.pkpass`, Google signs a save JWT. */
 	issue(item: PassItem): Promise<Issued>;
 	/**

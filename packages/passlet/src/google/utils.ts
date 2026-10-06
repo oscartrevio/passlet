@@ -5,7 +5,7 @@ import type {
 	GoogleModules,
 	Locales,
 } from "../schema/parts";
-import type { GoogleTransitOptions, TemplateConfig } from "../schema/template";
+import type { GoogleTransitOptions, ParsedTemplate } from "../schema/template";
 
 const GOOGLE_BARCODE_TYPE: Record<BarcodeFormat, string> = {
 	QR: "QR_CODE",
@@ -71,7 +71,7 @@ export function imageUri(url: string | undefined): GoogleImage | undefined {
 }
 
 export function transitOptions(
-	template: TemplateConfig
+	template: ParsedTemplate
 ): GoogleTransitOptions | undefined {
 	return template.type === "boardingPass"
 		? template.google?.transit

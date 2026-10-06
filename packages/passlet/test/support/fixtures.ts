@@ -1,15 +1,35 @@
 // One full-fidelity pass per vertical, carrying both Apple and Google options
 // so unit, integration and e2e tiers all issue the same passes.
-import type { PassContent } from "../../src/schema/content";
-import type { TemplateConfig } from "../../src/schema/template";
+import {
+	type ParsedContent,
+	type PassContent,
+	passContentSchema,
+} from "../../src/schema/content";
+import {
+	type ParsedTemplate,
+	type TemplateConfig,
+	templateConfigSchema,
+} from "../../src/schema/template";
 import type { PassTemplate } from "../../src/template";
 import type { Wallet } from "../../src/wallet";
 import { ICON, PNG } from "./apple";
 import { LOGO_URL } from "./google";
 
+// Parsed the way PassTemplate and Wallet parse them, so provider code sees
+// every default applied.
 export interface Fixture {
+	create: ParsedContent;
+	pass: ParsedTemplate;
+}
+
+function parsed(fixture: {
 	create: PassContent;
 	pass: TemplateConfig;
+}): Fixture {
+	return {
+		create: passContentSchema.parse(fixture.create),
+		pass: templateConfigSchema.parse(fixture.pass),
+	};
 }
 
 export type FixtureName =
@@ -31,7 +51,7 @@ export function fixtures({
 }: FixtureOptions = {}): Record<FixtureName, Fixture> {
 	return {
 		// Apple renders loyalty as storeCard; Google requires programLogo.
-		loyalty: {
+		loyalty: parsed({
 			pass: {
 				type: "loyalty",
 				id: "fx-loyalty",
@@ -67,10 +87,10 @@ export function fixtures({
 				serialNumber: "loyalty-001",
 				barcode: { value: "LOY-1250", format: "QR" },
 			},
-		},
+		}),
 
 		// Poster event ticket: Apple uses eventLogoText and drops logoText.
-		eventTicket: {
+		eventTicket: parsed({
 			pass: {
 				type: "eventTicket",
 				id: "fx-event",
@@ -111,10 +131,10 @@ export function fixtures({
 				serialNumber: "event-001",
 				barcode: { value: "EVT-1", format: "PDF417" },
 			},
-		},
+		}),
 
 		// Air: Apple boardingPass, Google flightClass (IATA codes required).
-		boardingPass: {
+		boardingPass: parsed({
 			pass: {
 				type: "boardingPass",
 				id: "fx-flight",
@@ -141,10 +161,10 @@ export function fixtures({
 				barcode: { value: "BP-1", format: "Aztec" },
 				values: { passengerName: "Jane Doe" },
 			},
-		},
+		}),
 
 		// Rail: Apple boardingPass, Google transitClass via google.transit.
-		transit: {
+		transit: parsed({
 			pass: {
 				type: "boardingPass",
 				id: "fx-transit",
@@ -169,9 +189,9 @@ export function fixtures({
 				serialNumber: "transit-001",
 				values: { passengerName: "Jane Doe" },
 			},
-		},
+		}),
 
-		coupon: {
+		coupon: parsed({
 			pass: {
 				type: "coupon",
 				id: "fx-coupon",
@@ -186,11 +206,11 @@ export function fixtures({
 				],
 			},
 			create: { serialNumber: "coupon-001", expiresAt: "2026-12-31T23:59:59Z" },
-		},
+		}),
 
 		// Apple shares storeCard with loyalty; currency is per field. Google
 		// carries the balance as Money micros.
-		giftCard: {
+		giftCard: parsed({
 			pass: {
 				type: "giftCard",
 				id: "fx-gift",
@@ -221,9 +241,9 @@ export function fixtures({
 				],
 			},
 			create: { serialNumber: "gift-001" },
-		},
+		}),
 
-		generic: {
+		generic: parsed({
 			pass: {
 				type: "generic",
 				id: "fx-generic",
@@ -241,7 +261,7 @@ export function fixtures({
 				],
 			},
 			create: { serialNumber: "generic-001" },
-		},
+		}),
 	};
 }
 

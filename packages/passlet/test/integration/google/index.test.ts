@@ -57,8 +57,8 @@ describe("GoogleProvider.issue", () => {
 				{ id: classId, ...buildClassBody(loyalty.pass) },
 			],
 			[
-				"PATCH",
-				`/loyaltyObject/${objectId}`,
+				"POST",
+				"/loyaltyObject",
 				buildObjectBody(loyalty.pass, loyalty.create, classId, objectId),
 			],
 		]);
@@ -82,24 +82,43 @@ describe("GoogleProvider.issue", () => {
 	});
 
 	// A JWT only links the holder to an object, so the object must exist with
-	// current content before the link is used.
-	it("inserts the object when Google has none", async () => {
-		const stub = stubGoogleFetch((request) =>
-			request.method === "PATCH" ? new Response("", { status: 404 }) : undefined
+	// current content before the link is used. Issuing inserts first, since a
+	// new holder is the common case.
+	it("inserts the object, then patches it with the same body when it already exists", async () => {
+		const stub = stubGoogleFetch(
+			(request) =>
+				existingClasses(request) ??
+				(request.method === "POST"
+					? Response.json({ error: { code: 409 } }, { status: 409 })
+					: undefined)
 		);
 		const classId = `${ISSUER_ID}.${loyalty.pass.id}`;
 		const objectId = `${ISSUER_ID}.${loyalty.create.serialNumber}`;
+		const objectBody = buildObjectBody(
+			loyalty.pass,
+			loyalty.create,
+			classId,
+			objectId
+		);
 
 		await generate(loyalty);
 
-		expect(calls(stub).slice(2)).toEqual([
-			["PATCH", `/loyaltyObject/${objectId}`, expect.any(Object)],
-			[
-				"POST",
-				"/loyaltyObject",
-				buildObjectBody(loyalty.pass, loyalty.create, classId, objectId),
-			],
+		expect(calls(stub)).toEqual([
+			["GET", `/loyaltyClass/${classId}`, undefined],
+			["POST", "/loyaltyObject", objectBody],
+			["PATCH", `/loyaltyObject/${objectId}`, objectBody],
 		]);
+	});
+
+	it("surfaces object insert errors other than a conflict without patching", async () => {
+		const stub = stubGoogleFetch(
+			(request) => existingClasses(request) ?? new Response("", { status: 403 })
+		);
+
+		await expect(generate(loyalty)).rejects.toMatchObject({
+			code: "GOOGLE_ACCESS_DENIED",
+		});
+		expect(stub.requests.map((r) => r.method)).toEqual(["GET", "POST"]);
 	});
 
 	it("rejects invalid recipient data before making Google requests", async () => {
@@ -134,13 +153,9 @@ describe("GoogleProvider.issue", () => {
 		});
 		expect(calls(stub)).toEqual([
 			["GET", `/loyaltyClass/${classId}`, undefined],
-			["PATCH", `/loyaltyObject/${ISSUER_ID}.loyalty-001`, expect.any(Object)],
+			["POST", "/loyaltyObject", expect.any(Object)],
 			["GET", `/loyaltyClass/${classId}`, undefined],
-			[
-				"PATCH",
-				`/loyaltyObject/${ISSUER_ID}.second-holder`,
-				expect.any(Object),
-			],
+			["POST", "/loyaltyObject", expect.any(Object)],
 		]);
 		expect(decodeJwtObject(jwt, "loyaltyObject")).toMatchObject({
 			id: `${ISSUER_ID}.second-holder`,
@@ -183,8 +198,8 @@ describe("GoogleProvider.issue", () => {
 				{ id: classId, ...buildClassBody(fixture.pass) },
 			],
 			[
-				"PATCH",
-				`/${vertical}Object/${objectId}`,
+				"POST",
+				`/${vertical}Object`,
 				buildObjectBody(fixture.pass, fixture.create, classId, objectId),
 			],
 		]);
@@ -218,7 +233,7 @@ describe("GoogleProvider.issue", () => {
 		expect(stub.requests.map((request) => request.method)).toEqual([
 			"GET",
 			"POST",
-			"PATCH",
+			"POST",
 		]);
 	});
 });
