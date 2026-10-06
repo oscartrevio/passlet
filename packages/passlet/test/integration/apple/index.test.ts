@@ -38,8 +38,8 @@ const MEMBERS: Record<FixtureName, string[]> = {
 	generic: ["icon.png", "icon@2x.png", "pass.json"],
 };
 
-// id-sha1: the digest Apple expects from an in-memory signing key.
-const SHA1_OID = "1.3.14.3.2.26";
+// id-sha256: the digest an in-memory signing key signs with.
+const SHA256_OID = "2.16.840.1.101.3.4.2.1";
 
 const NAMES = Object.keys(FIXTURES) as FixtureName[];
 const archives = {} as Record<FixtureName, Pkpass>;
@@ -77,14 +77,14 @@ describe.each(NAMES)("%s .pkpass", (name) => {
 
 describe("signature", () => {
 	it("is a detached PKCS#7 over manifest.json that verifies against the signer cert", () => {
-		const { sha1, signature } = archives.loyalty;
+		const { manifestSha256, signature } = archives.loyalty;
 		const signed = parseSignature(signature);
 
 		expect(signed).toMatchObject({
 			certificateCount: 2,
 			detached: true,
-			digestAlgorithmOid: SHA1_OID,
-			messageDigestHex: sha1["manifest.json"],
+			digestAlgorithmOid: SHA256_OID,
+			messageDigestHex: manifestSha256,
 		});
 		expect(signed.verifies(credentials.signerCert)).toBe(true);
 	});

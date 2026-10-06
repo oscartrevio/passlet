@@ -113,6 +113,8 @@ export interface Pkpass {
 	entries: string[];
 	files: Record<string, Uint8Array>;
 	manifest: Record<string, string>;
+	/** SHA-256 of manifest.json, the digest the signature is made over. */
+	manifestSha256: string;
 	passJson: Record<string, unknown>;
 	/** SHA-1 of each member's bytes, recomputed here. */
 	sha1: Record<string, string>;
@@ -149,6 +151,9 @@ export async function readPkpass(bytes: Uint8Array): Promise<Pkpass> {
 		entries: Object.keys(files).sort(),
 		files,
 		manifest: JSON.parse(text("manifest.json")) as Record<string, string>,
+		manifestSha256: createHash("sha256")
+			.update(text("manifest.json"))
+			.digest("hex"),
 		passJson: JSON.parse(text("pass.json")) as Record<string, unknown>,
 		sha1,
 		signature,

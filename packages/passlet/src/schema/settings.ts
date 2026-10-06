@@ -46,7 +46,7 @@ import type { PassContent } from "./content";
 export interface AppleExternalSigner {
 	/**
 	 * Digest used for both the CMS digest algorithm and the signature.
-	 * Defaults to `"sha256"` — `"sha1"` matches the in-memory key path but is
+	 * Defaults to `"sha256"`, as the in-memory key path uses; `"sha1"` is
 	 * rejected by most KMS providers.
 	 */
 	digestAlgorithm?: "sha1" | "sha256";

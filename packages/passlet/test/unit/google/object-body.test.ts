@@ -40,7 +40,8 @@ function transitPass(transit: GoogleTransitOptions): ParsedTemplate {
 	return { ...pass, google: { logo: LOGO_URL, transit } };
 }
 
-const BASE_REQUIRED = ["id", "classId", "state"];
+// `state` is set by the insert request, not the body, so updates keep it.
+const BASE_REQUIRED = ["id", "classId"];
 
 interface Golden {
 	body: Record<string, unknown>;
@@ -55,7 +56,6 @@ const GOLDEN: Record<FixtureName, Golden> = {
 		body: {
 			id: `${ISSUER_ID}.loyalty-001`,
 			classId: `${ISSUER_ID}.fx-loyalty`,
-			state: "ACTIVE",
 			barcode: { type: "QR_CODE", value: "LOY-1250" },
 			// points and member feed structured fields, so they stay out of
 			// textModulesData even though member sits in the back slot.
@@ -73,7 +73,6 @@ const GOLDEN: Record<FixtureName, Golden> = {
 		body: {
 			id: `${ISSUER_ID}.event-001`,
 			classId: `${ISSUER_ID}.fx-event`,
-			state: "ACTIVE",
 			barcode: { type: "PDF_417", value: "EVT-1" },
 			// seat/row/section/gate render in dedicated ticket slots; the primary
 			// field has no home on eventTicketObject, so it leads textModulesData.
@@ -92,14 +91,15 @@ const GOLDEN: Record<FixtureName, Golden> = {
 		body: {
 			id: `${ISSUER_ID}.flight-001`,
 			classId: `${ISSUER_ID}.fx-flight`,
-			state: "ACTIVE",
 			barcode: { type: "AZTEC", value: "BP-1" },
 			passengerName: "Jane Doe",
 			reservationInfo: { confirmationCode: "flight-001" },
+			// Google renders the seat in the card's SEAT slot, so it is not
+			// repeated as a text module.
+			boardingAndSeatingInfo: { seatNumber: "14A" },
 			textModulesData: [
 				{ header: "Gate", body: "B22", id: "gate" },
 				{ header: "Passenger", body: "Jane Doe", id: "passengerName" },
-				{ header: "Seat", body: "14A", id: "seat" },
 				{ header: "Terminal", body: "4", id: "terminal" },
 			],
 		},
@@ -110,7 +110,6 @@ const GOLDEN: Record<FixtureName, Golden> = {
 		body: {
 			id: `${ISSUER_ID}.transit-001`,
 			classId: `${ISSUER_ID}.fx-transit`,
-			state: "ACTIVE",
 			tripType: "ROUND_TRIP",
 			ticketNumber: "TK-9001",
 			// transitObject pluralises the passenger field.
@@ -136,7 +135,6 @@ const GOLDEN: Record<FixtureName, Golden> = {
 		body: {
 			id: `${ISSUER_ID}.coupon-001`,
 			classId: `${ISSUER_ID}.fx-coupon`,
-			state: "ACTIVE",
 			validTimeInterval: { end: { date: "2026-12-31T23:59:59Z" } },
 			// offerObject has no structured display fields: everything is a text
 			// module, primary field first.
@@ -152,7 +150,6 @@ const GOLDEN: Record<FixtureName, Golden> = {
 		body: {
 			id: `${ISSUER_ID}.gift-001`,
 			classId: `${ISSUER_ID}.fx-gift`,
-			state: "ACTIVE",
 			// cardNumber is required; it defaults to the serial number.
 			cardNumber: "gift-001",
 			balance: { micros: "50000000", currencyCode: "USD" },
@@ -171,7 +168,6 @@ const GOLDEN: Record<FixtureName, Golden> = {
 		body: {
 			id: `${ISSUER_ID}.generic-001`,
 			classId: `${ISSUER_ID}.fx-generic`,
-			state: "ACTIVE",
 			cardTitle: en("Member Card"),
 			hexBackgroundColor: "#264653",
 			logo: LOGO,
@@ -496,9 +492,17 @@ describe("updating an object", () => {
 			})
 		);
 		expect(patch).toMatchObject({
-			state: "ACTIVE",
 			loyaltyPoints: null,
 			textModulesData: null,
 		});
+		expect(patch).not.toHaveProperty("state");
+	});
+
+	it("clears a flight's seat number once the seat value is gone", () => {
+		const { pass, create } = FIXTURES.boardingPass;
+		const patch = patchBody(
+			build(pass, { ...create, values: { ...create.values, seat: null } })
+		);
+		expect(patch).toMatchObject({ boardingAndSeatingInfo: null });
 	});
 });

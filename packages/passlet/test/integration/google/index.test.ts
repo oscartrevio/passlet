@@ -60,7 +60,10 @@ describe("GoogleProvider.issue", () => {
 			[
 				"POST",
 				"/loyaltyObject",
-				buildObjectBody(loyalty.pass, loyalty.create, classId, objectId),
+				{
+					...buildObjectBody(loyalty.pass, loyalty.create, classId, objectId),
+					state: "ACTIVE",
+				},
 			],
 		]);
 
@@ -106,11 +109,14 @@ describe("GoogleProvider.issue", () => {
 
 		await generate(loyalty);
 
+		// Only the insert sets state, so re-issuing an expired serial keeps it
+		// expired.
 		expect(calls(stub)).toEqual([
 			["GET", `/loyaltyClass/${classId}`, undefined],
-			["POST", "/loyaltyObject", objectBody],
+			["POST", "/loyaltyObject", { ...objectBody, state: "ACTIVE" }],
 			["PATCH", `/loyaltyObject/${objectId}`, patchBody(objectBody)],
 		]);
+		expect(stub.body("PATCH", objectId)).not.toHaveProperty("state");
 	});
 
 	it("surfaces object insert errors other than a conflict without patching", async () => {
@@ -203,7 +209,10 @@ describe("GoogleProvider.issue", () => {
 			[
 				"POST",
 				`/${vertical}Object`,
-				buildObjectBody(fixture.pass, fixture.create, classId, objectId),
+				{
+					...buildObjectBody(fixture.pass, fixture.create, classId, objectId),
+					state: "ACTIVE",
+				},
 			],
 		]);
 		expect(decodeJwtObject(jwt, `${vertical}Object`)).toEqual({
@@ -324,6 +333,30 @@ describe("GoogleProvider.update", () => {
 				patchBody(flightObject),
 			],
 		]);
+		expect(stub.body("PATCH", "transit-001")).not.toHaveProperty("state");
+	});
+
+	// Google announces a flight's seat change only through
+	// boardingAndSeatingInfo.seatNumber with notifyPreference on the PATCH.
+	it("sends a changed seat as the flight's seat number with the notify flag", async () => {
+		const stub = stubGoogleFetch(existingClasses);
+		const objectId = `${ISSUER_ID}.flight-001`;
+
+		await provider.update(
+			{
+				template: boardingPass.pass,
+				content: {
+					...boardingPass.create,
+					values: { ...boardingPass.create.values, seat: "14C" },
+				},
+			},
+			{ notify: true }
+		);
+
+		expect(stub.body("PATCH", objectId)).toMatchObject({
+			boardingAndSeatingInfo: { seatNumber: "14C" },
+			notifyPreference: "NOTIFY_ON_UPDATE",
+		});
 	});
 
 	it("creates the missing class, then the object without the notify flag", async () => {
@@ -358,7 +391,7 @@ describe("GoogleProvider.update", () => {
 				`/flightObject/${objectId}`,
 				{ ...patchBody(objectBody), notifyPreference: "NOTIFY_ON_UPDATE" },
 			],
-			["POST", "/flightObject", objectBody],
+			["POST", "/flightObject", { ...objectBody, state: "ACTIVE" }],
 		]);
 	});
 

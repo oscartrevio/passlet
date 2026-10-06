@@ -107,7 +107,7 @@ describe("wallet.createBundle on Apple", () => {
 				throw new Error(`${index}.pkpass missing`);
 			}
 			const signed = parseSignature(pass.signature);
-			expect(signed.messageDigestHex).toBe(pass.sha1["manifest.json"]);
+			expect(signed.messageDigestHex).toBe(pass.manifestSha256);
 			expect(signed.verifies(apple.signerCert)).toBe(true);
 			expect(pass.passJson).toMatchObject({
 				passTypeIdentifier: PASS_TYPE_IDENTIFIER,

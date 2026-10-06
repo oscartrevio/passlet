@@ -64,15 +64,18 @@ function parseCertificate(
  * Signs manifest.json with a PKCS#7 detached signature — required by Apple to
  * validate the integrity of a `.pkpass` file.
  *
- * The private-key operation uses either the in-memory PEM `signerKey` (SHA-1
- * digest) or an {@link AppleExternalSigner} (KMS/HSM, SHA-256 by default).
+ * Apple asks for "a PKCS #7 detached signature for the manifest" and names no
+ * digest for it (only the manifest's file hashes are SHA-1), so both the
+ * in-memory PEM `signerKey` and an {@link AppleExternalSigner} default to
+ * SHA-256; an external signer may opt into SHA-1.
+ * https://developer.apple.com/documentation/walletpasses/building-a-pass
  */
 export async function signManifest(
 	options: SignManifestOptions
 ): Promise<Uint8Array> {
 	const { manifest, signer, signerCert, signerKey, wwdr } = options;
 
-	const digest: Digest = signer ? (signer.digestAlgorithm ?? "sha256") : "sha1";
+	const digest: Digest = signer?.digestAlgorithm ?? "sha256";
 	const digestAlgorithm = DIGEST_ALGORITHMS[digest];
 	if (!digestAlgorithm) {
 		throw new WalletError(
