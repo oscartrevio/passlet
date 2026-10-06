@@ -11,15 +11,11 @@ export async function GET(
 	const { serial } = await params;
 
 	try {
-		const { google, warnings } = await rewardsCard.create({
+		const { google } = await rewardsCard.create({
 			serialNumber: serial,
 			values: { points: "1250" },
 			barcode: { format: "QR", value: serial },
 		});
-
-		if (warnings.length > 0) {
-			console.warn("[passlet]", warnings);
-		}
 
 		if (!google) {
 			return new Response("Google Wallet is not configured", { status: 501 });

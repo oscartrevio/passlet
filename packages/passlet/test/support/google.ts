@@ -1,7 +1,7 @@
 import { generateKeyPairSync } from "node:crypto";
 import { onTestFinished, vi } from "vitest";
-import type { GoogleObjectType } from "../../src/providers/google/api";
-import type { GoogleCredentials } from "../../src/types/credentials";
+import type { GoogleObjectType } from "../../src/google/client";
+import type { GoogleCredentials } from "../../src/schema/settings";
 
 export const ISSUER_ID = "3388000000022801234";
 export const CLIENT_EMAIL = "test@test-project.iam.gserviceaccount.com";
@@ -123,6 +123,17 @@ export function stubGoogleFetch(
 	});
 
 	return stub;
+}
+
+/**
+ * Responder under which every class already exists, as after the first pass
+ * was issued from a template. Other requests fall through to the defaults.
+ */
+export function existingClasses(request: WalletRequest): Response | undefined {
+	const [, resource, id] = request.path.split("/");
+	return request.method === "GET" && resource?.endsWith("Class")
+		? Response.json({ id })
+		: undefined;
 }
 
 export interface DecodedJwt {

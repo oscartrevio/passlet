@@ -2,6 +2,8 @@
 
 Three minimal servers that issue the **same** loyalty pass and serve it over HTTP:
 
+The examples install `passlet` from npm and target passlet v3.
+
 | Example                  | Stack                     | Endpoints                                                       |
 | ------------------------ | ------------------------- | --------------------------------------------------------------- |
 | [`nextjs/`](./nextjs)     | Next.js 15 App Router     | `GET /api/passes/:serial/apple` · `GET /api/passes/:serial/google` |
@@ -34,7 +36,7 @@ All three examples follow the same three steps:
 ```ts
 const wallet = new Wallet({ apple: {...}, google: {...} }); // once, at boot
 const card = wallet.loyalty({ id, name, fields: [...] });   // reusable template
-const { apple, google, warnings } = await card.create({     // per recipient
+const { apple, google } = await card.create({               // per recipient
   serialNumber: "user-123",
   values: { points: "1250" },
   barcode: { format: "QR", value: "user-123" },
@@ -43,7 +45,7 @@ const { apple, google, warnings } = await card.create({     // per recipient
 
 - `apple` is a `Uint8Array` — the `.pkpass` archive, or `null` if you left Apple credentials out.
 - `google` is a JWT `string` — or `null` if you left Google credentials out.
-- `warnings` is a `string[]` of non-fatal notices. Log them.
+- A named image that fails to load rejects `create()` with a `WalletError`; there are no partial results.
 
 `new Wallet()` and `wallet.loyalty()` are cheap and side-effect free; only `create()`
 does signing and network I/O. Build the template at module scope and call `create()`
@@ -146,7 +148,7 @@ return the URL as JSON and let the client render an official
   A's pass to user B. Always send `Cache-Control: no-store, private`. In Next.js also set
   `export const dynamic = "force-dynamic"` — route handlers can otherwise be statically
   cached at build time, and a cached `302` to a stale Google JWT is a very confusing bug.
-- **Runtime.** Passlet signs with `node-forge` / `jszip` and needs Node APIs. In Next.js
+- **Runtime.** Passlet signs with Node's built-in `crypto` and `zlib`. In Next.js
   set `export const runtime = "nodejs"` (the Edge runtime will fail). On Cloudflare
   Workers you need `nodejs_compat`.
 - **Required images.** Apple needs `apple.icon`, as bytes or a URL. Google loyalty
@@ -163,8 +165,8 @@ return the URL as JSON and let the client render an official
   flow. Use your own user/ticket ID.
 - **`values: { key: null }` hides a field** for that recipient — it does not clear the
   label. Omit the key entirely to fall back to the template's default value.
-- **Check `warnings`.** `create()` resolves successfully with warnings for things like a
-  missing optional image. They're the fastest signal that a pass will look wrong.
+- **Images must load.** Every image a template names is fetched by `create()`, and any
+  failure rejects the call. Pass bytes instead of URLs to avoid that network step.
 - **Template publication.** Google issuance creates missing classes but does not
   overwrite existing ones. Call `pass.publish()` after changing shared template
   configuration, from setup or deployment code rather than on each download.

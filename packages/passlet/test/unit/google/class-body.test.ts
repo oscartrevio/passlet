@@ -1,13 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { WalletErrorCode } from "../../../src/errors";
-import {
-	buildClassBody,
-	validateGoogleRequirements,
-} from "../../../src/providers/google/index";
+import { buildClassBody } from "../../../src/google/class-body";
+import { validateGoogleRequirements } from "../../../src/google/index";
 import type {
 	GoogleTransitOptions,
-	PassConfig,
-} from "../../../src/types/schemas";
+	TemplateConfig,
+} from "../../../src/schema/template";
 import { FIXTURES, type FixtureName } from "../../support/fixtures";
 import { LOGO_URL } from "../../support/google";
 import {
@@ -16,7 +14,7 @@ import {
 	type GoogleResource,
 } from "../../support/google-schema";
 
-type FlightPass = Extract<PassConfig, { type: "flight" }>;
+type BoardingPassConfig = Extract<TemplateConfig, { type: "boardingPass" }>;
 
 const LOGO = { sourceUri: { uri: LOGO_URL } };
 
@@ -28,9 +26,9 @@ function walletError(code: WalletErrorCode) {
 	return expect.objectContaining({ code });
 }
 
-const EVENT = FIXTURES.event.pass;
-const FLIGHT = FIXTURES.flight.pass;
-if (EVENT.type !== "event" || FLIGHT.type !== "flight") {
+const EVENT = FIXTURES.eventTicket.pass;
+const FLIGHT = FIXTURES.boardingPass.pass;
+if (EVENT.type !== "eventTicket" || FLIGHT.type !== "boardingPass") {
 	throw new Error("fixture types drifted");
 }
 
@@ -57,7 +55,7 @@ const GOLDEN: Record<FixtureName, Golden> = {
 			programLogo: LOGO,
 		},
 	},
-	event: {
+	eventTicket: {
 		resource: "eventTicketClass",
 		required: [...BASE_REQUIRED, "eventName"],
 		body: {
@@ -71,7 +69,7 @@ const GOLDEN: Record<FixtureName, Golden> = {
 			logo: LOGO,
 		},
 	},
-	flight: {
+	boardingPass: {
 		resource: "flightClass",
 		required: [
 			...BASE_REQUIRED,
@@ -227,7 +225,7 @@ describe("buildClassBody", () => {
 	});
 
 	it.each([
-		["event", "eventName", "Festival de Verano"],
+		["eventTicket", "eventName", "Festival de Verano"],
 		["giftCard", "localizedMerchantName", "Tarjeta Regalo"],
 	] as const)("%s translates %s from locales.<lang>.name", (name, key, translation) => {
 		const { pass } = FIXTURES[name];
@@ -273,11 +271,11 @@ describe("buildClassBody", () => {
 
 	describe("transitType", () => {
 		function transitPass(
-			transitType: FlightPass["transitType"],
+			transitType: BoardingPassConfig["transitType"],
 			transit: GoogleTransitOptions = {}
-		): PassConfig {
+		): TemplateConfig {
 			return {
-				type: "flight",
+				type: "boardingPass",
 				id: "fx-transit",
 				name: "Northern Line",
 				transitType,
@@ -326,7 +324,7 @@ describe("validateGoogleRequirements", () => {
 		).toThrow(walletError("GOOGLE_MISSING_LOGO"));
 		expect(() =>
 			validateGoogleRequirements({
-				type: "flight",
+				type: "boardingPass",
 				id: "t",
 				name: "Bus",
 				google: { transit: {} },

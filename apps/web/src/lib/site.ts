@@ -9,7 +9,7 @@ export const SITE_MANIFEST = {
 	display: "standalone" as const,
 	background_color: "#FAFAFA",
 	theme_color: "#FAFAFA",
-	url: "https://passlet.oscartrevio.xyz",
+	url: "https://passlet.oscartrev.io",
 	author: {
 		name: "Oscar Treviño",
 		twitter: "@oscartrevio_",
@@ -77,6 +77,8 @@ export const METADATA: Metadata = {
 	},
 	alternates: {
 		canonical: SITE_MANIFEST.url,
+		// Lets agents discover the llms.txt overview from the HTML page.
+		types: { "text/markdown": "/llms.txt" },
 	},
 };
 

@@ -4,7 +4,7 @@ Passlet is still early, and there's a lot of room to shape it. Whether it's a bu
 
 ## Setup
 
-Prerequisites: Node.js 20+, pnpm 10.33+.
+Prerequisites: Node.js 22+ (changesets requires >=22.11), pnpm 10.33+. CI tests Node 20, 22, 24, and 26.
 
 ```bash
 git clone https://github.com/oscartrevio/passlet.git

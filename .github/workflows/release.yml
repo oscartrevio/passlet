@@ -24,18 +24,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      # Node 24 ships npm 11, which npm trusted publishing (OIDC) needs.
+      - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 24
           cache: pnpm
           registry-url: https://registry.npmjs.org
-
-      # npm trusted publishing (OIDC) needs npm >= 11.5.1; Node 20 ships npm 10.
-      - run: npm install -g npm@11
 
       - run: pnpm install --frozen-lockfile
 
@@ -43,9 +41,7 @@ jobs:
         run: pnpm -F passlet test
 
       - name: Create Release PR or Publish
-        uses: changesets/action@v1
+        uses: changesets/action@v2
         with:
-          version: pnpm changeset version
-          publish: pnpm release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          version-script: pnpm changeset version
+          publish-script: pnpm release

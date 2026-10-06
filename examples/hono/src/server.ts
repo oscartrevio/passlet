@@ -49,15 +49,12 @@ const app = new Hono();
 app.get("/passes/:serial/apple", async (c) => {
 	const serial = c.req.param("serial");
 
-	const { apple, warnings } = await rewardsCard.create({
+	const { apple } = await rewardsCard.create({
 		serialNumber: serial,
 		values: { points: "1250" },
 		barcode: { format: "QR", value: serial, altText: serial },
 	});
 
-	if (warnings.length > 0) {
-		console.warn("[passlet]", warnings);
-	}
 	if (!apple) {
 		return c.text("Apple Wallet is not configured", 501);
 	}
@@ -76,15 +73,12 @@ app.get("/passes/:serial/apple", async (c) => {
 app.get("/passes/:serial/google", async (c) => {
 	const serial = c.req.param("serial");
 
-	const { google, warnings } = await rewardsCard.create({
+	const { google } = await rewardsCard.create({
 		serialNumber: serial,
 		values: { points: "1250" },
 		barcode: { format: "QR", value: serial },
 	});
 
-	if (warnings.length > 0) {
-		console.warn("[passlet]", warnings);
-	}
 	if (!google) {
 		return c.text("Google Wallet is not configured", 501);
 	}

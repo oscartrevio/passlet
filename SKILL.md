@@ -14,13 +14,13 @@ Configure `apple`, `google`, or both. Apple needs a Pass Type ID certificate, it
 
 ## Define and issue
 
-Use `wallet.loyalty`, `wallet.event`, `wallet.flight`, `wallet.coupon`, `wallet.giftCard`, or `wallet.generic`. Templates hold shared configuration; `create()` supplies recipient data.
+Use `wallet.loyalty`, `wallet.eventTicket`, `wallet.boardingPass`, `wallet.coupon`, `wallet.giftCard`, or `wallet.generic`. Templates hold shared configuration; `create()` supplies recipient data.
 
 ```ts
 import { readFile } from "node:fs/promises";
 import { field } from "passlet";
 
-const pass = wallet.event({
+const pass = wallet.eventTicket({
   id: "summer-fest",
   name: "Summer Fest",
   color: "#1c1917",
@@ -37,7 +37,7 @@ const pass = wallet.event({
   ],
 });
 
-const { apple, google, warnings } = await pass.create({
+const { apple, google } = await pass.create({
   serialNumber: "ticket-2444",
   values: { seat: "A12" },
   barcode: { format: "QR", value: "TICKET-2444" },
@@ -56,11 +56,13 @@ const { apple, google, warnings } = await pass.create({
 
 `apple` is a `Uint8Array`; serve the bytes with `APPLE_PASS_CONTENT_TYPE` and a `.pkpass` filename. `google` is a JWT; use `googleSaveUrl(google)` for a redirect or save button. Unconfigured providers return `null`, so check outputs before using them.
 
-Use HTTPS and `Cache-Control: no-store, private`. Authenticate recipients before issuing their passes; signed files and save URLs contain recipient data. Check `warnings` for optional image failures.
+Use HTTPS and `Cache-Control: no-store, private`. Authenticate recipients before issuing their passes; signed files and save URLs contain recipient data. Any named image that fails to load rejects `create()`; there are no warnings.
+
+To issue several passes in one download (family tickets, multi-leg trips), call `wallet.createBundle([{ template, content }, ...])` with 1 to 10 items and unique serial numbers. `apple` is always a `.pkpasses` bundle; serve it with `APPLE_PASSES_CONTENT_TYPE` and a `.pkpasses` filename. `google` is one JWT covering every pass. Set `content.group` to group related passes. Bundle limit violations throw `PASS_BUNDLE_INVALID`.
 
 Google `create()` creates a missing shared class but does not overwrite an existing class. After changing the template, call `await pass.publish()` from setup or deployment code, not on each download. Publication affects all passes sharing that class and requires Google credentials.
 
-For already-saved Google passes, use `pass.update({ serialNumber, values })`, `pass.expire(serialNumber)`, and `pass.delete(serialNumber)`. These are no-ops for Apple-only wallets. Apple updates require your own pass web service and APNs integration; Passlet generates the replacement file but does not implement that service.
+To update issued passes, keep content in your database and give `new Wallet()` a `load(serialNumber)` that returns `{ template, content: { values, ... }, updatedAt }` or `null`; build `content` with the same function you use for `create()`. Bump `updatedAt` on every change, save first, then call `await wallet.update(serialNumber, { notify: true })`. Google objects are patched (created if missing); `notify` only alerts for Google's allowlisted fields (loyalty `points`, event `seat`/`row`/`section`/`gate`), at most 3 per pass per day. For Apple, set `apple.webService: { url, secret, registrations }` (one secret of 32+ chars from `openssl rand -base64 32`, kept in your secret manager and never changed, since every issued pass's token derives from it; `push: { cert, key }` is required with an external signer). Implement `registrations` (`add`, `devices`, `remove`, `serialNumbers`) on a real database, never an in-memory map on serverless. Mount `wallet.handler` at `url` (Next.js: `app/api/.../[...path]/route.ts` exporting `GET`/`POST`/`DELETE` with `runtime = "nodejs"`; Express: `app.use(prefix, toNodeListener(wallet.handler))` before body parsers). Apple alerts only for fields with a `changeMessage` containing `%@`. With Google configured, serial numbers may contain only `A-Z a-z 0-9 . _ -`; prefer `crypto.randomUUID()`. `pass.expire(serialNumber)` acts on Google only (Google's API cannot delete passes); void an Apple pass by returning `apple: { voided: true }` from `load` and calling `wallet.update()`.
 
 ## Failures
 

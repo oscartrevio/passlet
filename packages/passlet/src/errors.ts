@@ -11,6 +11,12 @@ export const WALLET_ERROR_CODES = {
 		why: "The issuance or update data does not satisfy the recipient schema.",
 		fix: "Correct each field listed in issues before retrying the operation.",
 	},
+	PASS_BUNDLE_INVALID: {
+		status: 400,
+		message: "Invalid pass bundle.",
+		why: "createBundle needs 1 to 10 passes with distinct serial numbers, all from this wallet's templates, and Apple caps a bundle at 150 MB.",
+		fix: "Split the batch, give every pass its own serialNumber, build each template from the same Wallet, or shrink the images.",
+	},
 	APPLE_INVALID_SIGNER_CERT: {
 		status: 500,
 		message: "Invalid Apple signing certificate.",
@@ -47,11 +53,29 @@ export const WALLET_ERROR_CODES = {
 		why: "Apple boarding passes require a transitType.",
 		fix: "Set transitType to air, train, bus, boat, or generic.",
 	},
-	APPLE_MISSING_AUTH_TOKEN: {
-		status: 400,
-		message: "Apple update authentication token is missing or too short.",
-		why: "A pass using webServiceURL needs an authenticationToken of at least 16 characters.",
-		fix: "Set apple.authenticationToken to a secure token with at least 16 characters.",
+	APPLE_WEB_SERVICE_INVALID: {
+		status: 500,
+		message: "Invalid Apple web service configuration.",
+		why: "apple.webService needs an http(s) url, a secret of 32 or more characters, and push credentials when apple.signer is used.",
+		fix: "Use a stable HTTPS url, generate a secret with `openssl rand -base64 32`, and set webService.push when signing with an external signer.",
+	},
+	APPLE_PUSH_FAILED: {
+		status: 502,
+		message: "Apple push notification failed.",
+		why: "APNs rejected the connection or certificate, so registered devices were not told about the update.",
+		fix: "Check that the push certificate is a valid Pass Type ID certificate for passTypeIdentifier and that the server can reach api.push.apple.com:443.",
+	},
+	UPDATES_NOT_CONFIGURED: {
+		status: 500,
+		message: "Pass updates are not configured.",
+		why: "wallet.update() needs a load function to read the pass's current content.",
+		fix: "Pass load to new Wallet() before calling update().",
+	},
+	PASS_NOT_FOUND: {
+		status: 404,
+		message: "Pass not found.",
+		why: "load returned null for this serial number.",
+		fix: "Check the serial number, and that load finds passes your app has issued.",
 	},
 	APPLE_APP_LAUNCH_URL_REQUIRES_STORE_IDS: {
 		status: 400,
@@ -62,7 +86,7 @@ export const WALLET_ERROR_CODES = {
 	GOOGLE_INVALID_PRIVATE_KEY: {
 		status: 500,
 		message: "Invalid Google service-account private key.",
-		why: "privateKey could not be imported as a PKCS#8 PEM private key.",
+		why: "privateKey could not be imported as a PEM RSA private key.",
 		fix: "Use private_key unchanged from the service-account JSON, not the filename or entire JSON.",
 	},
 	GOOGLE_SIGNING_FAILED: {
@@ -141,7 +165,7 @@ export const WALLET_ERROR_CODES = {
 		status: 400,
 		message: "Google flight details are incomplete.",
 		why: "The flight class is missing required header or departure data.",
-		fix: "Set carrier, flightNumber, origin, destination, and departure on the flight template.",
+		fix: "Set carrier, flightNumber, origin, destination, and departure on the boardingPass template.",
 	},
 	GOOGLE_FLIGHT_MISSING_PASSENGER_NAME: {
 		status: 400,

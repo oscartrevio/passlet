@@ -1,0 +1,53 @@
+name: Bug report
+description: Something in passlet does not work as documented
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: passlet version
+      placeholder: 1.2.3
+    validations:
+      required: true
+  - type: input
+    id: runtime
+    attributes:
+      label: Runtime and version
+      placeholder: Node 22.11.0
+    validations:
+      required: true
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Provider
+      options:
+        - Apple
+        - Google
+        - Both
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: Smallest code that triggers the bug. Redact certificates, keys, and credentials.
+      render: ts
+    validations:
+      required: true
+  - type: input
+    id: error-code
+    attributes:
+      label: WalletError code
+      description: The `code` of the thrown WalletError, if any.
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true

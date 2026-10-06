@@ -1,16 +1,12 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { generateApplePass } from "../../../src/providers/apple/index";
-import type { AppleCredentials } from "../../../src/types/credentials";
-import type {
-	EventPassConfig,
-	LoyaltyPassConfig,
-	PassConfig,
-} from "../../../src/types/schemas";
+import { resolveImageSet } from "../../../src/apple/images";
+import type { AppleCredentials } from "../../../src/schema/settings";
+import type { LoyaltyTemplateConfig } from "../../../src/schema/template";
+import { Wallet } from "../../../src/wallet";
 import {
 	appleCredentials,
 	ICON,
 	type Pkpass,
-	PNG,
 	readPkpass,
 } from "../../support/apple";
 
@@ -54,33 +50,34 @@ function served(
 	};
 }
 
-function loyalty(apple: LoyaltyPassConfig["apple"]): PassConfig {
-	return {
-		type: "loyalty",
-		id: "img-loyalty",
-		name: "Images",
-		fields: [],
-		apple,
-	};
-}
-
-function event(apple: EventPassConfig["apple"]): PassConfig {
-	return { type: "event", id: "img-event", name: "Images", fields: [], apple };
-}
-
+/** Issue a loyalty pass with these Apple options and open its archive. */
 async function generate(
-	pass: PassConfig
-): Promise<Pkpass & { warnings: string[] }> {
-	const { pass: bytes, warnings } = await generateApplePass(
-		pass,
-		{ serialNumber: "img-001" },
-		credentials
-	);
-	return { ...(await readPkpass(bytes)), warnings };
+	apple: LoyaltyTemplateConfig["apple"]
+): Promise<Pkpass> {
+	const { apple: bytes } = await new Wallet({ apple: credentials })
+		.loyalty({ id: "img-loyalty", name: "Images", fields: [], apple })
+		.create({ serialNumber: "img-001" });
+	if (!bytes) {
+		throw new Error("no .pkpass issued");
+	}
+	return await readPkpass(bytes);
 }
+
+const FAILURES = [
+	{
+		code: "IMAGE_FETCH_FAILED",
+		failure: "a non-2xx response",
+		respond: () => new Response(null, { status: 500 }),
+	},
+	{
+		code: "IMAGE_FETCH_NETWORK_ERROR",
+		failure: "a network error",
+		respond: () => Promise.reject(new TypeError("fetch failed")),
+	},
+];
 
 describe("icon", () => {
-	it("names URL variants by scale and warns only when @2x is missing", async () => {
+	it("names URL variants by scale", async () => {
 		stubFetch(
 			served({
 				[ICON_URLS.base]: Uint8Array.of(1),
@@ -89,7 +86,7 @@ describe("icon", () => {
 			})
 		);
 
-		const full = await generate(loyalty({ icon: ICON_URLS }));
+		const full = await generate({ icon: ICON_URLS });
 		expect(full.entries).toEqual([
 			"icon.png",
 			"icon@2x.png",
@@ -103,67 +100,97 @@ describe("icon", () => {
 			full.files["icon@2x.png"],
 			full.files["icon@3x.png"],
 		]).toEqual([Uint8Array.of(1), Uint8Array.of(2), Uint8Array.of(3)]);
-		expect(full.warnings).toEqual([]);
 
-		const bare = await generate(loyalty({ icon: ICON_URLS.base }));
+		const bare = await generate({ icon: ICON_URLS.base });
 		expect(bare.entries).toEqual([
 			"icon.png",
 			"manifest.json",
 			"pass.json",
 			"signature",
 		]);
-		expect(bare.warnings).toEqual([expect.stringContaining("icon@2x")]);
 	});
 
-	it.each([
-		{
-			code: "IMAGE_FETCH_FAILED",
-			failure: "a non-2xx response",
-			respond: () => new Response(null, { status: 500 }),
-		},
-		{
-			code: "IMAGE_FETCH_NETWORK_ERROR",
-			failure: "a network error",
-			respond: () => Promise.reject(new TypeError("fetch failed")),
-		},
-	])("rejects with $code when the required icon URL hits $failure", async ({
+	it.each(
+		FAILURES
+	)("rejects with $code when the icon URL hits $failure", async ({
 		code,
 		respond,
 	}) => {
 		stubFetch(respond);
 
-		await expect(generate(loyalty({ icon: ICON_URLS.base }))).rejects.toThrow(
+		await expect(generate({ icon: ICON_URLS.base })).rejects.toThrow(
 			expect.objectContaining({ code })
 		);
 	});
 });
 
-describe("optional images", () => {
-	it("still generates the pass when a logo URL fails, with a warning", async () => {
-		stubFetch(served({}));
+describe("other images", () => {
+	it("packs a logo URL under logo.png", async () => {
+		stubFetch(served({ [LOGO_URL]: Uint8Array.of(4) }));
 
-		const { entries, warnings } = await generate(
-			loyalty({ icon: ICON, logo: LOGO_URL })
-		);
+		const { entries, files } = await generate({ icon: ICON, logo: LOGO_URL });
 
 		expect(entries).toEqual([
 			"icon.png",
 			"icon@2x.png",
+			"logo.png",
 			"manifest.json",
 			"pass.json",
 			"signature",
 		]);
-		expect(warnings).toEqual([expect.stringContaining("logo.png")]);
+		expect(files["logo.png"]).toEqual(Uint8Array.of(4));
 	});
 
-	// Apple renders the strip and ignores background/thumbnail on event tickets.
-	it("warns when an event ticket sets both strip and background", async () => {
-		const both = await generate(
-			event({ icon: ICON, strip: PNG, background: PNG })
-		);
-		expect(both.warnings).toEqual([expect.stringContaining("strip")]);
+	// The template asked for the image; a pass silently missing it is a bug.
+	it.each(FAILURES)("rejects with $code when a logo URL hits $failure", async ({
+		code,
+		respond,
+	}) => {
+		stubFetch(respond);
 
-		const stripOnly = await generate(event({ icon: ICON, strip: PNG }));
-		expect(stripOnly.warnings).toEqual([]);
+		await expect(generate({ icon: ICON, logo: LOGO_URL })).rejects.toThrow(
+			expect.objectContaining({ code })
+		);
+	});
+});
+
+describe("image failures", () => {
+	const imageUrl = "https://images.example/icon.png?token=private-image-token";
+
+	it("reports HTTP status without exposing signed image URLs", async () => {
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(() =>
+				Promise.resolve(new Response("private-response", { status: 403 }))
+			)
+		);
+		await expect(resolveImageSet("icon", imageUrl)).rejects.toMatchObject({
+			code: "IMAGE_FETCH_FAILED",
+			status: 403,
+			message: expect.not.stringContaining("private"),
+		});
+	});
+
+	it("classifies interrupted image bodies as network failures", async () => {
+		const cause = new Error("connection reset");
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(() =>
+				Promise.resolve(
+					new Response(
+						new ReadableStream({
+							start(controller) {
+								controller.error(cause);
+							},
+						})
+					)
+				)
+			)
+		);
+		await expect(resolveImageSet("icon", imageUrl)).rejects.toMatchObject({
+			code: "IMAGE_FETCH_NETWORK_ERROR",
+			status: 502,
+			cause,
+		});
 	});
 });
