@@ -61,11 +61,14 @@ Runs on the server, Node.js 20.15+. Leave out either wallet to use just one. Get
 
 ## Features
 
-- One template for both wallets: fields, barcodes, images, colors, dates, locations and translations mapped for you
-- Live updates: `wallet.update(serial)` patches Google and pushes Apple devices through a built-in web service, with lock-screen notifications
-- Bundles: `wallet.createBundle()` issues up to 10 passes as one `.pkpasses` file and one Google save link
-- Per-pass Apple tokens, external signers (AWS KMS, Google Cloud KMS, HSM), and errors with a stable `code`, `why` and `fix`
-- Zero runtime dependencies: 0.5 MB installed, loads in ~35 ms; ESM + CJS; strict types
+- Apple and Google from one definition: a signed `.pkpass` and a Google save link from the same call
+- Fields on the front and back, with date, number and currency formatting
+- Barcodes: QR, PDF417, Aztec, Code 128 and more, plus rotating codes on Google
+- Images from URLs or bytes: icons, logos, strips, thumbnails and Google hero images
+- Translations for every field, in both wallets
+- Lock-screen relevance by date and location, and NFC (Apple NFC passes, Google Smart Tap)
+- Updates after issue, with a notification on the holder's phone when a value changes
+- Several passes in one download, like a family's tickets or every leg of a trip
 
 ## Documentation
 
