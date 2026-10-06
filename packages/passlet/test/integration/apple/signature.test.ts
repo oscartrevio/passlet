@@ -1,5 +1,4 @@
 import { createHash, createSign } from "node:crypto";
-import forge from "node-forge";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import {
 	type SignManifestOptions,
@@ -15,6 +14,7 @@ import {
 	TEAM_ID,
 } from "../../support/apple";
 import { generateTestCerts, type TestCerts } from "../../support/certs";
+import { child, children, decodeOid, parse } from "../../support/der-reader";
 import { FIXTURES } from "../../support/fixtures";
 
 const MANIFEST = new TextEncoder().encode('{"pass.json":"abc123"}');
@@ -54,11 +54,8 @@ function kmsSigner(digestAlgorithm?: Digest, key = certs.signerKey) {
 
 // Each signed attribute is SEQUENCE { OID, SET OF value }.
 function attributeOids(set: Uint8Array): string[] {
-	const asn1 = forge.asn1.fromDer(forge.util.binary.raw.encode(set));
-	return (asn1.value as forge.asn1.Asn1[]).map((attribute) =>
-		forge.asn1.derToOid(
-			(attribute.value as forge.asn1.Asn1[])[0]?.value as string
-		)
+	return children(parse(set)).map((attribute) =>
+		decodeOid(child(attribute, 0))
 	);
 }
 
@@ -149,9 +146,9 @@ describe("signManifest with an external signer", () => {
 		expect(signedAttributes[0]).toBe(0x31);
 		expect(attributeOids(signedAttributes).sort()).toEqual(
 			[
-				forge.pki.oids.contentType,
-				forge.pki.oids.messageDigest,
-				forge.pki.oids.signingTime,
+				"1.2.840.113549.1.9.3", // contentType
+				"1.2.840.113549.1.9.4", // messageDigest
+				"1.2.840.113549.1.9.5", // signingTime
 			].sort()
 		);
 	});

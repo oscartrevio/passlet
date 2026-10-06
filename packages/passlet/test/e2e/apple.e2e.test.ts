@@ -9,7 +9,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import JSZip from "jszip";
-import forge from "node-forge";
 import { beforeAll, describe, expect, it, onTestFinished } from "vitest";
 import { Wallet, type WalletConfig } from "../../src/index";
 import { parseSignature, readPkpass } from "../support/apple";
@@ -22,10 +21,6 @@ import {
 const OUT_DIR = fileURLToPath(new URL("out/", import.meta.url));
 const NAMES = Object.keys(FIXTURES) as FixtureName[];
 
-// Apple puts the pass type identifier in the subject's UID attribute, which
-// node-forge has no short name for.
-const UID_OID = "0.9.2342.19200300.100.1.1";
-
 const APPLE_ROOT_CA_URL =
 	"https://www.apple.com/appleca/AppleIncRootCertificate.cer";
 
@@ -37,17 +32,16 @@ function requireEnv(name: string): string {
 	return value;
 }
 
-function subjectField(
-	cert: forge.pki.Certificate,
-	field: string | { type: string }
-): string {
-	const value = cert.subject.getField(field)?.value;
-	if (typeof value !== "string") {
-		throw new Error(
-			`signer certificate subject has no ${JSON.stringify(field)} attribute`
-		);
+// Node renders the subject one `SHORTNAME=value` per line; Apple puts the pass
+// type identifier in UID and the team in OU.
+function subjectField(cert: X509Certificate, field: "OU" | "UID"): string {
+	for (const line of cert.subject.split("\n")) {
+		const separator = line.indexOf("=");
+		if (line.slice(0, separator) === field) {
+			return line.slice(separator + 1);
+		}
 	}
-	return value;
+	throw new Error(`signer certificate subject has no ${field} attribute`);
 }
 
 describe.skipIf(!process.env.APPLE_SIGNER_CERT)(
@@ -55,8 +49,8 @@ describe.skipIf(!process.env.APPLE_SIGNER_CERT)(
 	() => {
 		let credentials: WalletConfig;
 		let signerCertPem: string;
-		let signerCert: forge.pki.Certificate;
-		let wwdrCert: forge.pki.Certificate;
+		let signerCert: X509Certificate;
+		let wwdrCert: X509Certificate;
 
 		beforeAll(() => {
 			signerCertPem = requireEnv("APPLE_SIGNER_CERT");
@@ -70,17 +64,18 @@ describe.skipIf(!process.env.APPLE_SIGNER_CERT)(
 					wwdr,
 				},
 			};
-			signerCert = forge.pki.certificateFromPem(signerCertPem);
-			wwdrCert = forge.pki.certificateFromPem(wwdr);
+			signerCert = new X509Certificate(signerCertPem);
+			wwdrCert = new X509Certificate(wwdr);
 			mkdirSync(OUT_DIR, { recursive: true });
 			console.log(`.pkpass files written to ${OUT_DIR}`);
 		});
 
 		it("signer certificate is issued by the supplied WWDR and is still valid", () => {
-			// forge throws when the issuer does not match, so a WWDR from the
-			// wrong generation fails with its own message.
-			expect(wwdrCert.verify(signerCert)).toBe(true);
-			expect(signerCert.validity.notAfter.getTime()).toBeGreaterThan(
+			// checkIssued compares names; verify checks the signature, so a
+			// WWDR from the wrong generation fails either way.
+			expect(signerCert.checkIssued(wwdrCert)).toBe(true);
+			expect(signerCert.verify(wwdrCert.publicKey)).toBe(true);
+			expect(new Date(signerCert.validTo).getTime()).toBeGreaterThan(
 				Date.now()
 			);
 		});
@@ -106,7 +101,7 @@ describe.skipIf(!process.env.APPLE_SIGNER_CERT)(
 			expect(parsed.certificateCount).toBe(2);
 			expect(parsed.verifies(signerCertPem)).toBe(true);
 			expect(passJson).toMatchObject({
-				passTypeIdentifier: subjectField(signerCert, { type: UID_OID }),
+				passTypeIdentifier: subjectField(signerCert, "UID"),
 				teamIdentifier: subjectField(signerCert, "OU"),
 			});
 		});
@@ -190,7 +185,7 @@ describe.skipIf(!process.env.APPLE_SIGNER_CERT)(
 				expect(result.stderr).toContain("Verification successful");
 				expect(result.status).toBe(0);
 				expect(passJson.passTypeIdentifier).toBe(
-					subjectField(signerCert, { type: UID_OID })
+					subjectField(signerCert, "UID")
 				);
 			}
 		});

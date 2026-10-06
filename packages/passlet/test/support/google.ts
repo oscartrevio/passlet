@@ -1,4 +1,4 @@
-import { generateKeyPairSync } from "node:crypto";
+import { generateKeyPairSync, type KeyObject, verify } from "node:crypto";
 import { onTestFinished, vi } from "vitest";
 import type { GoogleObjectType } from "../../src/google/client";
 import type { GoogleCredentials } from "../../src/schema/settings";
@@ -149,6 +149,28 @@ export function decodeJwt(jwt: string): DecodedJwt {
 	const decode = (segment: string): Record<string, unknown> =>
 		JSON.parse(Buffer.from(segment, "base64url").toString("utf8"));
 	return { header: decode(header), claims: decode(claims) };
+}
+
+/** Verifies an RS256 JWT signature independently of the library's signer. */
+export function verifyJwt(jwt: string, publicKey: KeyObject): DecodedJwt {
+	const [header, claims, signature, ...rest] = jwt.split(".");
+	if (!(header && claims && signature) || rest.length > 0) {
+		throw new Error("malformed JWT");
+	}
+	const decoded = decodeJwt(jwt);
+	if (decoded.header.alg !== "RS256") {
+		throw new Error(`unexpected JWT alg ${String(decoded.header.alg)}`);
+	}
+	const valid = verify(
+		"sha256",
+		Buffer.from(`${header}.${claims}`),
+		publicKey,
+		Buffer.from(signature, "base64url")
+	);
+	if (!valid) {
+		throw new Error("JWT signature does not verify");
+	}
+	return decoded;
 }
 
 /** The single Wallet object embedded in a save-to-wallet JWT. */

@@ -1,6 +1,5 @@
-import { createHash } from "node:crypto";
+import { createHash, verify } from "node:crypto";
 import JSZip from "jszip";
-import forge from "node-forge";
 import { inject } from "vitest";
 import { AppleProvider } from "../../src/apple/index";
 import type { ParsedContent } from "../../src/schema/content";
@@ -10,6 +9,7 @@ import type {
 	PassRegistrations,
 } from "../../src/schema/settings";
 import type { ParsedTemplate } from "../../src/schema/template";
+import { child, children, decodeOid, parse } from "./der-reader";
 
 export const PASS_TYPE_IDENTIFIER = "pass.com.test.example";
 export const TEAM_ID = "ABCD1234EF";
@@ -166,59 +166,72 @@ export interface ParsedSignature {
 	verifies(signerCertPem: string): boolean;
 }
 
+const DIGEST_NAMES: Record<string, string> = {
+	"1.3.14.3.2.26": "sha1",
+	"2.16.840.1.101.3.4.2.1": "sha256",
+	"2.16.840.1.101.3.4.2.2": "sha384",
+	"2.16.840.1.101.3.4.2.3": "sha512",
+};
+const SIGNED_DATA_OID = "1.2.840.113549.1.7.2";
+const MESSAGE_DIGEST_OID = "1.2.840.113549.1.9.4";
+
 /** Parses a detached PKCS#7 signature as produced for `.pkpass` files. */
 export function parseSignature(der: Uint8Array): ParsedSignature {
-	const asn1 = forge.asn1.fromDer(forge.util.binary.raw.encode(der));
-	const p7 = forge.pkcs7.messageFromAsn1(asn1) as forge.pkcs7.PkcsSignedData & {
-		certificates: forge.pki.Certificate[];
-		rawCapture: {
-			authenticatedAttributes?: forge.asn1.Asn1[];
-			digestAlgorithm: string;
-			signature: string;
-			content?: unknown;
-		};
-	};
-	const raw = p7.rawCapture;
-	const attrs = raw.authenticatedAttributes ?? [];
-	const digestOid = forge.asn1.derToOid(raw.digestAlgorithm);
-	const digestName = forge.pki.oids[digestOid] as "sha1" | "sha256";
+	const contentInfo = parse(der);
+	if (decodeOid(child(contentInfo, 0)) !== SIGNED_DATA_OID) {
+		throw new Error("not a PKCS#7 SignedData");
+	}
+	// SignedData: version, digestAlgorithms, contentInfo, [0] certificates,
+	// [1] crls, signerInfos.
+	const signedData = children(child(child(contentInfo, 1), 0));
+	const encapsulated = signedData[2];
+	const signerInfoSet = signedData.at(-1);
+	if (!(encapsulated && signerInfoSet)) {
+		throw new Error("SignedData is missing fields");
+	}
+	const certificates = signedData.find((node) => node.tag === 0xa0);
+	const signerInfos = children(signerInfoSet);
+	const signerInfo = signerInfos[0];
+	if (signerInfos.length !== 1 || !signerInfo) {
+		throw new Error(`expected one SignerInfo, got ${signerInfos.length}`);
+	}
+	// SignerInfo: version, issuerAndSerialNumber, digestAlgorithm,
+	// [0] signedAttributes, signatureAlgorithm, signature.
+	const [, , digestAlgorithm, attributes, , signature] = children(signerInfo);
+	if (!(digestAlgorithm && attributes?.tag === 0xa0 && signature)) {
+		throw new Error("SignerInfo has no signed attributes");
+	}
+	const digestOid = decodeOid(child(digestAlgorithm, 0));
+	const digestName = DIGEST_NAMES[digestOid];
 
-	// Signed attributes are verified as a SET (RFC 2315 §9.3), not the
+	// Signed attributes are verified as a SET (RFC 5652 §5.4), not the
 	// implicit [0] tag they carry inside SignerInfo.
-	const attrSet = forge.asn1.create(
-		forge.asn1.Class.UNIVERSAL,
-		forge.asn1.Type.SET,
-		true,
-		attrs
-	);
-	const signedAttributes = forge.asn1.toDer(attrSet).getBytes();
+	const signedAttributes = Uint8Array.from(attributes.raw);
+	signedAttributes[0] = 0x31;
 
 	let messageDigestHex: string | undefined;
-	for (const attr of attrs) {
-		const [oidNode, valueSet] = attr.value as forge.asn1.Asn1[];
-		if (
-			oidNode &&
-			forge.asn1.derToOid(oidNode.value as string) ===
-				forge.pki.oids.messageDigest
-		) {
-			const digest = (valueSet?.value as forge.asn1.Asn1[])[0];
-			messageDigestHex = forge.util.bytesToHex(digest?.value as string);
+	for (const attribute of children(attributes)) {
+		if (decodeOid(child(attribute, 0)) === MESSAGE_DIGEST_OID) {
+			const digest = child(child(attribute, 1), 0);
+			messageDigestHex = Buffer.from(digest.content).toString("hex");
 		}
 	}
 
 	return {
-		certificateCount: p7.certificates.length,
-		detached: raw.content === undefined,
+		certificateCount: certificates ? children(certificates).length : 0,
+		detached: children(encapsulated).length === 1,
 		digestAlgorithmOid: digestOid,
 		messageDigestHex,
 		verifies(signerCertPem) {
-			const cert = forge.pki.certificateFromPem(signerCertPem);
-			const md = forge.md[digestName].create();
-			md.update(signedAttributes);
+			if (!digestName) {
+				return false;
+			}
 			try {
-				return (cert.publicKey as forge.pki.rsa.PublicKey).verify(
-					md.digest().getBytes(),
-					raw.signature
+				return verify(
+					digestName,
+					signedAttributes,
+					signerCertPem,
+					signature.content
 				);
 			} catch {
 				return false;

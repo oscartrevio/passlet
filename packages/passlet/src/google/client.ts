@@ -278,6 +278,31 @@ export async function publishClass(
 	);
 }
 
+/**
+ * The PATCH body for an object write: every `undefined` field becomes `null`.
+ * Google merges a PATCH into the stored object, recursing into nested objects,
+ * so an omitted field keeps its old value and only `null` clears it. Lists are
+ * replaced whole, so their entries are sent as they are.
+ */
+export function patchBody(body: object): Record<string, unknown> {
+	const patch: Record<string, unknown> = {};
+	for (const [key, value] of Object.entries(body)) {
+		if (value === undefined) {
+			patch[key] = null;
+		} else if (
+			typeof value === "object" &&
+			value !== null &&
+			!Array.isArray(value)
+		) {
+			patch[key] = patchBody(value);
+		} else {
+			patch[key] = value;
+		}
+	}
+	return patch;
+}
+
+/** Write the given fields of an object; `undefined` ones are cleared. */
 export async function patchObject(
 	objectType: GoogleObjectType,
 	objectId: string,
@@ -286,6 +311,7 @@ export async function patchObject(
 	privateKey: KeyObject,
 	options?: { notify?: boolean }
 ): Promise<void> {
+	const body = patchBody(patch);
 	const response = await walletRequest(
 		"PATCH",
 		`/${objectType}/${objectId}`,
@@ -294,7 +320,7 @@ export async function patchObject(
 		// notifyPreference is a request-body field on the object, not a query
 		// parameter. It is ephemeral: Google requires it on every PATCH/UPDATE
 		// that should trigger a field-update notification.
-		options?.notify ? { ...patch, notifyPreference: "NOTIFY_ON_UPDATE" } : patch
+		options?.notify ? { ...body, notifyPreference: "NOTIFY_ON_UPDATE" } : body
 	);
 	assertOk(response);
 }

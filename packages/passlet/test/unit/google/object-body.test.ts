@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { patchBody } from "../../../src/google/client";
 import { buildObjectBody } from "../../../src/google/object-body";
-import type { ParsedContent } from "../../../src/schema/content";
+import {
+	type ParsedContent,
+	passContentSchema,
+} from "../../../src/schema/content";
 import type {
 	GoogleTransitOptions,
 	ParsedTemplate,
@@ -383,5 +387,118 @@ describe("buildObjectBody", () => {
 		expect(body.messages).toEqual([
 			{ header: "Welcome", body: "Thanks for joining", messageType: "TEXT" },
 		]);
+	});
+});
+
+// Google's PATCH as observed against the live API: nested objects merge, null
+// clears, and lists and scalars replace.
+function applyPatch(stored: object, patch: object): Record<string, unknown> {
+	const result: Record<string, unknown> = { ...stored };
+	for (const [key, value] of Object.entries(patch)) {
+		const current = result[key];
+		if (value === null) {
+			result[key] = undefined;
+		} else if (typeof value === "object" && !Array.isArray(value)) {
+			const base =
+				typeof current === "object" &&
+				current !== null &&
+				!Array.isArray(current)
+					? current
+					: {};
+			result[key] = applyPatch(base, value);
+		} else {
+			result[key] = value;
+		}
+	}
+	return result;
+}
+
+describe("updating an object", () => {
+	// Everything passlet can put on an object, so a later write that leaves it
+	// out shows whether the field is cleared or left stale.
+	function rich(create: ParsedContent): ParsedContent {
+		return passContentSchema.parse({
+			...create,
+			barcode: { format: "QR", value: "R-1", altText: "Show at the door" },
+			validFrom: "2026-01-01T00:00:00Z",
+			expiresAt: "2027-01-01T00:00:00Z",
+			group: "household",
+			google: {
+				smartTapRedemptionValue: "tap-1",
+				rotatingBarcode: {
+					valuePattern: "https://example.com/{totp_value_hex}",
+					totpDetails: { parameters: [{ key: "k", valueLength: 8 }] },
+					renderEncoding: "UTF_8",
+				},
+				messages: [{ header: "Hi", body: "Welcome" }],
+				links: [{ uri: "https://example.com/me" }],
+				images: [{ url: "https://example.com/me.png" }],
+				valueAdded: [{ header: "Perks", uri: "https://example.com/perks" }],
+			},
+		});
+	}
+
+	// Every other value nulled and every optional part dropped or trimmed.
+	function sparse(pass: ParsedTemplate, create: ParsedContent): ParsedContent {
+		return passContentSchema.parse({
+			serialNumber: create.serialNumber,
+			barcode: { format: "QR", value: "R-2" },
+			validFrom: "2026-02-01T00:00:00Z",
+			google: {
+				rotatingBarcode: {
+					valuePattern: "https://example.com/{totp_value_hex}",
+					totpDetails: { parameters: [{ key: "k", valueLength: 8 }] },
+				},
+			},
+			values: Object.fromEntries(
+				pass.fields.map((field, index) => [
+					field.key,
+					// Google rejects a flight object without a passenger name.
+					index % 2 === 0 && field.key !== "passengerName"
+						? null
+						: (create.values?.[field.key] ?? field.value ?? "kept"),
+				])
+			),
+		});
+	}
+
+	function empty(pass: ParsedTemplate, create: ParsedContent): ParsedContent {
+		return {
+			serialNumber: create.serialNumber,
+			values: Object.fromEntries(
+				pass.fields.map((field) => [
+					field.key,
+					field.key === "passengerName" ? "Jane Doe" : null,
+				])
+			),
+		};
+	}
+
+	describe.each(Object.keys(FIXTURES) as FixtureName[])("%s", (name) => {
+		const { pass, create } = FIXTURES[name];
+		const stored = JSON.parse(JSON.stringify(build(pass, rich(create))));
+
+		it.each([
+			{ label: "a sparser", next: sparse(pass, create) },
+			{ label: "an empty", next: empty(pass, create) },
+		])("leaves exactly $label content after a patch", ({ next }) => {
+			const body = build(pass, next);
+			expect(applyPatch(stored, patchBody(body))).toEqual(body);
+		});
+	});
+
+	it("clears loyalty points and text modules whose values became null", () => {
+		const { pass, create } = FIXTURES.loyalty;
+		const patch = patchBody(
+			build(pass, {
+				...create,
+				values: { points: null, tier: null, terms: null },
+			})
+		);
+		expect(patch).toMatchObject({
+			state: "ACTIVE",
+			loyaltyPoints: null,
+			textModulesData: null,
+		});
 	});
 });
