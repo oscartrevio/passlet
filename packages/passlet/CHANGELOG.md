@@ -1,5 +1,14 @@
 # passlet
 
+## 3.1.1
+
+### Patch Changes
+
+- 4feeb95: On Google air boarding passes, the `seat` field is now sent as `boardingAndSeatingInfo.seatNumber`, shown in the card's seat slot, so `wallet.update(serial, { notify: true })` can notify the holder of a seat change.
+- 063dad2: Values set to `null` are now removed from Google passes on update, as they already were on Apple. Before, `wallet.update()` left the old value on the Google pass: a loyalty balance, a text module, a seat, a barcode's alternate text, a message or a link that the content no longer had stayed visible. Fields passlet never sets are still left as they are.
+- 4feeb95: An expired Google pass now stays expired after `wallet.update()` or a repeated `create()`. Only the insert that creates a Google object sets it `ACTIVE`; updates no longer send a state.
+- 4feeb95: Apple passes signed with an in-memory `signerKey` now use SHA-256 instead of SHA-1 for the signature digest. The manifest.json file hashes stay SHA-1, as Apple specifies.
+
 ## 3.1.0
 
 ### Minor Changes
