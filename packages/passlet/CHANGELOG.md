@@ -4,7 +4,7 @@
 
 ### Major Changes
 
-- 23d57fb: **Breaking.** Upgrade with the [migration guide](https://github.com/oscartrevio/passlet/blob/main/MIGRATION.md).
+- 23d57fb: **Breaking.** Upgrade with the [migration guide](https://github.com/oscartrevio/passlet/releases/tag/passlet%403.0.0).
   
   - **Pass updates.** Give `new Wallet()` a `load(serialNumber)` function and call `wallet.update(serialNumber, { notify: true })` after your data changes. Google objects update in place; Apple devices get an APNs push and download the new pass from `wallet.handler`, the built-in Apple web service (`apple.webService: { url, secret, registrations }`; mount it with `toNodeListener` outside Fetch-based frameworks). Each Apple pass gets its own authentication token.
   - **Bundles.** `wallet.createBundle([{ template, content }, ...])` issues up to 10 passes at once: an Apple `.pkpasses` bundle (`APPLE_PASSES_CONTENT_TYPE`) and one Google save JWT. `content.group` groups related passes in both wallets.
