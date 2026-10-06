@@ -1,7 +1,7 @@
 import { createPublicKey } from "node:crypto";
-import { jwtVerify } from "jose";
 import { describe, expect, it, vi } from "vitest";
 import { buildClassBody } from "../../../src/google/class-body";
+import { patchBody } from "../../../src/google/client";
 import { GoogleProvider } from "../../../src/google/index";
 import { signJwt } from "../../../src/google/jwt";
 import { buildObjectBody } from "../../../src/google/object-body";
@@ -14,6 +14,7 @@ import {
 	googleCredentials,
 	ISSUER_ID,
 	stubGoogleFetch,
+	verifyJwt,
 } from "../../support/google";
 
 vi.mock("../../../src/google/jwt", async (importOriginal) => {
@@ -65,12 +66,14 @@ describe("GoogleProvider.issue", () => {
 
 		// Google verifies the JWT against the service account's public key and
 		// rejects an iat in the future, which a millisecond timestamp would be.
-		const { payload, protectedHeader } = await jwtVerify(
+		const { header, claims: payload } = verifyJwt(
 			jwt,
-			createPublicKey(credentials.privateKey),
-			{ maxTokenAge: "5 minutes" }
+			createPublicKey(credentials.privateKey)
 		);
-		expect(protectedHeader.alg).toBe("RS256");
+		expect(header.alg).toBe("RS256");
+		const nowSeconds = Date.now() / 1000;
+		expect(payload.iat).toBeLessThanOrEqual(nowSeconds);
+		expect(payload.iat).toBeGreaterThan(nowSeconds - 5 * 60);
 		expect(payload).toEqual({
 			iss: credentials.clientEmail,
 			aud: "google",
@@ -84,7 +87,7 @@ describe("GoogleProvider.issue", () => {
 	// A JWT only links the holder to an object, so the object must exist with
 	// current content before the link is used. Issuing inserts first, since a
 	// new holder is the common case.
-	it("inserts the object, then patches it with the same body when it already exists", async () => {
+	it("inserts the object, then patches the same content over it when it already exists", async () => {
 		const stub = stubGoogleFetch(
 			(request) =>
 				existingClasses(request) ??
@@ -106,7 +109,7 @@ describe("GoogleProvider.issue", () => {
 		expect(calls(stub)).toEqual([
 			["GET", `/loyaltyClass/${classId}`, undefined],
 			["POST", "/loyaltyObject", objectBody],
-			["PATCH", `/loyaltyObject/${objectId}`, objectBody],
+			["PATCH", `/loyaltyObject/${objectId}`, patchBody(objectBody)],
 		]);
 	});
 
@@ -312,10 +315,14 @@ describe("GoogleProvider.update", () => {
 			[
 				"PATCH",
 				`/transitObject/${ISSUER_ID}.transit-001`,
-				{ ...transitObject, notifyPreference: "NOTIFY_ON_UPDATE" },
+				{ ...patchBody(transitObject), notifyPreference: "NOTIFY_ON_UPDATE" },
 			],
 			["GET", `/flightClass/${ISSUER_ID}.fx-flight`, undefined],
-			["PATCH", `/flightObject/${ISSUER_ID}.flight-001`, flightObject],
+			[
+				"PATCH",
+				`/flightObject/${ISSUER_ID}.flight-001`,
+				patchBody(flightObject),
+			],
 		]);
 	});
 
@@ -349,7 +356,7 @@ describe("GoogleProvider.update", () => {
 			[
 				"PATCH",
 				`/flightObject/${objectId}`,
-				{ ...objectBody, notifyPreference: "NOTIFY_ON_UPDATE" },
+				{ ...patchBody(objectBody), notifyPreference: "NOTIFY_ON_UPDATE" },
 			],
 			["POST", "/flightObject", objectBody],
 		]);

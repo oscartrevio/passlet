@@ -227,6 +227,71 @@ describe("wallet.update", () => {
 		});
 	});
 
+	// Google merges a PATCH into the stored object, so a value that is gone
+	// must be sent as null; leaving it out would keep the old one on the pass.
+	it("clears Google values that became null, and sends them again once set", async () => {
+		const stub = stubGoogleFetch(existingClasses);
+		let values: Record<string, string | null> = {
+			points: "100",
+			tier: "Gold",
+		};
+		let template: PassTemplate | undefined;
+		const wallet = new Wallet({
+			google: googleCredentials(),
+			load: (): LoadedPass | null =>
+				template
+					? { content: { values }, template, updatedAt: new Date() }
+					: null,
+		});
+		template = wallet.loyalty({
+			...TEMPLATE,
+			fields: [...TEMPLATE.fields, field.secondary("tier", "Tier")],
+		});
+
+		await template.create({ serialNumber: SERIAL, values });
+		values = { points: null, tier: null };
+		await wallet.update(SERIAL);
+		values = { points: "250", tier: "Silver" };
+		await wallet.update(SERIAL);
+
+		const objectId = `${ISSUER_ID}.${SERIAL}`;
+		expect(
+			stub.requests
+				.filter((r) => r.path.startsWith("/loyaltyObject"))
+				.map((r) => [r.method, r.body])
+		).toEqual([
+			[
+				"POST",
+				expect.objectContaining({
+					id: objectId,
+					state: "ACTIVE",
+					loyaltyPoints: { balance: { string: "100" } },
+					textModulesData: [{ header: "Tier", body: "Gold", id: "tier" }],
+				}),
+			],
+			[
+				"PATCH",
+				expect.objectContaining({
+					state: "ACTIVE",
+					loyaltyPoints: null,
+					textModulesData: null,
+				}),
+			],
+			[
+				"PATCH",
+				expect.objectContaining({
+					state: "ACTIVE",
+					loyaltyPoints: { balance: { string: "250" } },
+					textModulesData: [{ header: "Tier", body: "Silver", id: "tier" }],
+				}),
+			],
+		]);
+		// Insert leaves empty fields out instead of sending null.
+		expect(Object.values(stub.body("POST", "/loyaltyObject"))).not.toContain(
+			null
+		);
+	});
+
 	it("still updates Google when Apple fails, then reports the Apple failure", async () => {
 		const failure = new Error("registrations unavailable");
 		const registrations = memoryRegistrations();

@@ -266,6 +266,30 @@ describe("patchObject", () => {
 		]);
 	});
 
+	// Google merges a PATCH into the stored object, nested objects included,
+	// so an omitted field would keep its old value; null clears it.
+	it("sends undefined fields as null, inside nested objects but not lists", async () => {
+		const stub = stubGoogleFetch();
+		await patchObject(
+			"loyaltyObject",
+			OBJECT_ID,
+			{
+				state: "ACTIVE",
+				loyaltyPoints: undefined,
+				barcode: { type: "QR_CODE", value: "1", alternateText: undefined },
+				textModulesData: [{ header: "Tier", body: "Gold", id: undefined }],
+			},
+			credentials,
+			privateKey
+		);
+		expect(stub.body("PATCH", OBJECT_ID)).toStrictEqual({
+			state: "ACTIVE",
+			loyaltyPoints: null,
+			barcode: { type: "QR_CODE", value: "1", alternateText: null },
+			textModulesData: [{ header: "Tier", body: "Gold" }],
+		});
+	});
+
 	it.each([
 		{ status: 400, code: "GOOGLE_API_ERROR" },
 		{ status: 401, code: "GOOGLE_AUTH_FAILED" },

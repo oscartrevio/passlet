@@ -1,4 +1,3 @@
-import { generateKeyPairSync } from "node:crypto";
 import { once } from "node:events";
 import type * as Http2 from "node:http2";
 import {
@@ -10,7 +9,6 @@ import {
 import type { AddressInfo } from "node:net";
 import type { TLSSocket } from "node:tls";
 import { inspect } from "node:util";
-import forge from "node-forge";
 import {
 	afterAll,
 	beforeAll,
@@ -22,6 +20,7 @@ import {
 } from "vitest";
 import { sendPassUpdates } from "../../../src/apple/apns";
 import { WalletError } from "../../../src/errors";
+import { createSelfSigned, type SelfSigned } from "../../support/x509";
 
 const trust = vi.hoisted(() => ({ ca: "" }));
 
@@ -38,30 +37,13 @@ vi.mock("node:http2", async (importOriginal) => {
 
 const TOPIC = "pass.com.example.loyalty";
 
-interface Identity {
-	cert: string;
-	key: string;
-}
-
-function selfSigned(commonName: string): Identity {
-	const { privateKey, publicKey } = generateKeyPairSync("rsa", {
-		modulusLength: 2048,
-		privateKeyEncoding: { type: "pkcs8", format: "pem" },
-		publicKeyEncoding: { type: "spki", format: "pem" },
+function selfSigned(commonName: string): SelfSigned {
+	return createSelfSigned({
+		commonName,
+		notBefore: new Date(Date.now() - 60_000),
+		notAfter: new Date(Date.now() + 24 * 60 * 60 * 1000),
+		subjectAltNameIp: "127.0.0.1",
 	});
-	const cert = forge.pki.createCertificate();
-	cert.publicKey = forge.pki.publicKeyFromPem(publicKey);
-	cert.serialNumber = "01";
-	cert.validity.notBefore = new Date(Date.now() - 60_000);
-	cert.validity.notAfter = new Date(Date.now() + 24 * 60 * 60 * 1000);
-	const attrs = [{ name: "commonName", value: commonName }];
-	cert.setSubject(attrs);
-	cert.setIssuer(attrs);
-	cert.setExtensions([
-		{ name: "subjectAltName", altNames: [{ type: 7, ip: "127.0.0.1" }] },
-	]);
-	cert.sign(forge.pki.privateKeyFromPem(privateKey), forge.md.sha256.create());
-	return { cert: forge.pki.certificateToPem(cert), key: privateKey };
 }
 
 interface ReceivedPush {

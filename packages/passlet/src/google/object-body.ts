@@ -146,6 +146,7 @@ function buildGiftCardObjectFields(
 
 // Event: structured seatInfo from well-known seat/row/section/gate field keys.
 // Google renders these in dedicated ticket slots rather than as text modules.
+// Every slot is stated, so an update clears one that no longer has a value.
 function buildEventTicketObjectFields(
 	fields: FieldDef[],
 	values: Record<string, string | null>
@@ -153,11 +154,13 @@ function buildEventTicketObjectFields(
 	const seatInfo: Record<string, unknown> = {};
 	for (const key of EVENT_SEAT_KEYS) {
 		const value = resolveValueByKey(fields, values, key);
-		if (value !== undefined) {
-			seatInfo[key] = localized(value);
-		}
+		seatInfo[key] = value === undefined ? undefined : localized(value);
 	}
-	return Object.keys(seatInfo).length > 0 ? { seatInfo } : {};
+	return {
+		seatInfo: Object.values(seatInfo).some((v) => v !== undefined)
+			? seatInfo
+			: undefined,
+	};
 }
 
 const EVENT_SEAT_KEYS = ["seat", "row", "section", "gate"];
@@ -190,12 +193,14 @@ function buildDisplayFields(
 	const body: Record<string, unknown> = {
 		textModulesData: textModules.length > 0 ? textModules : undefined,
 	};
-	if (!(generic && primaryField)) {
+	if (!generic) {
 		return body;
 	}
-	const primaryValue = resolveFieldValue(primaryField, values);
-	if (primaryValue === undefined) {
-		return body;
+	const primaryValue = primaryField
+		? resolveFieldValue(primaryField, values)
+		: undefined;
+	if (!primaryField || primaryValue === undefined) {
+		return { ...body, header: undefined, subheader: undefined };
 	}
 	body.subheader = localized(
 		primaryField.label ?? primaryField.key,
@@ -210,6 +215,12 @@ function buildDisplayFields(
 	return body;
 }
 
+/**
+ * The object as passlet owns it. Every field passlet can set for the object's
+ * vertical is present, `undefined` when this content leaves it empty, so an
+ * update can clear what the content no longer has. `state` is always ACTIVE;
+ * fields passlet never sets are absent and left to Google.
+ */
 export function buildObjectBody(
 	template: ParsedTemplate,
 	content: ParsedContent,
@@ -220,6 +231,7 @@ export function buildObjectBody(
 	const fields = template.fields;
 	const transit = transitOptions(template);
 	const googleBarcode = content.barcodes?.[0] ?? content.barcode;
+	const rotatingBarcode = content.google?.rotatingBarcode;
 
 	const display = buildDisplayFields(template, values);
 	const genericTitle =
@@ -253,12 +265,20 @@ export function buildObjectBody(
 				: undefined,
 		// Smart Tap: per-recipient redemption value sent to NFC terminals
 		smartTapRedemptionValue: content.google?.smartTapRedemptionValue,
-		// Rotating barcode replaces the static barcode when set
-		rotatingBarcode: content.google?.rotatingBarcode,
+		// Rotating barcode replaces the static barcode when set. renderEncoding
+		// is optional, so it is stated to clear one an earlier write set.
+		rotatingBarcode: rotatingBarcode && {
+			renderEncoding: undefined,
+			...rotatingBarcode,
+		},
 		messages: content.google?.messages,
 		groupingInfo: content.group ? { groupingId: content.group } : undefined,
 		// Per-recipient links, images, and value-added modules. Google merges
-		// these with the class-level modules of the same name.
+		// these with the class-level modules of the same name. buildModuleData
+		// omits empty modules, so each is stated here first.
+		linksModuleData: undefined,
+		imageModulesData: undefined,
+		valueAddedModuleData: undefined,
 		...buildModuleData(content.google),
 		...(template.type === "loyalty" &&
 			buildLoyaltyObjectFields(fields, values)),
@@ -275,16 +295,15 @@ export function buildObjectBody(
 				values,
 				content.serialNumber
 			)),
-		// Generic branding is object-level, unlike other pass types.
 		...(template.type === "generic" && {
 			cardTitle: genericTitle,
 			hexBackgroundColor: template.color,
 			logo: imageUri(template.google?.logo),
 			wideLogo: imageUri(template.google?.wideLogo),
 			heroImage: imageUri(template.google?.hero),
-			...(template.google?.appLinkData && {
-				appLinkData: buildAppLinkData(template.google.appLinkData),
-			}),
+			appLinkData: template.google?.appLinkData
+				? buildAppLinkData(template.google.appLinkData)
+				: undefined,
 		}),
 		...display,
 		// genericObject requires a header even when no primary value is available.

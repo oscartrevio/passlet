@@ -57,10 +57,7 @@
   },
   "devDependencies": {
     "@passlet/config": "workspace:*",
-    "@types/node-forge": "^1.3.14",
-    "jose": "^5.10.0",
     "jszip": "^3.10.1",
-    "node-forge": "^1.4.0",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3",
     "vite": "^8.1.5",
