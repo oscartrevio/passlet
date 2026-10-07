@@ -162,74 +162,16 @@ function Field({ label, value }: { label: string; value: string }) {
 	);
 }
 
-// The light that shapes the emboss: from the top left, like the radial sheen
-// on the card.
-const EMBOSS_LIGHT = { azimuth: 225, elevation: 45 };
-// How bright a flat surface is under that light (N·L for a normal facing the
-// viewer). Slopes brighter than this face the light; darker ones face away.
-const EMBOSS_FLAT = Math.sin((EMBOSS_LIGHT.elevation * Math.PI) / 180);
-// How strongly a slope's difference from flat turns into light or shadow.
-const EMBOSS_HIGHLIGHT = 0.45;
-const EMBOSS_SHADOW = 0.45;
-
-// The back of the pass: the wordmark lightly pressed into the card. A height
-// map of the letters is lit from the top left, and only the difference from a
-// flat surface is drawn: white on edges facing the light, black on edges
-// facing away. Everything flat, including each letter's face, stays
-// transparent, so the card colour and its sheen show through for every colour.
+// The back of the pass: the wordmark pressed into the card (see the
+// pass-letterpress utility), under a soft light so the surface doesn't read as
+// flat paint.
 function PassBack() {
 	return (
 		<>
 			<div className="absolute inset-0 bg-[radial-gradient(120%_70%_at_25%_0%,rgb(255_255_255/0.12),transparent_65%)]" />
-			<svg aria-hidden="true" className="absolute inset-0 size-full">
-				<filter
-					colorInterpolationFilters="sRGB"
-					height="160%"
-					id="pass-emboss"
-					width="120%"
-					x="-10%"
-					y="-30%"
-				>
-					<feGaussianBlur in="SourceAlpha" result="height" stdDeviation={0.8} />
-					<feDiffuseLighting
-						diffuseConstant={1}
-						in="height"
-						lightingColor="#fff"
-						result="light"
-						surfaceScale={0.6}
-					>
-						<feDistantLight {...EMBOSS_LIGHT} />
-					</feDiffuseLighting>
-					{/* alpha = (light - flat) × strength, in white */}
-					<feColorMatrix
-						in="light"
-						result="highlight"
-						type="matrix"
-						values={`0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  ${EMBOSS_HIGHLIGHT} 0 0 0 ${-EMBOSS_FLAT * EMBOSS_HIGHLIGHT}`}
-					/>
-					{/* alpha = (flat - light) × strength, in black */}
-					<feColorMatrix
-						in="light"
-						result="shadow"
-						type="matrix"
-						values={`0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  ${-EMBOSS_SHADOW} 0 0 0 ${EMBOSS_FLAT * EMBOSS_SHADOW}`}
-					/>
-					<feMerge>
-						<feMergeNode in="shadow" />
-						<feMergeNode in="highlight" />
-					</feMerge>
-				</filter>
-				<text
-					className="font-semibold text-[52px] tracking-tighter"
-					dominantBaseline="central"
-					filter="url(#pass-emboss)"
-					textAnchor="middle"
-					x="50%"
-					y="50%"
-				>
-					Passlet
-				</text>
-			</svg>
+			<span className="pass-letterpress absolute inset-0 grid place-items-center font-semibold text-[52px] tracking-tighter">
+				Passlet
+			</span>
 		</>
 	);
 }
@@ -502,10 +444,9 @@ export function PassPlayground({
 						{COLORS.map((c) => {
 							const isSelected = color === c.value;
 							return (
-								// The ring is a pseudo-element 2px outside the swatch, so the gap
-								// between them shows the page and the ring takes the swatch colour.
+								// The selection ring takes the swatch's own colour.
 								<label
-									className="relative size-5 cursor-pointer rounded-sm border-overlay transition-transform duration-150 ease-out forced-color-adjust-none before:pointer-events-none before:absolute before:-inset-1 before:rounded-[7px] before:border-(--swatch) before:border-2 before:opacity-0 before:transition-opacity before:duration-150 before:content-[''] after:absolute after:-inset-[3px] after:content-[''] active:scale-[0.96] has-focus-visible:outline-(--gray-a11) has-focus-visible:outline-2 has-focus-visible:outline-offset-6 has-checked:before:opacity-100 forced-colors:has-focus-visible:outline-[color:Highlight] forced-colors:before:border-[CanvasText]"
+									className="relative size-5 cursor-pointer rounded-sm border-overlay transition-transform duration-150 ease-out forced-color-adjust-none after:absolute after:-inset-[3px] after:content-[''] active:scale-[0.96] has-checked:shadow-[inset_0_0_0_2px_#F5F5F5,0_0_0_2px_var(--swatch)] has-focus-visible:outline-(--gray-a11) has-focus-visible:outline-2 has-focus-visible:outline-offset-4 forced-colors:has-checked:shadow-[inset_0_0_0_2px_Canvas,0_0_0_2px_CanvasText] forced-colors:has-focus-visible:outline-[color:Highlight]"
 									key={c.value}
 									style={
 										{
