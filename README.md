@@ -5,15 +5,26 @@
   <img src="https://raw.githubusercontent.com/oscartrevio/passlet/main/.github/assets/header.svg" alt="Passlet" width="100%">
 </picture>
 
-Apple Wallet and Google Wallet passes from one TypeScript API.
-Issue, update and bundle passes with zero runtime dependencies.
+<h3>Apple Wallet and Google Wallet passes from one TypeScript API</h3>
 
-[![npm](https://img.shields.io/npm/v/passlet)](https://www.npmjs.com/package/passlet)
-[![CI](https://github.com/oscartrevio/passlet/actions/workflows/ci.yml/badge.svg)](https://github.com/oscartrevio/passlet/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
-[![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue.svg)](https://www.typescriptlang.org/)
+<p>Issue, update and bundle passes with zero runtime dependencies.</p>
 
-**[Live playground →](https://passlet.oscartrev.io)**
+<p>
+  <a href="https://www.npmjs.com/package/passlet"><img src="https://img.shields.io/npm/v/passlet?style=flat-square&color=000" alt="npm"></a>
+  <a href="https://github.com/oscartrevio/passlet/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/oscartrevio/passlet/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-000?style=flat-square" alt="License: MIT"></a>
+  <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-strict-000?style=flat-square" alt="TypeScript: strict"></a>
+</p>
+
+<p>
+  <a href="https://passlet.oscartrev.io"><b>Playground</b></a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/oscartrevio/passlet/wiki/Getting-Started">Docs</a>
+  &nbsp;·&nbsp;
+  <a href="examples/README.md">Examples</a>
+  &nbsp;·&nbsp;
+  <a href="packages/passlet/CHANGELOG.md">Changelog</a>
+</p>
 
 </div>
 
