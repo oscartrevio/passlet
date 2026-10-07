@@ -1,5 +1,10 @@
 import type { ParsedContent } from "../schema/content";
-import type { FieldDef, ParsedBarcode, RelevantDate } from "../schema/parts";
+import {
+	type FieldDef,
+	type ParsedBarcode,
+	type RelevantDate,
+	TIMEZONE_RE,
+} from "../schema/parts";
 import type { AppleCredentials } from "../schema/settings";
 import type { ParsedTemplate, TemplateType } from "../schema/template";
 import {
@@ -211,13 +216,23 @@ function buildSeats(
 	return number || row || section ? [seat] : undefined;
 }
 
+// Apple's date keys take W3C timestamps ("YYYY-MM-DDThh:mmTZD"), which always
+// carry a time zone designator: https://www.w3.org/TR/NOTE-datetime, cited by
+// https://developer.apple.com/documentation/walletpasses/pass (relevantDate).
+// Google takes venue-local times without one ("with or without an offset",
+// https://developers.google.com/wallet/reference/rest/v1/eventticketclass), so
+// a zone-less template time still reaches Google but stays out of pass.json
+// rather than becoming a date Wallet cannot place.
+function zoned(value: string | undefined): string | undefined {
+	return value && TIMEZONE_RE.test(value) ? value : undefined;
+}
+
 // Top-level semantics enable Wallet flight tracking and event relevance.
 function buildBoardingPassSemantics(
 	template: BoardingPassConfig,
 	values: Record<string, string | null>
 ): Record<string, unknown> | undefined {
-	const { carrier, flightNumber, origin, destination, departure, arrival } =
-		template;
+	const { carrier, flightNumber, origin, destination } = template;
 	const semantics: Record<string, unknown> = {};
 	if (carrier) {
 		semantics.airlineCode = carrier;
@@ -238,6 +253,8 @@ function buildBoardingPassSemantics(
 	if (destination) {
 		semantics.destinationAirportCode = destination;
 	}
+	const departure = zoned(template.departure);
+	const arrival = zoned(template.arrival);
 	if (departure) {
 		semantics.originalDepartureDate = departure;
 	}
@@ -270,13 +287,18 @@ function buildEventTicketSemantics(
 	values: Record<string, string | null>
 ): Record<string, unknown> {
 	const semantics: Record<string, unknown> = { eventName: template.name };
-	if (template.startsAt) {
-		semantics.eventStartDate = template.startsAt;
+	const startsAt = zoned(template.startsAt);
+	const endsAt = zoned(template.endsAt);
+	if (startsAt) {
+		semantics.eventStartDate = startsAt;
 	}
-	if (template.endsAt) {
-		semantics.eventEndDate = template.endsAt;
+	if (endsAt) {
+		semantics.eventEndDate = endsAt;
 	}
-	const venue = fieldValue(template.fields, values, "venue");
+	// A per-pass `venue` field wins over the template's venue.
+	// https://developer.apple.com/documentation/walletpasses/semantictags (venueName)
+	const venue =
+		fieldValue(template.fields, values, "venue") ?? template.venue?.name;
 	if (venue) {
 		semantics.venueName = venue;
 	}
@@ -318,6 +340,19 @@ function buildSemantics(
 	return Object.keys(merged).length > 0 ? merged : undefined;
 }
 
+// A date, or an interval when the end is known too.
+function relevantInterval(
+	start: string | undefined,
+	end: string | undefined
+): RelevantDate[] | undefined {
+	const startDate = zoned(start);
+	if (!startDate) {
+		return;
+	}
+	const endDate = zoned(end);
+	return endDate ? [{ startDate, endDate }] : [{ date: startDate }];
+}
+
 // Explicit relevance dates override event/flight times.
 function deriveRelevantDates(
 	template: ParsedTemplate
@@ -325,17 +360,26 @@ function deriveRelevantDates(
 	if (template.apple?.relevantDates) {
 		return template.apple.relevantDates;
 	}
-	if (template.type === "eventTicket" && template.startsAt) {
-		return template.endsAt
-			? [{ startDate: template.startsAt, endDate: template.endsAt }]
-			: [{ date: template.startsAt }];
+	if (template.type === "eventTicket") {
+		return relevantInterval(template.startsAt, template.endsAt);
 	}
-	if (template.type === "boardingPass" && template.departure) {
-		return template.arrival
-			? [{ startDate: template.departure, endDate: template.arrival }]
-			: [{ date: template.departure }];
+	if (template.type === "boardingPass") {
+		return relevantInterval(template.departure, template.arrival);
 	}
 	return;
+}
+
+// `relevantDates` needs iOS 18; earlier systems read only the deprecated
+// singular `relevantDate`, so it carries the first entry's start.
+// https://developer.apple.com/documentation/walletpasses/pass/relevantdates-data.dictionary
+function legacyRelevantDate(
+	relevantDates: RelevantDate[] | undefined
+): string | undefined {
+	const first = relevantDates?.[0];
+	if (!first) {
+		return;
+	}
+	return "date" in first ? first.date : first.startDate;
 }
 
 // `barcodes` (plural) wins when both are given; a lone `barcode` becomes a
@@ -362,6 +406,7 @@ function buildAppleCommonFields(
 ): Record<string, unknown> {
 	const a = template.apple;
 	const barcodes = resolveBarcodes(content);
+	const relevantDates = deriveRelevantDates(template);
 	// The deprecated singular key accepts only QR, PDF417 and Aztec.
 	const legacy = barcodes?.find((b) => isLegacyBarcodeFormat(b.format));
 	return {
@@ -383,7 +428,8 @@ function buildAppleCommonFields(
 			})
 		),
 		beacons: a?.beacons,
-		relevantDates: deriveRelevantDates(template),
+		relevantDates,
+		relevantDate: legacyRelevantDate(relevantDates),
 		// Wallet groups only boarding passes and event tickets.
 		groupingIdentifier:
 			template.type === "eventTicket" || template.type === "boardingPass"

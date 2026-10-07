@@ -53,7 +53,7 @@
     "test:integration": "vitest run --project integration",
     "test:e2e": "vitest run --project e2e",
     "test:watch": "vitest --project unit --project integration",
-    "prepack": "cp ../../README.md README.md"
+    "prepack": "cp ../../README.md ../../LICENSE ."
   },
   "devDependencies": {
     "@passlet/config": "workspace:*",

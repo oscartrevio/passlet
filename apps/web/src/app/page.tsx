@@ -134,7 +134,7 @@ export default async function Home() {
 					<h2 className="text-balance font-semibold text-(--gray-a12) text-sm">
 						How it works
 					</h2>
-					<ol className="flex flex-col gap-2.5">
+					<ol className="flex flex-col gap-1">
 						{[
 							"Configure credentials once.",
 							"Define a pass.",

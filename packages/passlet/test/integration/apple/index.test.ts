@@ -1,8 +1,6 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
-import {
-	AppleProvider,
-	type AppleProviderOptions,
-} from "../../../src/apple/index";
+import type { ApnsOptions } from "../../../src/apple/apns";
+import { type ApnsSender, AppleProvider } from "../../../src/apple/index";
 import { WalletError } from "../../../src/errors";
 import {
 	type AppleCredentials,
@@ -19,6 +17,7 @@ import {
 	parseSignature,
 	readPkpass,
 } from "../../support/apple";
+import { generateTestCerts, generateTestWwdr } from "../../support/certs";
 import { FIXTURES, type FixtureName } from "../../support/fixtures";
 
 // Payload members per fixture; manifest.json and signature are always added.
@@ -43,7 +42,7 @@ const SHA256_OID = "2.16.840.1.101.3.4.2.1";
 
 const NAMES = Object.keys(FIXTURES) as FixtureName[];
 const archives = {} as Record<FixtureName, Pkpass>;
-let credentials: AppleCredentials;
+let credentials: AppleCredentials & { signerKey: string };
 
 beforeAll(async () => {
 	credentials = appleCredentials();
@@ -133,16 +132,77 @@ describe("Wallet.create with Apple credentials", () => {
 		expect(issued.google).toBeNull();
 	});
 
-	it("rejects with the Apple provider's error when signing fails", async () => {
-		const wallet = new Wallet({
-			apple: { ...credentials, signerCert: "not-a-cert" },
-		});
+	it("signs with PEM whose newlines were escaped into an env var", async () => {
+		const envEscaped = (pem: string) => pem.replace(/\n/g, "\\n");
+		const issued = await new Wallet({
+			apple: {
+				...credentials,
+				signerCert: envEscaped(credentials.signerCert),
+				signerKey: envEscaped(credentials.signerKey),
+				wwdr: envEscaped(credentials.wwdr),
+			},
+		})
+			.loyalty(LOYALTY)
+			.create({ serialNumber: "api-002" });
+		if (!issued.apple) {
+			throw new Error("no .pkpass issued");
+		}
 
-		await expect(
-			wallet.loyalty(LOYALTY).create({ serialNumber: "api-002" })
-		).rejects.toThrow(
-			expect.objectContaining({ code: "APPLE_INVALID_SIGNER_CERT" })
+		const { signature } = await readPkpass(issued.apple);
+		expect(parseSignature(signature).verifies(credentials.signerCert)).toBe(
+			true
 		);
+	});
+});
+
+// Wallet checks the signature against the Pass Type ID certificate and the
+// WWDR intermediate that issued it, so a mismatch fails at setup.
+// https://developer.apple.com/documentation/walletpasses/building-a-pass
+describe("Apple signing credentials", () => {
+	const build = (apple: Partial<AppleCredentials>) => () =>
+		new Wallet({ apple: { ...credentials, ...apple } as AppleCredentials });
+
+	it.each([
+		{ code: "APPLE_INVALID_SIGNER_CERT", field: "signerCert" },
+		{ code: "APPLE_INVALID_SIGNER_KEY", field: "signerKey" },
+		{ code: "APPLE_INVALID_WWDR", field: "wwdr" },
+	] as const)("rejects with $code when $field is not PEM", ({
+		code,
+		field,
+	}) => {
+		expect(build({ [field]: "not-pem" })).toThrow(
+			expect.objectContaining({ code })
+		);
+	});
+
+	it("requires signerKey without an external signer", () => {
+		expect(build({ signerKey: undefined })).toThrow(
+			expect.objectContaining({ code: "APPLE_INVALID_SIGNER_KEY" })
+		);
+	});
+
+	it("rejects a signerKey that does not match signerCert", () => {
+		expect(build({ signerKey: generateTestCerts().signerKey })).toThrow(
+			expect.objectContaining({ code: "APPLE_INVALID_SIGNER_KEY" })
+		);
+	});
+
+	it.each([
+		// Same subject as the real issuer, but a different key.
+		["a same-named CA with another key", () => generateTestWwdr().cert],
+		["a certificate that issued nothing", () => generateTestCerts().signerCert],
+	])("rejects %s as wwdr", (_, wwdr) => {
+		expect(build({ wwdr: wwdr() })).toThrow(
+			expect.objectContaining({ code: "APPLE_INVALID_WWDR" })
+		);
+	});
+
+	it("checks the WWDR for an external signer too", () => {
+		const signer = { sign: () => new Uint8Array(1) };
+		expect(
+			build({ signerKey: undefined, signer, wwdr: generateTestWwdr().cert })
+		).toThrow(expect.objectContaining({ code: "APPLE_INVALID_WWDR" }));
+		expect(build({ signerKey: undefined, signer })).not.toThrow();
 	});
 });
 
@@ -152,11 +212,13 @@ describe("AppleProvider.update", () => {
 		template: FIXTURES.loyalty.pass,
 		content: { serialNumber: SERIAL },
 	};
+	let apnsOptions: ApnsOptions[] = [];
 
 	function provider(
-		send: AppleProviderOptions["sendPassUpdates"],
+		send: ApnsSender["send"],
 		registrations = memoryRegistrations()
 	): AppleProvider {
+		apnsOptions = [];
 		return new AppleProvider(
 			{
 				...credentials,
@@ -169,7 +231,10 @@ describe("AppleProvider.update", () => {
 			{
 				load: () => null,
 				resolve: () => item,
-				sendPassUpdates: send,
+				apns: (options) => {
+					apnsOptions.push(options);
+					return { send, close: () => Promise.resolve() };
+				},
 			}
 		);
 	}
@@ -192,15 +257,12 @@ describe("AppleProvider.update", () => {
 				serialNumber: "member-456",
 			},
 		]);
-		const send = vi.fn<NonNullable<AppleProviderOptions["sendPassUpdates"]>>(
-			() =>
-				Promise.resolve({
-					notified: 1,
-					failed: 0,
-					unregistered: [
-						{ deviceLibraryIdentifier: "watch", pushToken: "bb22" },
-					],
-				})
+		const send = vi.fn<ApnsSender["send"]>(() =>
+			Promise.resolve({
+				notified: 1,
+				failed: 0,
+				unregistered: [{ deviceLibraryIdentifier: "watch", pushToken: "bb22" }],
+			})
 		);
 
 		await expect(provider(send, registrations).update(item)).resolves.toEqual({
@@ -208,17 +270,17 @@ describe("AppleProvider.update", () => {
 			failed: 0,
 			removed: 1,
 		});
-		expect(send).toHaveBeenCalledWith(
-			[
-				{ deviceLibraryIdentifier: "phone", pushToken: "aa11" },
-				{ deviceLibraryIdentifier: "watch", pushToken: "bb22" },
-			],
+		expect(apnsOptions).toEqual([
 			{
 				cert: credentials.signerCert,
 				key: credentials.signerKey,
 				topic: PASS_TYPE_IDENTIFIER,
-			}
-		);
+			},
+		]);
+		expect(send).toHaveBeenCalledWith([
+			{ deviceLibraryIdentifier: "phone", pushToken: "aa11" },
+			{ deviceLibraryIdentifier: "watch", pushToken: "bb22" },
+		]);
 		expect(registrations.rows()).toEqual([
 			{
 				deviceLibraryIdentifier: "phone",
@@ -243,7 +305,7 @@ describe("AppleProvider.update", () => {
 		const send = vi.fn();
 		const plain = new AppleProvider(credentials, {
 			resolve: () => item,
-			sendPassUpdates: send,
+			apns: () => ({ send, close: () => Promise.resolve() }),
 		});
 		await expect(plain.update(item)).resolves.toBeNull();
 		expect(send).not.toHaveBeenCalled();

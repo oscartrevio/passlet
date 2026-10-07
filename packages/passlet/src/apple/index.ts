@@ -8,11 +8,16 @@ import type {
 	UpdateResult,
 } from "../schema/settings";
 import type { ParsedTemplate } from "../schema/template";
-import { sendPassUpdates } from "./apns";
+import { ApnsClient, type ApnsOptions } from "./apns";
 import { appleAuthToken } from "./auth-token";
 import { collectImages } from "./images";
 import { packagePass, packagePasses } from "./package";
 import { buildPassJson } from "./pass-json";
+import {
+	type AppleSigningIdentity,
+	parseSigningIdentity,
+	unescapePem,
+} from "./signature";
 import { buildStringsLines } from "./strings";
 import { createAppleWebService } from "./web-service";
 
@@ -26,34 +31,16 @@ const MAX_BUNDLE_BYTES = 150_000_000;
 
 type AppleUpdate = UpdateResult["apple"];
 
-interface PushCredentials {
-	cert: string;
-	key: string;
-}
+/** The part of {@link ApnsClient} the provider uses. */
+export type ApnsSender = Pick<ApnsClient, "send">;
 
 export interface AppleProviderOptions {
+	/** Creates the APNs sender instead of an {@link ApnsClient}; for tests. */
+	apns?: (options: ApnsOptions) => ApnsSender;
 	/** Reads a pass's current content; required with `webService`. */
 	load?: LoadPass;
 	/** Turn loaded content into a checked item to render for `serialNumber`. */
 	resolve(loaded: LoadedPass, serialNumber: string): PassItem;
-	/** APNs sender; replaced in tests. */
-	sendPassUpdates?: typeof sendPassUpdates;
-}
-
-export function validateAppleRequirements(template: ParsedTemplate): void {
-	if (!template.apple?.icon) {
-		throw new WalletError("APPLE_MISSING_ICON");
-	}
-	if (template.type === "boardingPass" && !template.transitType) {
-		throw new WalletError("APPLE_BOARDING_MISSING_TRANSIT_TYPE");
-	}
-	// Apple ignores appLaunchURL without associated App Store IDs.
-	if (
-		template.apple?.appLaunchURL &&
-		!template.apple.associatedStoreIdentifiers?.length
-	) {
-		throw new WalletError("APPLE_APP_LAUNCH_URL_REQUIRES_STORE_IDS");
-	}
 }
 
 /**
@@ -61,9 +48,9 @@ export function validateAppleRequirements(template: ParsedTemplate): void {
  * Messages name the setting at fault, never its value.
  */
 function resolvePushCredentials(
-	apple: AppleCredentials,
+	identity: AppleSigningIdentity,
 	webService: AppleWebService
-): PushCredentials {
+): { cert: string; key: string } {
 	let url: URL | undefined;
 	try {
 		url = new URL(webService.url);
@@ -86,44 +73,63 @@ function resolvePushCredentials(
 		);
 	}
 	if (webService.push) {
-		return webService.push;
+		return {
+			cert: unescapePem(webService.push.cert),
+			key: unescapePem(webService.push.key),
+		};
 	}
 	// APNs authenticates with TLS client certificates, so it needs the key
 	// itself; an external signer cannot stand in for it.
-	if (!apple.signerKey) {
+	if (!identity.signerKey) {
 		throw new WalletError(
 			"APPLE_WEB_SERVICE_INVALID",
 			"apple.webService.push is required when signing with apple.signer"
 		);
 	}
-	return { cert: apple.signerCert, key: apple.signerKey };
+	return {
+		cert: identity.signerCert.toString(),
+		key: identity.signerKey.export({ format: "pem", type: "pkcs8" }).toString(),
+	};
 }
 
 /**
  * Apple Wallet: signed `.pkpass` archives, plus the web service and push
  * notifications that keep issued passes current when `webService` is set.
  */
-export class AppleProvider implements Provider<Uint8Array, AppleUpdate> {
+export class AppleProvider
+	implements Provider<Uint8Array<ArrayBuffer>, AppleUpdate>
+{
 	/** Apple's pass web service; every route answers 404 without `webService`. */
 	readonly handler: (request: Request) => Promise<Response>;
 	private readonly credentials: AppleCredentials;
-	private readonly push: PushCredentials | undefined;
-	private readonly send: typeof sendPassUpdates;
+	private readonly identity: AppleSigningIdentity;
+	private readonly apns: ApnsSender | undefined;
+	// Each template's images, loaded once per provider.
+	private readonly images = new WeakMap<
+		ParsedTemplate,
+		Promise<Record<string, Uint8Array>>
+	>();
 
 	/**
-	 * @throws {WalletError} `APPLE_WEB_SERVICE_INVALID` if `webService` is
+	 * @throws {WalletError} `APPLE_INVALID_SIGNER_CERT`, `APPLE_INVALID_WWDR`
+	 * or `APPLE_INVALID_SIGNER_KEY` if the signing credentials are unusable or
+	 * do not belong together, `APPLE_WEB_SERVICE_INVALID` if `webService` is
 	 * malformed, or `UPDATES_NOT_CONFIGURED` if it is set without `load`.
 	 */
 	constructor(credentials: AppleCredentials, options: AppleProviderOptions) {
 		this.credentials = credentials;
-		this.send = options.sendPassUpdates ?? sendPassUpdates;
+		this.identity = parseSigningIdentity(credentials);
 		const { webService } = credentials;
 		if (!webService) {
-			this.push = undefined;
+			this.apns = undefined;
 			this.handler = () => Promise.resolve(new Response(null, { status: 404 }));
 			return;
 		}
-		this.push = resolvePushCredentials(credentials, webService);
+		const push = resolvePushCredentials(this.identity, webService);
+		const apnsOptions = { ...push, topic: credentials.passTypeIdentifier };
+		this.apns = options.apns
+			? options.apns(apnsOptions)
+			: new ApnsClient(apnsOptions);
 		const { load, resolve } = options;
 		if (!load) {
 			throw new WalletError(
@@ -137,6 +143,7 @@ export class AppleProvider implements Provider<Uint8Array, AppleUpdate> {
 			registrations: webService.registrations,
 			load,
 			onLog: webService.onLog,
+			onError: webService.onError,
 			renderPass: async (loaded, serialNumber) =>
 				await this.issue(resolve(loaded, serialNumber)),
 		});
@@ -146,6 +153,16 @@ export class AppleProvider implements Provider<Uint8Array, AppleUpdate> {
 		if (!template.apple?.icon) {
 			throw new WalletError("APPLE_MISSING_ICON");
 		}
+		if (template.type === "boardingPass" && !template.transitType) {
+			throw new WalletError("APPLE_BOARDING_MISSING_TRANSIT_TYPE");
+		}
+		// Apple ignores appLaunchURL without associated App Store IDs.
+		if (
+			template.apple.appLaunchURL &&
+			!template.apple.associatedStoreIdentifiers?.length
+		) {
+			throw new WalletError("APPLE_APP_LAUNCH_URL_REQUIRES_STORE_IDS");
+		}
 	}
 
 	checkContent(): void {
@@ -153,34 +170,26 @@ export class AppleProvider implements Provider<Uint8Array, AppleUpdate> {
 	}
 
 	/** Sign one `.pkpass`. */
-	async issue(item: PassItem): Promise<Uint8Array> {
-		validateAppleRequirements(item.template);
-		return await this.sign(item, await collectImages(item.template));
+	async issue(item: PassItem): Promise<Uint8Array<ArrayBuffer>> {
+		return await this.sign(
+			item,
+			await collectImages(item.template, this.images)
+		);
 	}
 
 	/**
-	 * Sign one `.pkpass` per item and bundle them into a `.pkpasses`, loading
-	 * each distinct template's images once.
+	 * Sign one `.pkpass` per item and bundle them into a `.pkpasses`.
 	 *
 	 * @throws {WalletError} `PASS_BUNDLE_INVALID` past Apple's 150 MB bundle cap.
 	 */
-	async issueBundle(items: readonly PassItem[]): Promise<Uint8Array> {
-		for (const { template } of items) {
-			validateAppleRequirements(template);
-		}
-		const images = new Map<
-			ParsedTemplate,
-			Promise<Record<string, Uint8Array>>
-		>();
+	async issueBundle(
+		items: readonly PassItem[]
+	): Promise<Uint8Array<ArrayBuffer>> {
 		const passes = await Promise.all(
-			items.map(async (item) => {
-				let files = images.get(item.template);
-				if (!files) {
-					files = collectImages(item.template);
-					images.set(item.template, files);
-				}
-				return await this.sign(item, await files);
-			})
+			items.map(
+				async (item) =>
+					await this.sign(item, await collectImages(item.template, this.images))
+			)
 		);
 		const bundle = packagePasses(passes);
 		if (bundle.byteLength > MAX_BUNDLE_BYTES) {
@@ -199,16 +208,13 @@ export class AppleProvider implements Provider<Uint8Array, AppleUpdate> {
 	 * apply. `null` without `webService`.
 	 */
 	async update({ content }: PassItem): Promise<AppleUpdate> {
-		const { webService, passTypeIdentifier } = this.credentials;
-		if (!(webService && this.push)) {
+		const { webService } = this.credentials;
+		if (!(webService && this.apns)) {
 			return null;
 		}
 		const { serialNumber } = content;
 		const devices = await webService.registrations.devices(serialNumber);
-		const { notified, failed, unregistered } = await this.send(devices, {
-			...this.push,
-			topic: passTypeIdentifier,
-		});
+		const { notified, failed, unregistered } = await this.apns.send(devices);
 		// Pushes are deduplicated by token, so drop every device holding a token
 		// APNs no longer accepts, not only the one reported.
 		const gone = new Set(unregistered.map(({ pushToken }) => pushToken));
@@ -229,7 +235,7 @@ export class AppleProvider implements Provider<Uint8Array, AppleUpdate> {
 	private async sign(
 		{ template, content }: PassItem,
 		images: Record<string, Uint8Array>
-	): Promise<Uint8Array> {
+	): Promise<Uint8Array<ArrayBuffer>> {
 		const { webService } = this.credentials;
 		const encoder = new TextEncoder();
 		const files: Record<string, Uint8Array> = {};
@@ -260,6 +266,6 @@ export class AppleProvider implements Provider<Uint8Array, AppleUpdate> {
 		}
 
 		Object.assign(files, images);
-		return await packagePass(files, this.credentials);
+		return await packagePass(files, this.identity);
 	}
 }

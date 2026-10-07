@@ -1,19 +1,11 @@
-import type { KeyObject } from "node:crypto";
 import { WalletError, type WalletValidationIssue } from "../errors";
 import type { PassItem, Provider } from "../providers";
 import type { ParsedContent } from "../schema/content";
+import type { ParsedGooglePassMessage } from "../schema/parts";
 import type { GoogleCredentials } from "../schema/settings";
 import type { ParsedTemplate, TemplateType } from "../schema/template";
 import { buildClassBody } from "./class-body";
-import type { GoogleObjectType } from "./client";
-import {
-	ensureClass,
-	importGoogleKey,
-	insertObject,
-	patchObject,
-	publishClass,
-	upsertObject,
-} from "./client";
+import { GoogleClient, type GoogleObjectType } from "./client";
 import { signJwt } from "./jwt";
 import { buildObjectBody } from "./object-body";
 import { transitOptions } from "./utils";
@@ -36,10 +28,27 @@ const OBJECT_TYPE = {
 	generic: "genericObject",
 } as const satisfies Record<TemplateType, string>;
 
-// Google object IDs are `issuerId.serialNumber`, and the identifier "can only
-// include alphanumeric characters, ., _, or -".
+// Class and object IDs are `issuerId.identifier`, where the identifier
+// "should only include alphanumeric characters, '.', '_', or '-'". It is the
+// template ID for a class and the serial number for an object.
+// https://developers.google.com/wallet/reference/rest/v1/loyaltyclass/update
 // https://developers.google.com/wallet/reference/rest/v1/genericobject
-const SERIAL_RE = /^[A-Za-z0-9._-]+$/;
+const GOOGLE_ID_RE = /^[A-Za-z0-9._-]+$/;
+
+function checkIdentifier(
+	code: "PASS_CONFIG_INVALID" | "CREATE_CONFIG_INVALID",
+	key: "id" | "serialNumber",
+	value: string
+): void {
+	if (GOOGLE_ID_RE.test(value)) {
+		return;
+	}
+	const issue: WalletValidationIssue = {
+		path: [key],
+		message: `Google Wallet allows only letters, digits, '.', '_' and '-' in ${key === "id" ? "template IDs" : "serial numbers"}`,
+	};
+	throw new WalletError(code, `${key}: ${issue.message}`, { issues: [issue] });
+}
 
 function objectType(template: ParsedTemplate): GoogleObjectType {
 	return transitOptions(template)
@@ -47,15 +56,49 @@ function objectType(template: ParsedTemplate): GoogleObjectType {
 		: OBJECT_TYPE[template.type];
 }
 
-export function validateGoogleRequirements(template: ParsedTemplate): void {
-	// Google loyalty classes require a programLogo URL — the API returns 400 without it
-	if (template.type === "loyalty" && !template.google?.logo) {
-		throw new WalletError(
-			"GOOGLE_MISSING_LOGO",
-			"Google Wallet loyalty passes require a logo URL (programLogo) in google.logo"
-		);
+/** One object to write: its ids, its class's template, and its body. */
+interface ObjectWrite {
+	body: Record<string, unknown>;
+	classId: string;
+	objectId: string;
+	objectType: GoogleObjectType;
+	template: ParsedTemplate;
+}
+
+/**
+ * Google Wallet: classes and objects written through the Wallet REST API, and
+ * save links signed as JWTs that point at those objects.
+ */
+export class GoogleProvider implements Provider<string, "updated" | "created"> {
+	private readonly credentials: GoogleCredentials;
+	private readonly client: GoogleClient;
+
+	/**
+	 * @throws {WalletError} `GOOGLE_INVALID_PRIVATE_KEY` if the service account
+	 * key is not an RSA PEM private key.
+	 */
+	constructor(credentials: GoogleCredentials) {
+		this.credentials = credentials;
+		this.client = new GoogleClient(credentials);
 	}
-	if (template.type === "boardingPass") {
+
+	/**
+	 * Every Google requirement a template alone decides, so configuration
+	 * errors surface at construction rather than on the first request.
+	 * Requirements on recipient content are checked when a pass is written.
+	 */
+	checkTemplate(template: ParsedTemplate): void {
+		checkIdentifier("PASS_CONFIG_INVALID", "id", template.id);
+		// Google loyalty classes require a programLogo URL — the API returns 400 without it
+		if (template.type === "loyalty" && !template.google?.logo) {
+			throw new WalletError(
+				"GOOGLE_MISSING_LOGO",
+				"Google Wallet loyalty passes require a logo URL (programLogo) in google.logo"
+			);
+		}
+		if (template.type !== "boardingPass") {
+			return;
+		}
 		if (template.google?.transit) {
 			// transitClass requires logo, transitType, issuerName, and reviewStatus.
 			// transitType is always derived, the other two are always emitted — only
@@ -78,61 +121,12 @@ export function validateGoogleRequirements(template: ParsedTemplate): void {
 			);
 		}
 	}
-}
-
-/** One object to write: its ids, its class's template, and its body. */
-interface ObjectWrite {
-	body: Record<string, unknown>;
-	classId: string;
-	objectId: string;
-	objectType: GoogleObjectType;
-	template: ParsedTemplate;
-}
-
-/**
- * Google Wallet: classes and objects written through the Wallet REST API, and
- * save links signed as JWTs that point at those objects.
- */
-export class GoogleProvider implements Provider<string, "updated" | "created"> {
-	private readonly credentials: GoogleCredentials;
-
-	constructor(credentials: GoogleCredentials) {
-		this.credentials = credentials;
-	}
-
-	/**
-	 * Template requirements that need no flight data, so configuration errors
-	 * surface before the first request. The rest are checked at issue time.
-	 */
-	checkTemplate(template: ParsedTemplate): void {
-		// Google loyalty classes require a programLogo URL — the API returns 400 without it.
-		if (template.type === "loyalty" && !template.google?.logo) {
-			throw new WalletError("GOOGLE_MISSING_LOGO");
-		}
-		// transitClass requires a logo. The air flightClass vertical does not, so
-		// only the transit opt-in is checked here.
-		if (
-			template.type === "boardingPass" &&
-			template.google?.transit &&
-			!template.google.logo
-		) {
-			throw new WalletError("GOOGLE_MISSING_LOGO");
-		}
-	}
 
 	checkContent(content: ParsedContent): void {
-		if (SERIAL_RE.test(content.serialNumber)) {
-			return;
-		}
-		const issue: WalletValidationIssue = {
-			path: ["serialNumber"],
-			message:
-				"Google Wallet allows only letters, digits, '.', '_' and '-' in serial numbers",
-		};
-		throw new WalletError(
+		checkIdentifier(
 			"CREATE_CONFIG_INVALID",
-			`serialNumber: ${issue.message}`,
-			{ issues: [issue] }
+			"serialNumber",
+			content.serialNumber
 		);
 	}
 
@@ -153,11 +147,10 @@ export class GoogleProvider implements Provider<string, "updated" | "created"> {
 		// keeps the link short; Google suggests it past 1,800 characters.
 		// https://developers.google.com/wallet/retail/loyalty-cards/overview/add-to-google-wallet-flow
 		// https://developers.google.com/wallet/tickets/events/use-cases/save-multiple-passes
-		const privateKey = importGoogleKey(this.credentials);
 		const writes = items.map((item) => this.prepare(item));
-		await this.ensureClasses(writes, privateKey);
+		await this.ensureClasses(writes);
 		for (const { objectType: type, objectId, body } of writes) {
-			await insertObject(type, objectId, body, this.credentials, privateKey);
+			await this.client.insertObject(type, objectId, body);
 		}
 
 		// One array of `{ id, classId }` refs per object type.
@@ -181,7 +174,7 @@ export class GoogleProvider implements Provider<string, "updated" | "created"> {
 		};
 
 		try {
-			return signJwt(payload, privateKey);
+			return signJwt(payload, this.client.privateKey);
 		} catch (cause) {
 			throw new WalletError("GOOGLE_SIGNING_FAILED", undefined, {
 				cause: cause instanceof Error ? cause : undefined,
@@ -197,22 +190,18 @@ export class GoogleProvider implements Provider<string, "updated" | "created"> {
 		item: PassItem,
 		options: { notify?: boolean }
 	): Promise<"updated" | "created"> {
-		const privateKey = importGoogleKey(this.credentials);
 		const write = this.prepare(item);
-		await this.ensureClasses([write], privateKey);
-		return await upsertObject(
+		await this.ensureClasses([write]);
+		return await this.client.upsertObject(
 			write.objectType,
 			write.objectId,
 			write.body,
-			this.credentials,
-			privateKey,
 			options
 		);
 	}
 
 	// Built before any request, so invalid recipient data never half-writes.
 	private prepare({ template, content }: PassItem): ObjectWrite {
-		validateGoogleRequirements(template);
 		const classId = `${this.credentials.issuerId}.${template.id}`;
 		const objectId = `${this.credentials.issuerId}.${content.serialNumber}`;
 		return {
@@ -225,10 +214,7 @@ export class GoogleProvider implements Provider<string, "updated" | "created"> {
 	}
 
 	/** Create each missing class once, however many objects share it. */
-	private async ensureClasses(
-		writes: readonly ObjectWrite[],
-		privateKey: KeyObject
-	): Promise<void> {
+	private async ensureClasses(writes: readonly ObjectWrite[]): Promise<void> {
 		const classes = new Map<string, ParsedTemplate>();
 		for (const { classId, template } of writes) {
 			if (!classes.has(classId)) {
@@ -236,38 +222,44 @@ export class GoogleProvider implements Provider<string, "updated" | "created"> {
 			}
 		}
 		for (const [classId, template] of classes) {
-			await ensureClass(
+			await this.client.ensureClass(
 				transitOptions(template) ? "transitClass" : CLASS_TYPE[template.type],
 				classId,
-				buildClassBody(template),
-				this.credentials,
-				privateKey
+				buildClassBody(template)
 			);
 		}
 	}
 
 	/** Overwrite the template's class with its current content. */
 	async publish(template: ParsedTemplate): Promise<void> {
-		validateGoogleRequirements(template);
-		const privateKey = importGoogleKey(this.credentials);
-		await publishClass(
+		await this.client.publishClass(
 			transitOptions(template) ? "transitClass" : CLASS_TYPE[template.type],
 			`${this.credentials.issuerId}.${template.id}`,
-			buildClassBody(template),
-			this.credentials,
-			privateKey
+			buildClassBody(template)
 		);
 	}
 
 	/** Move a pass's object to the `EXPIRED` state. */
 	async expire(template: ParsedTemplate, serialNumber: string): Promise<void> {
-		const privateKey = importGoogleKey(this.credentials);
-		await patchObject(
+		checkIdentifier("CREATE_CONFIG_INVALID", "serialNumber", serialNumber);
+		await this.client.patchObject(
 			objectType(template),
 			`${this.credentials.issuerId}.${serialNumber}`,
-			{ state: "EXPIRED" },
-			this.credentials,
-			privateKey
+			{ state: "EXPIRED" }
+		);
+	}
+
+	/** Add a message to a pass's object; TEXT_AND_NOTIFY also pushes it. */
+	async sendMessage(
+		template: ParsedTemplate,
+		serialNumber: string,
+		message: ParsedGooglePassMessage
+	): Promise<void> {
+		checkIdentifier("CREATE_CONFIG_INVALID", "serialNumber", serialNumber);
+		await this.client.addObjectMessage(
+			objectType(template),
+			`${this.credentials.issuerId}.${serialNumber}`,
+			message
 		);
 	}
 }

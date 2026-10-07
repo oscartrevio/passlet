@@ -127,13 +127,38 @@ function buildTransitObjectFields(
 	};
 }
 
+// Money.micros is an int64 string: "$1 USD would be represented as 1000000
+// micros". Parsed as decimal digits, never through a float, so the amount is
+// exact and a non-number is rejected before any request.
+// https://developers.google.com/wallet/reference/rest/v1/Money
+const DECIMAL_RE = /^(\d+)(?:\.(\d{1,6}))?$/;
+
+function balanceMicros(raw: string): string {
+	const match = DECIMAL_RE.exec(raw.trim());
+	if (!match) {
+		const issue = {
+			path: ["values", "balance"],
+			message:
+				'Google Wallet needs the gift card balance as a decimal number with up to 6 decimal places, e.g. "50.00"',
+		};
+		throw new WalletError(
+			"CREATE_CONFIG_INVALID",
+			`values.balance: ${issue.message}`,
+			{ issues: [issue] }
+		);
+	}
+	const [, whole = "", fraction = ""] = match;
+	return String(BigInt(whole) * 1_000_000n + BigInt(fraction.padEnd(6, "0")));
+}
+
 function buildGiftCardObjectFields(
 	template: Extract<ParsedTemplate, { type: "giftCard" }>,
 	fields: FieldDef[],
 	values: Record<string, string | null>,
 	serialNumber: string
 ): Record<string, unknown> {
-	const raw = resolveValueByKey(fields, values, "balance");
+	const balanceField = fields.find((field) => field.key === "balance");
+	const raw = balanceField && resolveFieldValue(balanceField, values);
 	// Google requires cardNumber; use the serial number when no field supplies it.
 	const cardNumber =
 		resolveValueByKey(fields, values, "cardNumber") ?? serialNumber;
@@ -143,8 +168,10 @@ function buildGiftCardObjectFields(
 			raw == null
 				? undefined
 				: {
-						micros: String(Math.round(Number.parseFloat(raw) * 1_000_000)),
-						currencyCode: template.currency ?? "USD",
+						micros: balanceMicros(raw),
+						// The balance field's Apple currencyCode names the same currency.
+						currencyCode:
+							template.currency ?? balanceField?.currencyCode ?? "USD",
 					},
 	};
 }

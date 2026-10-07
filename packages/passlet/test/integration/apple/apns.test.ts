@@ -5,12 +5,13 @@ import {
 	type Http2SecureServer,
 	type IncomingHttpHeaders,
 	type SecureClientSessionOptions,
+	type ServerHttp2Session,
 } from "node:http2";
 import type { AddressInfo } from "node:net";
 import type { TLSSocket } from "node:tls";
 import { inspect } from "node:util";
 import {
-	afterAll,
+	afterEach,
 	beforeAll,
 	beforeEach,
 	describe,
@@ -18,7 +19,7 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { sendPassUpdates } from "../../../src/apple/apns";
+import { ApnsClient } from "../../../src/apple/apns";
 import { WalletError } from "../../../src/errors";
 import { createSelfSigned, type SelfSigned } from "../../support/x509";
 
@@ -52,19 +53,31 @@ interface ReceivedPush {
 	headers: IncomingHttpHeaders;
 }
 
-/** APNs reply per device token: status plus the error `reason`, if any. */
-type Reply = [status: number, reason?: string];
+/**
+ * APNs reply per device token: status plus the error `reason`, if any, or
+ * `"drop"` to tear down the connection without answering.
+ */
+type Reply = [status: number, reason?: string] | "drop" | "goaway";
 
 const pushIdentity = selfSigned(TOPIC);
 const serverIdentity = selfSigned("apns.test");
 const replies = new Map<string, Reply>();
 let received: ReceivedPush[] = [];
-let sessions = 0;
+let sessions: ServerHttp2Session[] = [];
 let server: Http2SecureServer;
 let origin: string;
+let client: ApnsClient;
 
-beforeAll(async () => {
+beforeAll(() => {
 	trust.ca = serverIdentity.cert;
+});
+
+// A server and a client per test, so each test counts only its own
+// connections.
+beforeEach(async () => {
+	replies.clear();
+	received = [];
+	sessions = [];
 	server = createSecureServer({
 		...serverIdentity,
 		// Like APNs, refuse any client that doesn't present the push certificate.
@@ -75,8 +88,8 @@ beforeAll(async () => {
 		// makes every multi-token test queue behind it.
 		settings: { maxConcurrentStreams: 1 },
 	});
-	server.on("session", () => {
-		sessions++;
+	server.on("session", (session) => {
+		sessions.push(session);
 	});
 	server.on("stream", (stream, headers) => {
 		let body = "";
@@ -92,7 +105,19 @@ beforeAll(async () => {
 				headers,
 			});
 			const token = String(headers[":path"]).replace("/3/device/", "");
-			const [status, reason] = replies.get(token) ?? [200];
+			const reply = replies.get(token) ?? [200];
+			if (reply === "drop") {
+				stream.session?.destroy();
+				return;
+			}
+			if (reply === "goaway") {
+				// Answer, then end the connection gracefully the way APNs does:
+				// streams already open finish, new ones are refused.
+				stream.respond({ ":status": 200 }, { endStream: true });
+				stream.session?.close();
+				return;
+			}
+			const [status, reason] = reply;
 			if (reason === undefined) {
 				stream.respond({ ":status": status }, { endStream: true });
 				return;
@@ -108,26 +133,28 @@ beforeAll(async () => {
 	server.listen(0, "127.0.0.1");
 	await once(server, "listening");
 	origin = `https://127.0.0.1:${(server.address() as AddressInfo).port}`;
+	client = apns({ ...pushIdentity, origin });
 });
 
-afterAll(async () => {
+afterEach(async () => {
+	for (const session of sessions) {
+		session.destroy();
+	}
 	server.close();
 	await once(server, "close");
 });
 
-beforeEach(() => {
-	replies.clear();
-	received = [];
-	sessions = 0;
-});
+function apns(options: { cert: string; key: string; origin: string }) {
+	return new ApnsClient({ ...options, topic: TOPIC });
+}
 
 function send(
 	targets: { deviceLibraryIdentifier: string; pushToken: string }[]
 ) {
-	return sendPassUpdates(targets, { ...pushIdentity, topic: TOPIC, origin });
+	return client.send(targets);
 }
 
-describe("sendPassUpdates", () => {
+describe("ApnsClient", () => {
 	it("sends Apple's documented Wallet push: POST /3/device/<token>, apns-topic, {} body", async () => {
 		await expect(
 			send([{ deviceLibraryIdentifier: "d1", pushToken: "a1b2" }])
@@ -185,7 +212,7 @@ describe("sendPassUpdates", () => {
 		]);
 		expect(received).toHaveLength(10);
 		// All pushes share one connection.
-		expect(sessions).toBe(1);
+		expect(sessions).toHaveLength(1);
 	});
 
 	it("pushes each token once, even when several devices share it", async () => {
@@ -217,7 +244,7 @@ describe("sendPassUpdates", () => {
 			failed: 0,
 			unregistered: [],
 		});
-		expect(sessions).toBe(0);
+		expect(sessions).toHaveLength(0);
 	});
 
 	it("never sends a token that isn't hex, and reports it as unregistered", async () => {
@@ -230,7 +257,7 @@ describe("sendPassUpdates", () => {
 			failed: 0,
 			unregistered: [target],
 		});
-		expect(sessions).toBe(0);
+		expect(sessions).toHaveLength(0);
 	});
 
 	it("throws APPLE_PUSH_FAILED on 403 without exposing key material", async () => {
@@ -254,14 +281,9 @@ describe("sendPassUpdates", () => {
 
 	it("throws APPLE_PUSH_FAILED when APNs refuses the client certificate", async () => {
 		const stranger = selfSigned(TOPIC);
-		const error = await sendPassUpdates(
-			[{ deviceLibraryIdentifier: "d1", pushToken: "a1" }],
-			{
-				...stranger,
-				topic: TOPIC,
-				origin,
-			}
-		).catch((e: unknown) => e);
+		const error = await apns({ ...stranger, origin })
+			.send([{ deviceLibraryIdentifier: "d1", pushToken: "a1" }])
+			.catch((e: unknown) => e);
 
 		expect(error).toBeInstanceOf(WalletError);
 		expect(error).toMatchObject({ code: "APPLE_PUSH_FAILED" });
@@ -280,11 +302,87 @@ describe("sendPassUpdates", () => {
 		await once(closed, "close");
 
 		await expect(
-			sendPassUpdates([{ deviceLibraryIdentifier: "d1", pushToken: "a1" }], {
-				...pushIdentity,
-				topic: TOPIC,
-				origin: `https://127.0.0.1:${port}`,
-			})
+			apns({ ...pushIdentity, origin: `https://127.0.0.1:${port}` }).send([
+				{ deviceLibraryIdentifier: "d1", pushToken: "a1" },
+			])
 		).rejects.toMatchObject({ code: "APPLE_PUSH_FAILED" });
+	});
+
+	// "Reuse a connection as long as possible." (Sending notification
+	// requests to APNs)
+	it("keeps one connection open across sends", async () => {
+		await send([{ deviceLibraryIdentifier: "d1", pushToken: "a1" }]);
+		await expect(
+			send([{ deviceLibraryIdentifier: "d2", pushToken: "b2" }])
+		).resolves.toEqual({ notified: 1, failed: 0, unregistered: [] });
+
+		expect(received.map((push) => push.headers[":path"])).toEqual([
+			"/3/device/a1",
+			"/3/device/b2",
+		]);
+		expect(sessions).toHaveLength(1);
+	});
+
+	it("opens a new connection once APNs closes the old one", async () => {
+		await send([{ deviceLibraryIdentifier: "d1", pushToken: "a1" }]);
+		// Graceful close: GOAWAY, as APNs ends connections.
+		sessions[0]?.close();
+		await once(sessions[0] as ServerHttp2Session, "close");
+
+		await expect(
+			send([{ deviceLibraryIdentifier: "d2", pushToken: "b2" }])
+		).resolves.toEqual({ notified: 1, failed: 0, unregistered: [] });
+		expect(sessions).toHaveLength(2);
+	});
+
+	it("keeps every answer when the connection drops mid-send, retrying the rest once", async () => {
+		replies.set("dead", [410, "Unregistered"]);
+		replies.set("ee", "drop");
+		const result = await send([
+			{ deviceLibraryIdentifier: "d1", pushToken: "01" },
+			{ deviceLibraryIdentifier: "d2", pushToken: "dead" },
+			{ deviceLibraryIdentifier: "d3", pushToken: "ee" },
+		]);
+
+		expect(result).toEqual({
+			notified: 1,
+			failed: 1,
+			unregistered: [{ deviceLibraryIdentifier: "d2", pushToken: "dead" }],
+		});
+		// Retried once, on a second connection.
+		expect(
+			received.filter((push) => push.headers[":path"] === "/3/device/ee")
+		).toHaveLength(2);
+		expect(sessions).toHaveLength(2);
+	});
+
+	it("retries on a new connection the pushes APNs refused after its GOAWAY", async () => {
+		replies.set("aa", "goaway");
+		const result = await send([
+			{ deviceLibraryIdentifier: "d1", pushToken: "aa" },
+			{ deviceLibraryIdentifier: "d2", pushToken: "bb" },
+			{ deviceLibraryIdentifier: "d3", pushToken: "cc" },
+		]);
+
+		expect(result).toEqual({ notified: 3, failed: 0, unregistered: [] });
+		expect(sessions).toHaveLength(2);
+	});
+
+	it("shares one new connection between sends that start together after a close", async () => {
+		// A 403 makes passlet close the connection; it stays cached until the
+		// close completes, so the next sends find it closing.
+		replies.set("bad", [403, "BadCertificate"]);
+		await send([{ deviceLibraryIdentifier: "d1", pushToken: "bad" }]).catch(
+			() => undefined
+		);
+
+		const results = await Promise.all([
+			send([{ deviceLibraryIdentifier: "d2", pushToken: "b2" }]),
+			send([{ deviceLibraryIdentifier: "d3", pushToken: "c3" }]),
+			send([{ deviceLibraryIdentifier: "d4", pushToken: "d4" }]),
+		]);
+
+		expect(results.map((r) => r.notified)).toEqual([1, 1, 1]);
+		expect(sessions).toHaveLength(2);
 	});
 });

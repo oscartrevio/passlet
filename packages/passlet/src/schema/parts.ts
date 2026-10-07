@@ -74,9 +74,10 @@ export const dataDetectorTypeSchema = z.enum([
 export const semanticTagsSchema = z.record(z.string(), z.unknown());
 
 // Apple requires a time zone on any value rendered with dateStyle/timeStyle
-// ("A date or time value needs to include a time zone" — PassFieldContent).
+// ("A date or time value needs to include a time zone" — PassFieldContent)
+// and on every pass.json date, which are W3C timestamps.
 // Matches a trailing UTC designator (Z) or numeric offset (±HH:MM / ±HHMM).
-const TIMEZONE_RE = /(Z|[+-]\d{2}:?\d{2})$/;
+export const TIMEZONE_RE = /(Z|[+-]\d{2}:?\d{2})$/;
 
 export const fieldDefSchema = z
 	.object({
@@ -205,19 +206,24 @@ export const beaconSchema = z.object({
 // Entry for relevantDates (replaces the deprecated relevantDate).
 // Apple accepts either a single moment ({ date }) or an interval
 // ({ startDate, endDate }) — and requires endDate whenever startDate is given.
+// Values are W3C timestamps, so a UTC offset is allowed and a time zone is
+// required; Apple's own examples use "2025-12-09T13:00-07:00".
+// https://developer.apple.com/documentation/walletpasses/creating-an-event-pass-using-semantic-tags
+// W3C timestamps may stop at minutes, which zod's datetime only takes alone.
+const relevantDateTime = (example: string) =>
+	z.union(
+		[
+			z.iso.datetime({ offset: true }),
+			z.iso.datetime({ offset: true, precision: -1 }),
+		],
+		{ message: `must be an ISO datetime with a time zone e.g. "${example}"` }
+	);
+
 export const relevantDateSchema = z.union([
+	z.object({ date: relevantDateTime("2024-06-01T20:00:00Z") }),
 	z.object({
-		date: z.iso.datetime({
-			message: 'must be an ISO datetime e.g. "2024-06-01T20:00:00Z"',
-		}),
-	}),
-	z.object({
-		startDate: z.iso.datetime({
-			message: 'must be an ISO datetime e.g. "2024-06-01T20:00:00Z"',
-		}),
-		endDate: z.iso.datetime({
-			message: 'must be an ISO datetime e.g. "2024-06-01T23:00:00Z"',
-		}),
+		startDate: relevantDateTime("2024-06-01T20:00:00-07:00"),
+		endDate: relevantDateTime("2024-06-01T23:00:00-07:00"),
 	}),
 ]);
 
@@ -228,6 +234,8 @@ export const googleMessageSchema = z.object({
 	body: z.string(),
 	id: z.optional(z.string()),
 	// TEXT (default, in-app only) or TEXT_AND_NOTIFY (in-app + Android push).
+	// Google pushes TEXT_AND_NOTIFY only for messages sent with
+	// PassTemplate.sendMessage (its AddMessage API).
 	// Google's EXPIRATION_NOTIFICATION value is documented as unsupported, so it
 	// is intentionally not offered here.
 	messageType: z._default(z.enum(["TEXT", "TEXT_AND_NOTIFY"]), "TEXT"),
@@ -444,7 +452,10 @@ export interface GooglePassMessage {
 	};
 	header: string;
 	id?: string;
-	/** Defaults to `"TEXT"`. */
+	/**
+	 * Defaults to `"TEXT"`. `"TEXT_AND_NOTIFY"` pushes a notification only when
+	 * sent with `PassTemplate.sendMessage`.
+	 */
 	messageType?: "TEXT" | "TEXT_AND_NOTIFY";
 }
 /** A message as validated, with its type default applied. */

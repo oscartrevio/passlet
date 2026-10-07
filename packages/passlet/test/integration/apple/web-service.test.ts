@@ -66,16 +66,18 @@ function setup(
 		async (serialNumber: string) => passes[serialNumber] ?? null
 	);
 	const renderPass = vi.fn(async () => PKPASS);
+	const onError = vi.fn();
 	const onLog = vi.fn();
 	const handler = createAppleWebService({
 		load,
+		onError,
 		onLog,
 		passTypeIdentifier: PASS_TYPE,
 		registrations,
 		renderPass,
 		secret: SECRET,
 	});
-	return { handler, load, onLog, registrations, renderPass };
+	return { handler, load, onError, onLog, registrations, renderPass };
 }
 
 function auth(serialNumber: string, secret = SECRET): Record<string, string> {
@@ -363,6 +365,54 @@ describe("get the list of updatable passes", () => {
 		expect(response.status).toBe(204);
 		expect(registrations.serialNumbers).not.toHaveBeenCalled();
 	});
+
+	describe("with registrations.updatablePasses", () => {
+		function withUpdatablePasses() {
+			const context = setup(passes, registered);
+			// Unfiltered on purpose: an adapter may skip the date filter.
+			const updatablePasses = vi.fn(async () =>
+				Object.entries(passes).map(([serialNumber, { updatedAt }]) => ({
+					serialNumber,
+					updatedAt,
+				}))
+			);
+			Object.assign(context.registrations, { updatablePasses });
+			return { ...context, updatablePasses };
+		}
+
+		it("answers from it without loading any pass", async () => {
+			const { handler, load, registrations, updatablePasses } =
+				withUpdatablePasses();
+			const tag = String(Date.parse("2026-01-15T00:00:00.000Z"));
+			const response = await handler(
+				new Request(`${listUrl}?passesUpdatedSince=${tag}`)
+			);
+
+			expect(await response.json()).toEqual({
+				lastUpdated: String(Date.parse("2026-03-01T00:00:00.000Z")),
+				serialNumbers: ["SN-2", "SN-3"],
+			});
+			expect(updatablePasses).toHaveBeenCalledExactlyOnceWith(
+				DEVICE,
+				new Date(Number(tag))
+			);
+			expect(load).not.toHaveBeenCalled();
+			expect(registrations.serialNumbers).not.toHaveBeenCalled();
+		});
+
+		it("passes no date on a device's first ask", async () => {
+			const { handler, updatablePasses } = withUpdatablePasses();
+			const response = await handler(new Request(listUrl));
+
+			expect(await response.json()).toMatchObject({
+				serialNumbers: ["SN-1", "SN-2", "SN-3"],
+			});
+			expect(updatablePasses).toHaveBeenCalledExactlyOnceWith(
+				DEVICE,
+				undefined
+			);
+		});
+	});
 });
 
 describe("send an updated pass", () => {
@@ -542,8 +592,8 @@ describe("failures", () => {
 			"GET",
 			`${BASE}/devices/${DEVICE}/registrations/${PASS_TYPE}`,
 		],
-	])("answers a bare 500 when %s throws (%s %s)", async (source, method, url) => {
-		const { handler, load, registrations, renderPass } = setup({
+	])("answers a bare 500 when %s throws (%s %s), reporting the error to onError", async (source, method, url) => {
+		const { handler, load, onError, registrations, renderPass } = setup({
 			"SN-1": loaded("2026-05-01T00:00:00Z"),
 		});
 		const error = new Error(`database password hunter2 (${source})`);
@@ -554,16 +604,35 @@ describe("failures", () => {
 		renderPass.mockRejectedValue(error);
 		registrations.add.mockRejectedValue(error);
 		registrations.serialNumbers.mockRejectedValue(error);
-		const response = await handler(
-			new Request(url, {
-				body:
-					method === "POST" ? JSON.stringify({ pushToken: PUSH_TOKEN }) : null,
-				headers: auth("SN-1"),
-				method,
-			})
-		);
+		const request = new Request(url, {
+			body:
+				method === "POST" ? JSON.stringify({ pushToken: PUSH_TOKEN }) : null,
+			headers: auth("SN-1"),
+			method,
+		});
+		const response = await handler(request);
 		expect(response.status).toBe(500);
 		expectNoStore(response);
 		expect(await response.text()).toBe("");
+		expect(onError).toHaveBeenCalledExactlyOnceWith(error, request);
+	});
+
+	it.each([
+		[
+			"throws",
+			() => {
+				throw new Error("reporter down");
+			},
+		],
+		["rejects", () => Promise.reject(new Error("reporter down"))],
+	])("still answers 500 when onError %s", async (_, reporter) => {
+		const { handler, load, onError } = setup();
+		load.mockRejectedValue(new Error("database down"));
+		onError.mockImplementation(reporter);
+		const response = await handler(
+			new Request(`${BASE}/passes/${PASS_TYPE}/SN-1`, { headers: auth("SN-1") })
+		);
+		expect(response.status).toBe(500);
+		expect(onError).toHaveBeenCalledOnce();
 	});
 });

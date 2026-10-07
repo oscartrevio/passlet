@@ -121,7 +121,12 @@ function PatternSwatch({
 			width={SWATCH_W}
 		>
 			<rect
-				fill={selected ? "#555" : "#C0C0C0"}
+				className={cn(
+					"transition-[fill] duration-150 ease-out",
+					selected
+						? "fill-(--gray-a12)"
+						: "fill-(--gray-a6) group-hover:fill-(--gray-a8)"
+				)}
 				height={SWATCH_H}
 				rx={4}
 				width={SWATCH_W}
@@ -131,14 +136,14 @@ function PatternSwatch({
 					d={SWATCH_PATHS[pattern]}
 					fill="none"
 					stroke="white"
-					strokeOpacity={selected ? 0.55 : 0.45}
+					strokeOpacity={selected ? 0.5 : 0.7}
 					strokeWidth={STROKE_WIDTH}
 				/>
 			) : (
 				<path
 					d={SWATCH_PATHS[pattern]}
 					fill="white"
-					fillOpacity={selected ? 0.55 : 0.45}
+					fillOpacity={selected ? 0.5 : 0.7}
 					shapeRendering="crispEdges"
 				/>
 			)}
@@ -439,10 +444,16 @@ export function PassPlayground({
 						{COLORS.map((c) => {
 							const isSelected = color === c.value;
 							return (
+								// The selection ring takes the swatch's own colour.
 								<label
-									className="relative size-5 cursor-pointer rounded-sm border-overlay transition-transform duration-150 ease-out forced-color-adjust-none after:absolute after:-inset-[3px] after:content-[''] active:scale-[0.96] has-checked:shadow-[inset_0_0_0_2px_#F5F5F5,0_0_0_2px_var(--gray-a12)] has-focus-visible:outline-(--gray-a11) has-focus-visible:outline-2 has-focus-visible:outline-offset-4 forced-colors:has-checked:shadow-[inset_0_0_0_2px_Canvas,0_0_0_2px_CanvasText] forced-colors:has-focus-visible:outline-[color:Highlight]"
+									className="relative size-5 cursor-pointer rounded-sm border-overlay transition-transform duration-150 ease-out forced-color-adjust-none after:absolute after:-inset-[3px] after:content-[''] active:scale-[0.96] has-checked:shadow-[inset_0_0_0_2px_#F5F5F5,0_0_0_2px_var(--swatch)] has-focus-visible:outline-(--gray-a11) has-focus-visible:outline-2 has-focus-visible:outline-offset-4 forced-colors:has-checked:shadow-[inset_0_0_0_2px_Canvas,0_0_0_2px_CanvasText] forced-colors:has-focus-visible:outline-[color:Highlight]"
 									key={c.value}
-									style={{ backgroundColor: c.color }}
+									style={
+										{
+											backgroundColor: c.color,
+											"--swatch": c.color,
+										} as CSSProperties
+									}
 									title={c.label}
 								>
 									<input
@@ -476,7 +487,7 @@ export function PassPlayground({
 							const isSelected = pattern === p.value;
 							return (
 								<label
-									className="relative cursor-pointer overflow-hidden rounded border-overlay transition-transform duration-150 ease-out forced-color-adjust-none active:scale-[0.96] has-checked:shadow-[0_0_0_2px_var(--gray-a12)] has-focus-visible:outline-(--gray-a11) has-focus-visible:outline-2 has-focus-visible:outline-offset-4 forced-colors:has-checked:shadow-[0_0_0_2px_CanvasText] forced-colors:has-focus-visible:outline-[color:Highlight]"
+									className="group relative cursor-pointer overflow-hidden rounded border-overlay transition-transform duration-150 ease-out forced-color-adjust-none active:scale-[0.96] has-focus-visible:outline-(--gray-a11) has-focus-visible:outline-2 has-focus-visible:outline-offset-4 forced-colors:has-checked:shadow-[0_0_0_2px_CanvasText] forced-colors:has-focus-visible:outline-[color:Highlight]"
 									key={p.value}
 									title={p.label}
 								>

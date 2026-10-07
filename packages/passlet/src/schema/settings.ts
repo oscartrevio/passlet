@@ -69,7 +69,7 @@ interface AppleCredentialsBase {
 	 * update in place. Without it, Apple passes are static once issued.
 	 */
 	webService?: AppleWebService;
-	/** PEM-encoded Apple WWDR intermediate certificate. */
+	/** PEM-encoded Apple WWDR intermediate certificate that issued `signerCert`. */
 	wwdr: string;
 }
 
@@ -78,7 +78,9 @@ interface AppleCredentialsBase {
  *
  * Provide the private key either directly as `signerKey` (PEM) or, to keep it
  * outside the process, as an {@link AppleExternalSigner} under `signer`. Exactly
- * one of the two is allowed; the certificates are always required.
+ * one of the two is allowed; the certificates are always required. PEM values
+ * may keep literal `\n` escapes from an env var. They are parsed and checked
+ * against each other when the `Wallet` is built.
  */
 export type AppleCredentials =
 	| (AppleCredentialsBase & {
@@ -128,7 +130,7 @@ export interface IssuedPass {
 	 * Serve it under the `APPLE_PASS_CONTENT_TYPE` content type — iOS refuses passes
 	 * sent under any other type. On Node HTTP servers wrap it with `Buffer.from(apple)`.
 	 */
-	apple: Uint8Array | null;
+	apple: Uint8Array<ArrayBuffer> | null;
 	/**
 	 * Signed JWT for a Google Wallet save link, or `null` if Google credentials were omitted.
 	 *
@@ -147,7 +149,7 @@ export interface IssuedBundle {
 	 * Serve it under the `APPLE_PASSES_CONTENT_TYPE` content type. On Node HTTP
 	 * servers wrap it with `Buffer.from(apple)`.
 	 */
-	apple: Uint8Array | null;
+	apple: Uint8Array<ArrayBuffer> | null;
 	/**
 	 * One signed JWT whose save link adds every item to Google Wallet, or `null`
 	 * if Google credentials were omitted. Pass it to `googleSaveUrl(jwt)`.
@@ -204,6 +206,20 @@ export interface PassRegistrations {
 	remove(deviceLibraryIdentifier: string, serialNumber: string): Promise<void>;
 	/** Every pass a device is registered for. */
 	serialNumbers(deviceLibraryIdentifier: string): Promise<string[]>;
+	/**
+	 * Optional fast path for Apple's "Get the List of Updatable Passes", which
+	 * devices call to learn what changed: the passes a device is registered for,
+	 * each with the `updatedAt` that `load` would return for it. You may leave
+	 * out passes not updated after `passesUpdatedSince` (absent on a device's
+	 * first ask) and passes your app no longer has.
+	 *
+	 * Without it, passlet calls `serialNumbers` and then `load` for every pass.
+	 * https://developer.apple.com/documentation/walletpasses/get-the-list-of-updatable-passes
+	 */
+	updatablePasses?(
+		deviceLibraryIdentifier: string,
+		passesUpdatedSince: Date | undefined
+	): Promise<{ serialNumber: string; updatedAt: Date }[]>;
 }
 
 /**
@@ -211,6 +227,12 @@ export interface PassRegistrations {
  * download updates, plus the push notifications that tell them to.
  */
 export interface AppleWebService {
+	/**
+	 * Called with any error thrown while answering a device, such as from
+	 * your storage, `load`, or rendering, before the device gets a bare 500.
+	 * Errors it throws are ignored.
+	 */
+	onError?: (error: unknown, request: Request) => void;
 	/** Messages devices report to `/v1/log`, usually errors with your service. */
 	onLog?: (messages: string[]) => void;
 	/**

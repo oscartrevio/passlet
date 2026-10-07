@@ -296,6 +296,54 @@ describe("buildObjectBody", () => {
 		expect(body.cardNumber).toBe("1234-5678-9012");
 	});
 
+	// Money.micros is an int64 string: $1 USD is 1000000 micros.
+	// https://developers.google.com/wallet/reference/rest/v1/Money
+	it.each([
+		["50", "50000000"],
+		["0.1", "100000"],
+		["19.99", "19990000"],
+		["1234567.000001", "1234567000001"],
+	])("converts the gift card balance %s to exactly %s micros", (balance, micros) => {
+		const { pass, create } = FIXTURES.giftCard;
+		const body = build(pass, { ...create, values: { balance } });
+		expect(body.balance).toEqual({ micros, currencyCode: "USD" });
+	});
+
+	it.each([
+		"abc",
+		"12abc",
+		"1e3",
+		"1.1234567",
+		"-5",
+		"",
+	])("rejects the gift card balance %j as recipient data", (balance) => {
+		const { pass, create } = FIXTURES.giftCard;
+		expect(() => build(pass, { ...create, values: { balance } })).toThrow(
+			expect.objectContaining({
+				code: "CREATE_CONFIG_INVALID",
+				issues: [expect.objectContaining({ path: ["values", "balance"] })],
+			})
+		);
+	});
+
+	it("takes the balance currency from the balance field when the template has none", () => {
+		const { pass, create } = FIXTURES.giftCard;
+		if (pass.type !== "giftCard") {
+			throw new Error("gift card fixture drifted");
+		}
+		const body = build(
+			{
+				...pass,
+				currency: undefined,
+				fields: pass.fields.map((field) =>
+					field.key === "balance" ? { ...field, currencyCode: "EUR" } : field
+				),
+			},
+			create
+		);
+		expect(body.balance).toEqual({ micros: "50000000", currencyCode: "EUR" });
+	});
+
 	describe("generic", () => {
 		it("falls back header to the pass name when there is no primary field", () => {
 			const { pass, create } = FIXTURES.generic;

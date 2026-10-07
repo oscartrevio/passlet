@@ -1,5 +1,5 @@
-// Generates the self-signed Apple test material once per run and hands it to
-// integration tests through `inject("appleCerts")`.
+// Generates the Apple test certificate chain once per run and hands it to
+// unit and integration tests through `inject("appleCerts")`.
 import type { TestProject } from "vitest/node";
 import { generateTestCerts, type TestCerts } from "./certs";
 

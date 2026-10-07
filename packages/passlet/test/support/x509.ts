@@ -1,4 +1,4 @@
-// Self-signed X.509 v3 certificates for tests. Encoding reuses the library's
+// X.509 v3 certificates for tests, self-signed or CA-issued. Encoding reuses the library's
 // DER writer; Node's X509Certificate and TLS parse and verify the result
 // independently.
 import { generateKeyPairSync, sign } from "node:crypto";
@@ -24,8 +24,16 @@ export interface SelfSignedOptions {
 	subjectAltNameIp?: string;
 }
 
+/** A PEM certificate and its PKCS#8 PEM private key. */
 export interface SelfSigned {
 	cert: string;
+	key: string;
+}
+
+/** The CA that signs a certificate made by {@link createIssued}. */
+export interface CertificateIssuer {
+	commonName: string;
+	/** PKCS#8 PEM private key of the issuer. */
 	key: string;
 }
 
@@ -58,6 +66,21 @@ function subjectAltNameIp(ip: string): Uint8Array {
 }
 
 export function createSelfSigned(options: SelfSignedOptions): SelfSigned {
+	return createCertificate(options);
+}
+
+/** A certificate signed by `issuer`, the way Apple's WWDR CA signs a Pass Type ID certificate. */
+export function createIssued(
+	options: SelfSignedOptions,
+	issuer: CertificateIssuer
+): SelfSigned {
+	return createCertificate(options, issuer);
+}
+
+function createCertificate(
+	options: SelfSignedOptions,
+	issuer?: CertificateIssuer
+): SelfSigned {
 	const { privateKey, publicKey } = generateKeyPairSync("rsa", {
 		modulusLength: options.modulusLength ?? 2048,
 	});
@@ -69,13 +92,13 @@ export function createSelfSigned(options: SelfSignedOptions): SelfSigned {
 		context0(tlv(INTEGER, Uint8Array.of(2))),
 		tlv(INTEGER, Uint8Array.of(1)),
 		SHA256_WITH_RSA,
-		subject,
+		issuer ? name(issuer.commonName) : subject,
 		sequence(time(options.notBefore), time(options.notAfter)),
 		subject,
 		publicKey.export({ type: "spki", format: "der" }),
 		...extensions
 	);
-	const signature = sign("sha256", tbs, privateKey);
+	const signature = sign("sha256", tbs, issuer?.key ?? privateKey);
 	const der = sequence(
 		tbs,
 		SHA256_WITH_RSA,

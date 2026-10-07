@@ -1,4 +1,5 @@
 export type {
+	PlatformResults,
 	WalletErrorCode,
 	WalletErrorOptions,
 	WalletValidationIssue,

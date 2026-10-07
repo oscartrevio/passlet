@@ -1,12 +1,6 @@
-import type { KeyObject } from "node:crypto";
-import { beforeAll, describe, expect, it, onTestFinished, vi } from "vitest";
+import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { WalletError } from "../../../src/errors";
-import {
-	ensureClass,
-	importGoogleKey,
-	patchObject,
-	publishClass,
-} from "../../../src/google/client";
+import { GoogleClient } from "../../../src/google/client";
 import { signJwt } from "../../../src/google/jwt";
 import type { GoogleCredentials } from "../../../src/schema/settings";
 import {
@@ -24,10 +18,11 @@ vi.mock("../../../src/google/jwt", async (importOriginal) => {
 const CLASS_ID = `${ISSUER_ID}.api-class`;
 const OBJECT_ID = `${ISSUER_ID}.api-object`;
 const credentials = googleCredentials();
-let privateKey: KeyObject;
+let client: GoogleClient;
 
-beforeAll(() => {
-	privateKey = importGoogleKey(credentials);
+// A client per test, so no test reuses another's access token.
+beforeEach(() => {
+	client = new GoogleClient(credentials);
 });
 
 function googleError(status: number, message: string): Response {
@@ -42,13 +37,7 @@ function calls(stub: GoogleFetchStub): unknown[][] {
 describe("ensureClass", () => {
 	it("creates the class when Google has none", async () => {
 		const stub = stubGoogleFetch();
-		await ensureClass(
-			"loyaltyClass",
-			CLASS_ID,
-			{ issuerName: "Acme" },
-			credentials,
-			privateKey
-		);
+		await client.ensureClass("loyaltyClass", CLASS_ID, { issuerName: "Acme" });
 		expect(calls(stub)).toEqual([
 			["GET", `/loyaltyClass/${CLASS_ID}`, undefined],
 			["POST", "/loyaltyClass", { id: CLASS_ID, issuerName: "Acme" }],
@@ -63,13 +52,10 @@ describe("ensureClass", () => {
 				reviewStatus: "APPROVED",
 			})
 		);
-		await ensureClass(
-			"loyaltyClass",
-			CLASS_ID,
-			{ issuerName: "Older local template", reviewStatus: "UNDER_REVIEW" },
-			credentials,
-			privateKey
-		);
+		await client.ensureClass("loyaltyClass", CLASS_ID, {
+			issuerName: "Older local template",
+			reviewStatus: "UNDER_REVIEW",
+		});
 		expect(calls(stub)).toEqual([
 			["GET", `/loyaltyClass/${CLASS_ID}`, undefined],
 		]);
@@ -78,7 +64,7 @@ describe("ensureClass", () => {
 	it("rejects a class payload that is not an object", async () => {
 		const stub = stubGoogleFetch(() => Response.json([]));
 		await expect(
-			ensureClass("loyaltyClass", CLASS_ID, {}, credentials, privateKey)
+			client.ensureClass("loyaltyClass", CLASS_ID, {})
 		).rejects.toMatchObject({
 			code: "GOOGLE_INVALID_RESPONSE",
 			status: 502,
@@ -91,7 +77,7 @@ describe("ensureClass", () => {
 	it("surfaces a failed lookup without attempting class creation", async () => {
 		const stub = stubGoogleFetch(() => googleError(500, "Backend Error"));
 		await expect(
-			ensureClass("loyaltyClass", CLASS_ID, {}, credentials, privateKey)
+			client.ensureClass("loyaltyClass", CLASS_ID, {})
 		).rejects.toMatchObject({
 			code: "GOOGLE_UNAVAILABLE",
 			status: 500,
@@ -101,33 +87,51 @@ describe("ensureClass", () => {
 		]);
 	});
 
-	it("reports a creation conflict instead of overwriting the class", async () => {
+	// Two issues from a new template can both find the class missing; the
+	// later insert answers 409 because the class now exists.
+	it("accepts a creation conflict as the class another issue just created", async () => {
 		const stub = stubGoogleFetch(({ method }) =>
 			method === "POST" ? googleError(409, "Already exists") : undefined
 		);
 		await expect(
-			ensureClass("loyaltyClass", CLASS_ID, {}, credentials, privateKey)
-		).rejects.toMatchObject({
-			code: "GOOGLE_CONFLICT",
-			status: 409,
-		});
+			client.ensureClass("loyaltyClass", CLASS_ID, {})
+		).resolves.toBeUndefined();
 		expect(calls(stub)).toEqual([
 			["GET", `/loyaltyClass/${CLASS_ID}`, undefined],
 			["POST", "/loyaltyClass", { id: CLASS_ID }],
 		]);
+	});
+
+	// "This field can be set to draft or underReview using the insert, patch,
+	// or update API calls."
+	// https://developers.google.com/wallet/reference/rest/v1/loyaltyclass
+	it.each([
+		{ requested: "APPROVED", sent: "UNDER_REVIEW" },
+		{ requested: "REJECTED", sent: "UNDER_REVIEW" },
+		{ requested: "DRAFT", sent: "DRAFT" },
+	])("creates a class requested as $requested with reviewStatus $sent", async ({
+		requested,
+		sent,
+	}) => {
+		const stub = stubGoogleFetch();
+		await client.ensureClass("loyaltyClass", CLASS_ID, {
+			reviewStatus: requested,
+		});
+		await client.publishClass("loyaltyClass", CLASS_ID, {
+			reviewStatus: requested,
+		});
+		expect(
+			stub.requests
+				.filter((r) => r.method === "POST")
+				.map((r) => r.body?.reviewStatus)
+		).toEqual([sent, sent]);
 	});
 });
 
 describe("publishClass", () => {
 	it("creates a missing class", async () => {
 		const stub = stubGoogleFetch();
-		await publishClass(
-			"loyaltyClass",
-			CLASS_ID,
-			{ issuerName: "Acme" },
-			credentials,
-			privateKey
-		);
+		await client.publishClass("loyaltyClass", CLASS_ID, { issuerName: "Acme" });
 		expect(calls(stub)).toEqual([
 			["GET", `/loyaltyClass/${CLASS_ID}`, undefined],
 			["POST", "/loyaltyClass", { id: CLASS_ID, issuerName: "Acme" }],
@@ -152,13 +156,7 @@ describe("publishClass", () => {
 					})
 				: undefined
 		);
-		await publishClass(
-			"loyaltyClass",
-			CLASS_ID,
-			{ issuerName: "Acme" },
-			credentials,
-			privateKey
-		);
+		await client.publishClass("loyaltyClass", CLASS_ID, { issuerName: "Acme" });
 		expect(calls(stub)).toEqual([
 			["GET", `/loyaltyClass/${CLASS_ID}`, undefined],
 			[
@@ -180,13 +178,9 @@ describe("publishClass", () => {
 				? Response.json({ id: CLASS_ID, reviewStatus: "APPROVED" })
 				: undefined
 		);
-		await publishClass(
-			"loyaltyClass",
-			CLASS_ID,
-			{ reviewStatus: "DRAFT" },
-			credentials,
-			privateKey
-		);
+		await client.publishClass("loyaltyClass", CLASS_ID, {
+			reviewStatus: "DRAFT",
+		});
 		expect(stub.body("PUT", CLASS_ID)).toEqual({
 			id: CLASS_ID,
 			reviewStatus: "DRAFT",
@@ -198,7 +192,7 @@ describe("publishClass", () => {
 			Response.json({ id: `${ISSUER_ID}.different-class` })
 		);
 		await expect(
-			publishClass("loyaltyClass", CLASS_ID, {}, credentials, privateKey)
+			client.publishClass("loyaltyClass", CLASS_ID, {})
 		).rejects.toMatchObject({
 			code: "GOOGLE_INVALID_RESPONSE",
 			status: 502,
@@ -213,13 +207,9 @@ describe("publishClass", () => {
 		const stub = stubGoogleFetch(
 			() => new Response(secret, { headers: { "Retry-After": "2" } })
 		);
-		const error = await publishClass(
-			"loyaltyClass",
-			CLASS_ID,
-			{},
-			credentials,
-			privateKey
-		).catch((cause: unknown) => cause);
+		const error = await client
+			.publishClass("loyaltyClass", CLASS_ID, {})
+			.catch((cause: unknown) => cause);
 		expect(error).toBeInstanceOf(WalletError);
 		expect(error).toMatchObject({
 			code: "GOOGLE_INVALID_RESPONSE",
@@ -241,21 +231,10 @@ describe("patchObject", () => {
 	it("asks for an update notification in the body only when requested", async () => {
 		const stub = stubGoogleFetch();
 		const patch = { state: "EXPIRED" };
-		await patchObject(
-			"loyaltyObject",
-			OBJECT_ID,
-			patch,
-			credentials,
-			privateKey,
-			{ notify: true }
-		);
-		await patchObject(
-			"loyaltyObject",
-			OBJECT_ID,
-			patch,
-			credentials,
-			privateKey
-		);
+		await client.patchObject("loyaltyObject", OBJECT_ID, patch, {
+			notify: true,
+		});
+		await client.patchObject("loyaltyObject", OBJECT_ID, patch);
 		expect(calls(stub)).toEqual([
 			[
 				"PATCH",
@@ -270,18 +249,12 @@ describe("patchObject", () => {
 	// so an omitted field would keep its old value; null clears it.
 	it("sends undefined fields as null, inside nested objects but not lists", async () => {
 		const stub = stubGoogleFetch();
-		await patchObject(
-			"loyaltyObject",
-			OBJECT_ID,
-			{
-				state: "ACTIVE",
-				loyaltyPoints: undefined,
-				barcode: { type: "QR_CODE", value: "1", alternateText: undefined },
-				textModulesData: [{ header: "Tier", body: "Gold", id: undefined }],
-			},
-			credentials,
-			privateKey
-		);
+		await client.patchObject("loyaltyObject", OBJECT_ID, {
+			state: "ACTIVE",
+			loyaltyPoints: undefined,
+			barcode: { type: "QR_CODE", value: "1", alternateText: undefined },
+			textModulesData: [{ header: "Tier", body: "Gold", id: undefined }],
+		});
 		expect(stub.body("PATCH", OBJECT_ID)).toStrictEqual({
 			state: "ACTIVE",
 			loyaltyPoints: null,
@@ -301,13 +274,7 @@ describe("patchObject", () => {
 	])("classifies HTTP $status as $code", async ({ status, code }) => {
 		stubGoogleFetch(() => googleError(status, "Provider diagnostic"));
 		await expect(
-			patchObject(
-				"loyaltyObject",
-				OBJECT_ID,
-				{ state: "EXPIRED" },
-				credentials,
-				privateKey
-			)
+			client.patchObject("loyaltyObject", OBJECT_ID, { state: "EXPIRED" })
 		).rejects.toMatchObject({ code, status });
 	});
 });
@@ -341,7 +308,7 @@ describe("Google failures", () => {
 				})
 		);
 		await expect(
-			patchObject("loyaltyObject", OBJECT_ID, {}, credentials, privateKey)
+			client.patchObject("loyaltyObject", OBJECT_ID, {})
 		).rejects.toMatchObject({
 			code: "GOOGLE_RATE_LIMITED",
 			status: 429,
@@ -359,13 +326,9 @@ describe("Google failures", () => {
 				? googleError(400, secret)
 				: new Response(secret, { status: 400 })
 		);
-		const error = await patchObject(
-			"loyaltyObject",
-			OBJECT_ID,
-			{},
-			credentials,
-			privateKey
-		).catch((cause: unknown) => cause);
+		const error = await client
+			.patchObject("loyaltyObject", OBJECT_ID, {})
+			.catch((cause: unknown) => cause);
 		expect(error).toBeInstanceOf(WalletError);
 		expect(error).toMatchObject({ code: "GOOGLE_API_ERROR", status: 400 });
 		expect(error).not.toHaveProperty("cause");
@@ -384,11 +347,8 @@ describe("Google failures", () => {
 		stubGoogleFetch(endpoint === "wallet" ? fail : undefined, {
 			token: endpoint === "oauth" ? fail : undefined,
 		});
-		const scoped = googleCredentials({
-			clientEmail: `network-${endpoint}@test-project.iam.gserviceaccount.com`,
-		});
 		await expect(
-			patchObject("loyaltyObject", OBJECT_ID, {}, scoped, privateKey)
+			client.patchObject("loyaltyObject", OBJECT_ID, {})
 		).rejects.toMatchObject({ code: "GOOGLE_NETWORK_ERROR", cause });
 	});
 
@@ -405,7 +365,7 @@ describe("Google failures", () => {
 				)
 		);
 		await expect(
-			publishClass("loyaltyClass", CLASS_ID, {}, credentials, privateKey)
+			client.publishClass("loyaltyClass", CLASS_ID, {})
 		).rejects.toMatchObject({
 			code: "GOOGLE_NETWORK_ERROR",
 			status: 502,
@@ -418,7 +378,7 @@ describe("Google failures", () => {
 			...credentials,
 			privateKey: undefined,
 		} as unknown as GoogleCredentials;
-		expect(() => importGoogleKey(missing)).toThrow(
+		expect(() => new GoogleClient(missing)).toThrow(
 			expect.objectContaining({
 				code: "GOOGLE_INVALID_PRIVATE_KEY",
 				cause: expect.any(Error),
@@ -449,7 +409,7 @@ describe("inside Next.js", () => {
 				method === "GET" ? new Response("", { status: 404 }) : Response.json({})
 			)
 		);
-		await ensureClass("loyaltyClass", CLASS_ID, {}, credentials, privateKey);
+		await client.ensureClass("loyaltyClass", CLASS_ID, {});
 		expect(calls(stub)).toEqual([
 			["GET", `/loyaltyClass/${CLASS_ID}`, undefined],
 			["POST", "/loyaltyClass", { id: CLASS_ID }],
@@ -459,14 +419,14 @@ describe("inside Next.js", () => {
 	it("patches an object", async () => {
 		stubGoogleFetch(() => nextJsResponse(Response.json({})));
 		await expect(
-			patchObject("loyaltyObject", OBJECT_ID, {}, credentials, privateKey)
+			client.patchObject("loyaltyObject", OBJECT_ID, {})
 		).resolves.toBeUndefined();
 	});
 
 	it("surfaces a Google failure", async () => {
 		stubGoogleFetch(() => nextJsResponse(googleError(400, "Invalid")));
 		await expect(
-			patchObject("loyaltyObject", OBJECT_ID, {}, credentials, privateKey)
+			client.patchObject("loyaltyObject", OBJECT_ID, {})
 		).rejects.toMatchObject({ code: "GOOGLE_API_ERROR", status: 400 });
 	});
 });
@@ -474,16 +434,83 @@ describe("inside Next.js", () => {
 describe("access token", () => {
 	it("exchanges one token per credentials and sends it as a bearer on every request", async () => {
 		const stub = stubGoogleFetch();
-		const shared = googleCredentials({
-			clientEmail: "cache@test-project.iam.gserviceaccount.com",
-		});
-		await patchObject("loyaltyObject", OBJECT_ID, {}, shared, privateKey);
-		await patchObject("loyaltyObject", OBJECT_ID, {}, shared, privateKey);
+		await client.patchObject("loyaltyObject", OBJECT_ID, {});
+		await client.patchObject("loyaltyObject", OBJECT_ID, {});
 		expect(stub.tokenRequests).toBe(1);
 		expect(stub.requests.map((r) => r.headers.authorization)).toEqual([
 			"Bearer test-token",
 			"Bearer test-token",
 		]);
+	});
+
+	// "Access tokens can be reused during the duration window specified by the
+	// expires_in value."
+	// https://developers.google.com/identity/protocols/oauth2/service-account
+	it("reuses a token only until shortly before its expires_in", async () => {
+		vi.useFakeTimers({ toFake: ["Date"] });
+		onTestFinished(() => {
+			vi.useRealTimers();
+		});
+		const stub = stubGoogleFetch(undefined, {
+			token: () =>
+				Response.json({ access_token: "hour-token", expires_in: 3600 }),
+		});
+		await client.patchObject("loyaltyObject", OBJECT_ID, {});
+		vi.advanceTimersByTime(50 * 60 * 1000);
+		await client.patchObject("loyaltyObject", OBJECT_ID, {});
+		expect(stub.tokenRequests).toBe(1);
+		vi.advanceTimersByTime(6 * 60 * 1000);
+		await client.patchObject("loyaltyObject", OBJECT_ID, {});
+		expect(stub.tokenRequests).toBe(2);
+	});
+
+	it("does not reuse a token whose response has no expires_in", async () => {
+		const stub = stubGoogleFetch(undefined, {
+			token: () => Response.json({ access_token: "once-token" }),
+		});
+		await client.patchObject("loyaltyObject", OBJECT_ID, {});
+		await client.patchObject("loyaltyObject", OBJECT_ID, {});
+		expect(stub.tokenRequests).toBe(2);
+	});
+
+	it("replaces a cached token Google rejects and retries the request once", async () => {
+		let issued = 0;
+		let revoked = false;
+		const stub = stubGoogleFetch(
+			({ headers }) =>
+				revoked && headers.authorization === "Bearer token-1"
+					? googleError(401, "Invalid Credentials")
+					: undefined,
+			{
+				token: () => {
+					issued += 1;
+					return Response.json({
+						access_token: `token-${issued}`,
+						expires_in: 3600,
+					});
+				},
+			}
+		);
+		await client.patchObject("loyaltyObject", OBJECT_ID, {});
+		revoked = true;
+		await client.patchObject("loyaltyObject", OBJECT_ID, {});
+		await client.patchObject("loyaltyObject", OBJECT_ID, {});
+		expect(stub.tokenRequests).toBe(2);
+		expect(stub.requests.map((r) => r.headers.authorization)).toEqual([
+			"Bearer token-1",
+			"Bearer token-1",
+			"Bearer token-2",
+			"Bearer token-2",
+		]);
+	});
+
+	it("does not retry when Google rejects a freshly exchanged token", async () => {
+		const stub = stubGoogleFetch(() => googleError(401, "Invalid Credentials"));
+		await expect(
+			client.patchObject("loyaltyObject", OBJECT_ID, {})
+		).rejects.toMatchObject({ code: "GOOGLE_AUTH_FAILED", status: 401 });
+		expect(stub.tokenRequests).toBe(1);
+		expect(stub.requests).toHaveLength(1);
 	});
 
 	it("classifies a rejected OAuth assertion without echoing its diagnostics", async () => {
@@ -495,16 +522,9 @@ describe("access token", () => {
 					{ status: 400 }
 				),
 		});
-		const revoked = googleCredentials({
-			clientEmail: "revoked@test-project.iam.gserviceaccount.com",
-		});
-		const error = await patchObject(
-			"loyaltyObject",
-			OBJECT_ID,
-			{},
-			revoked,
-			privateKey
-		).catch((cause: unknown) => cause);
+		const error = await client
+			.patchObject("loyaltyObject", OBJECT_ID, {})
+			.catch((cause: unknown) => cause);
 		expect(error).toBeInstanceOf(WalletError);
 		expect(error).toMatchObject({ code: "GOOGLE_AUTH_FAILED", status: 400 });
 		expect(error).not.toHaveProperty("cause");
@@ -521,10 +541,7 @@ describe("access token", () => {
 			label: "whitespace",
 			body: JSON.stringify({ access_token: "token\r\ninjected: secret" }),
 		},
-	])("never caches a malformed $label token response", async ({
-		label,
-		body,
-	}) => {
+	])("never caches a malformed $label token response", async ({ body }) => {
 		let first = true;
 		const stub = stubGoogleFetch(undefined, {
 			token: () => {
@@ -535,16 +552,9 @@ describe("access token", () => {
 				return Response.json({ access_token: "recovered-token" });
 			},
 		});
-		const scoped = googleCredentials({
-			clientEmail: `malformed-${label}@test-project.iam.gserviceaccount.com`,
-		});
-		const error = await patchObject(
-			"loyaltyObject",
-			OBJECT_ID,
-			{},
-			scoped,
-			privateKey
-		).catch((cause: unknown) => cause);
+		const error = await client
+			.patchObject("loyaltyObject", OBJECT_ID, {})
+			.catch((cause: unknown) => cause);
 		expect(error).toBeInstanceOf(WalletError);
 		expect(error).toMatchObject({
 			code: "GOOGLE_INVALID_RESPONSE",
@@ -555,7 +565,7 @@ describe("access token", () => {
 		expect(JSON.stringify(error)).not.toContain(body);
 		expect(stub.requests).toEqual([]);
 
-		await patchObject("loyaltyObject", OBJECT_ID, {}, scoped, privateKey);
+		await client.patchObject("loyaltyObject", OBJECT_ID, {});
 		expect(stub.tokenRequests).toBe(2);
 		expect(
 			stub.requests.map((request) => request.headers.authorization)
@@ -568,11 +578,8 @@ describe("access token", () => {
 			throw cause;
 		});
 		const stub = stubGoogleFetch();
-		const scoped = googleCredentials({
-			clientEmail: "oauth-signing@test-project.iam.gserviceaccount.com",
-		});
 		await expect(
-			patchObject("loyaltyObject", OBJECT_ID, {}, scoped, privateKey)
+			client.patchObject("loyaltyObject", OBJECT_ID, {})
 		).rejects.toMatchObject({ code: "GOOGLE_SIGNING_FAILED", cause });
 		expect(stub.tokenRequests).toBe(0);
 		expect(stub.requests).toEqual([]);

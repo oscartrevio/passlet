@@ -2,6 +2,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { resolveImageSet } from "../../../src/apple/images";
 import type { AppleCredentials } from "../../../src/schema/settings";
 import type { LoyaltyTemplateConfig } from "../../../src/schema/template";
+import type { PassTemplate } from "../../../src/template";
 import { Wallet } from "../../../src/wallet";
 import {
 	appleCredentials,
@@ -26,6 +27,7 @@ beforeAll(() => {
 
 afterEach(() => {
 	vi.unstubAllGlobals();
+	vi.restoreAllMocks();
 });
 
 /** Replaces global fetch until afterEach unstubs it. */
@@ -151,6 +153,79 @@ describe("other images", () => {
 		await expect(generate({ icon: ICON, logo: LOGO_URL })).rejects.toThrow(
 			expect.objectContaining({ code })
 		);
+	});
+});
+
+describe("downloads", () => {
+	function template(): PassTemplate {
+		return new Wallet({ apple: credentials }).loyalty({
+			id: "img-cache",
+			name: "Images",
+			fields: [],
+			apple: { icon: ICON, logo: LOGO_URL },
+		});
+	}
+
+	async function logoOf(
+		pass: PassTemplate,
+		serialNumber: string
+	): Promise<Uint8Array | undefined> {
+		const { apple } = await pass.create({ serialNumber });
+		if (!apple) {
+			throw new Error("no .pkpass issued");
+		}
+		return (await readPkpass(apple)).files["logo.png"];
+	}
+
+	it("downloads a template's URL images once for all its passes", async () => {
+		const respond = vi.fn(served({ [LOGO_URL]: Uint8Array.of(4) }));
+		stubFetch(respond);
+		const pass = template();
+
+		expect(await logoOf(pass, "img-001")).toEqual(Uint8Array.of(4));
+		expect(await logoOf(pass, "img-002")).toEqual(Uint8Array.of(4));
+		expect(respond).toHaveBeenCalledTimes(1);
+	});
+
+	it("downloads again after a failed download", async () => {
+		const respond = vi
+			.fn<(url: string) => Response>()
+			.mockReturnValueOnce(new Response(null, { status: 503 }))
+			.mockImplementation(served({ [LOGO_URL]: Uint8Array.of(4) }));
+		stubFetch(respond);
+		const pass = template();
+
+		await expect(logoOf(pass, "img-001")).rejects.toMatchObject({
+			code: "IMAGE_FETCH_FAILED",
+		});
+		expect(await logoOf(pass, "img-001")).toEqual(Uint8Array.of(4));
+		expect(respond).toHaveBeenCalledTimes(2);
+	});
+
+	it("gives up on a stalled image server with IMAGE_FETCH_NETWORK_ERROR", async () => {
+		// Fire the download timeout at once instead of after its full wait.
+		vi.spyOn(AbortSignal, "timeout").mockImplementation(() =>
+			AbortSignal.abort(new DOMException("timed out", "TimeoutError"))
+		);
+		// A server that never answers: only the request's signal ends it.
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(
+				(_: string, init?: RequestInit) =>
+					new Promise<Response>((_resolve, reject) => {
+						const signal = init?.signal;
+						if (signal?.aborted) {
+							reject(signal.reason);
+						}
+						signal?.addEventListener("abort", () => reject(signal.reason));
+					})
+			)
+		);
+
+		await expect(resolveImageSet("logo", LOGO_URL)).rejects.toMatchObject({
+			code: "IMAGE_FETCH_NETWORK_ERROR",
+			cause: expect.objectContaining({ name: "TimeoutError" }),
+		});
 	});
 });
 

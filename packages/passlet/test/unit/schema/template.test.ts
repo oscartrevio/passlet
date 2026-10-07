@@ -112,6 +112,18 @@ describe("templateConfigSchema", () => {
 		).toBe(false);
 	});
 
+	// Apple's relevance dates are W3C timestamps: an offset is fine, a zone is
+	// required. Apple's own example: "2025-12-09T13:00-07:00".
+	it("accepts a UTC offset in relevantDates and rejects a zone-less time", () => {
+		const withDate = (date: string) => ({
+			...BASE_LOYALTY,
+			apple: { relevantDates: [{ date }] },
+		});
+		expect(parsesTemplate(withDate("2025-12-09T13:00-07:00"))).toBe(true);
+		expect(parsesTemplate(withDate("2025-12-09T13:00:00+05:30"))).toBe(true);
+		expect(parsesTemplate(withDate("2025-12-09T13:00:00"))).toBe(false);
+	});
+
 	it("validates a static field value against its dateStyle/numberStyle", () => {
 		const withField = (field: Record<string, unknown>) => ({
 			...BASE_LOYALTY,

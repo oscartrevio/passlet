@@ -5,7 +5,8 @@ import { patchBody } from "../../../src/google/client";
 import { GoogleProvider } from "../../../src/google/index";
 import { signJwt } from "../../../src/google/jwt";
 import { buildObjectBody } from "../../../src/google/object-body";
-import { FIXTURES, type Fixture } from "../../support/fixtures";
+import { Wallet } from "../../../src/wallet";
+import { FIXTURES, type Fixture, walletTemplate } from "../../support/fixtures";
 import {
 	decodeJwt,
 	decodeJwtObject,
@@ -13,6 +14,7 @@ import {
 	type GoogleFetchStub,
 	googleCredentials,
 	ISSUER_ID,
+	LOGO_URL,
 	stubGoogleFetch,
 	verifyJwt,
 } from "../../support/google";
@@ -24,7 +26,7 @@ vi.mock("../../../src/google/jwt", async (importOriginal) => {
 
 const credentials = googleCredentials();
 const provider = new GoogleProvider(credentials);
-const { loyalty, boardingPass, transit } = FIXTURES;
+const { loyalty, boardingPass, transit, giftCard } = FIXTURES;
 
 async function generate(
 	fixture: Fixture,
@@ -287,6 +289,52 @@ describe("GoogleProvider.publish", () => {
 			reviewStatus: "UNDER_REVIEW",
 		});
 	});
+
+	// update replaces the whole class: what passlet owns but the template no
+	// longer sets is left out of the PUT, so Google clears it.
+	// https://developers.google.com/wallet/reference/rest/v1/loyaltyclass/update
+	it("clears class fields the template no longer sets and turns Smart Tap off", async () => {
+		const classId = `${ISSUER_ID}.${loyalty.pass.id}`;
+		const callbackOptions = { url: "https://example.com/wallet-callback" };
+		const stub = stubGoogleFetch(({ method }) =>
+			method === "GET"
+				? Response.json({
+						id: classId,
+						callbackOptions,
+						reviewStatus: "APPROVED",
+						heroImage: { sourceUri: { uri: "https://example.com/old.png" } },
+						messages: [{ header: "Old", body: "Gone" }],
+						enableSmartTap: true,
+						redemptionIssuers: ["123"],
+						merchantLocations: [{ latitude: 1, longitude: 2 }],
+						linksModuleData: { uris: [{ uri: "https://example.com" }] },
+						appLinkData: { webAppLinkInfo: {} },
+					})
+				: undefined
+		);
+
+		await walletTemplate(new Wallet({ google: credentials }), {
+			...loyalty.pass,
+			google: { logo: LOGO_URL },
+		}).publish();
+
+		const sent = stub.body("PUT", classId);
+		expect(sent).toMatchObject({
+			callbackOptions,
+			enableSmartTap: false,
+			reviewStatus: "UNDER_REVIEW",
+		});
+		for (const key of [
+			"heroImage",
+			"messages",
+			"redemptionIssuers",
+			"merchantLocations",
+			"linksModuleData",
+			"appLinkData",
+		]) {
+			expect(sent).not.toHaveProperty(key);
+		}
+	});
 });
 
 describe("GoogleProvider.update", () => {
@@ -423,5 +471,128 @@ describe("GoogleProvider.expire", () => {
 			],
 			["PATCH", `/flightObject/${ISSUER_ID}.flight-001`, { state: "EXPIRED" }],
 		]);
+	});
+
+	it("rejects a serial number Google cannot use as an object ID, before any request", async () => {
+		const stub = stubGoogleFetch();
+		await expect(
+			walletTemplate(new Wallet({ google: credentials }), loyalty.pass).expire(
+				"../loyaltyClass/x"
+			)
+		).rejects.toMatchObject({
+			code: "CREATE_CONFIG_INVALID",
+			issues: [expect.objectContaining({ path: ["serialNumber"] })],
+		});
+		expect(stub.requests).toEqual([]);
+		expect(stub.tokenRequests).toBe(0);
+	});
+});
+
+describe("PassTemplate.create on Google", () => {
+	it("rejects a gift card balance that is not a decimal, before any request", async () => {
+		const stub = stubGoogleFetch();
+		await expect(
+			walletTemplate(new Wallet({ google: credentials }), giftCard.pass).create(
+				{
+					...giftCard.create,
+					values: { balance: "fifty" },
+				}
+			)
+		).rejects.toMatchObject({
+			code: "CREATE_CONFIG_INVALID",
+			issues: [expect.objectContaining({ path: ["values", "balance"] })],
+		});
+		expect(stub.requests).toEqual([]);
+	});
+});
+
+// TEXT_AND_NOTIFY pushes a notification when sent through AddMessage.
+// https://developers.google.com/wallet/generic/use-cases/trigger-push-notifications
+// https://developers.google.com/wallet/reference/rest/v1/loyaltyobject/addmessage
+describe("PassTemplate.sendMessage", () => {
+	it("adds the message to the pass's object through AddMessage", async () => {
+		const stub = stubGoogleFetch();
+		const wallet = new Wallet({ google: credentials });
+
+		await walletTemplate(wallet, loyalty.pass).sendMessage("member-1", {
+			header: "Double points",
+			body: "Today only",
+			id: "promo-1",
+			messageType: "TEXT_AND_NOTIFY",
+		});
+		await walletTemplate(wallet, transit.pass).sendMessage("transit-001", {
+			header: "Platform change",
+			body: "Now leaving from platform 4",
+		});
+
+		expect(calls(stub)).toEqual([
+			[
+				"POST",
+				`/loyaltyObject/${ISSUER_ID}.member-1/addMessage`,
+				{
+					message: {
+						header: "Double points",
+						body: "Today only",
+						id: "promo-1",
+						messageType: "TEXT_AND_NOTIFY",
+					},
+				},
+			],
+			[
+				"POST",
+				`/transitObject/${ISSUER_ID}.transit-001/addMessage`,
+				{
+					message: {
+						header: "Platform change",
+						body: "Now leaving from platform 4",
+						messageType: "TEXT",
+					},
+				},
+			],
+		]);
+	});
+
+	it("rejects an invalid message or serial number before any request", async () => {
+		const stub = stubGoogleFetch();
+		const template = walletTemplate(
+			new Wallet({ google: credentials }),
+			loyalty.pass
+		);
+		await expect(
+			// @ts-expect-error -- a message without a body
+			template.sendMessage("member-1", { header: "Hi" })
+		).rejects.toMatchObject({
+			code: "CREATE_CONFIG_INVALID",
+			issues: [expect.objectContaining({ path: ["body"] })],
+		});
+		await expect(
+			template.sendMessage("member 1", { header: "Hi", body: "There" })
+		).rejects.toMatchObject({ code: "CREATE_CONFIG_INVALID" });
+		expect(stub.requests).toEqual([]);
+	});
+
+	it("surfaces Google's notification quota as GOOGLE_RATE_LIMITED", async () => {
+		stubGoogleFetch(() =>
+			Response.json({ error: { code: 429 } }, { status: 429 })
+		);
+		await expect(
+			walletTemplate(
+				new Wallet({ google: credentials }),
+				loyalty.pass
+			).sendMessage("member-1", {
+				header: "Again",
+				body: "Fourth today",
+				messageType: "TEXT_AND_NOTIFY",
+			})
+		).rejects.toMatchObject({ code: "GOOGLE_RATE_LIMITED" });
+	});
+
+	it("requires Google credentials", async () => {
+		await expect(
+			walletTemplate(new Wallet({}), loyalty.pass).sendMessage("member-1", {
+				header: "Hi",
+				body: "There",
+			})
+		).rejects.toMatchObject({ code: "GOOGLE_NOT_CONFIGURED" });
 	});
 });

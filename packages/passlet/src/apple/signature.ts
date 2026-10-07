@@ -7,7 +7,7 @@ import {
 	X509Certificate,
 } from "node:crypto";
 import { WalletError } from "../errors";
-import type { AppleExternalSigner } from "../schema/settings";
+import type { AppleCredentials, AppleExternalSigner } from "../schema/settings";
 import {
 	context0,
 	issuerAndSerialNumber,
@@ -20,15 +20,22 @@ import {
 	tlv,
 } from "./der";
 
-export interface SignManifestOptions {
+/**
+ * Apple signing credentials, parsed and cross-checked once: the Pass Type ID
+ * certificate, the WWDR intermediate that issued it, and either its private
+ * key or an external signer holding that key.
+ */
+export type AppleSigningIdentity = {
+	signerCert: X509Certificate;
+	wwdr: X509Certificate;
+} & (
+	| { signer?: undefined; signerKey: KeyObject }
+	| { signer: AppleExternalSigner; signerKey?: undefined }
+);
+
+export type SignManifestOptions = AppleSigningIdentity & {
 	manifest: Uint8Array;
-	/** External signer (KMS/HSM) that replaces `signerKey`. */
-	signer?: AppleExternalSigner;
-	signerCert: string; // PEM
-	/** PEM-encoded private key. Omit when `signer` is provided. */
-	signerKey?: string;
-	wwdr: string; // PEM
-}
+};
 
 type Digest = NonNullable<AppleExternalSigner["digestAlgorithm"]>;
 
@@ -49,15 +56,90 @@ const MESSAGE_DIGEST = oid("1.2.840.113549.1.9.4");
 const SIGNING_TIME = oid("1.2.840.113549.1.9.5");
 const VERSION_1 = tlv(0x02, Uint8Array.of(1));
 
+/**
+ * PEM copied into an env var often keeps literal "\n" escapes. PEM never
+ * contains a backslash, so unescaping leaves valid PEM untouched.
+ */
+export function unescapePem(pem: string): string {
+	return pem.replace(/\\n/g, "\n");
+}
+
 function parseCertificate(
 	pem: string,
 	code: "APPLE_INVALID_SIGNER_CERT" | "APPLE_INVALID_WWDR"
 ): X509Certificate {
 	try {
-		return new X509Certificate(pem);
+		return new X509Certificate(unescapePem(pem));
 	} catch (cause) {
 		throw new WalletError(code, undefined, { cause });
 	}
+}
+
+/**
+ * Parse Apple credentials and check they belong together, so a mismatched
+ * certificate, key or WWDR fails at setup instead of in a pass Wallet rejects.
+ * Wallet validates the signature against the signing certificate and the WWDR
+ * intermediate that issued it.
+ * https://developer.apple.com/documentation/walletpasses/building-a-pass
+ *
+ * @throws {WalletError} `APPLE_INVALID_SIGNER_CERT`, `APPLE_INVALID_WWDR` or
+ * `APPLE_INVALID_SIGNER_KEY`.
+ */
+export function parseSigningIdentity(
+	credentials: AppleCredentials
+): AppleSigningIdentity {
+	const signerCert = parseCertificate(
+		credentials.signerCert,
+		"APPLE_INVALID_SIGNER_CERT"
+	);
+	const wwdr = parseCertificate(credentials.wwdr, "APPLE_INVALID_WWDR");
+	if (!(signerCert.checkIssued(wwdr) && signerCert.verify(wwdr.publicKey))) {
+		throw new WalletError(
+			"APPLE_INVALID_WWDR",
+			"Invalid Apple WWDR certificate: wwdr did not issue signerCert"
+		);
+	}
+	if (credentials.signer) {
+		return { signerCert, wwdr, signer: credentials.signer };
+	}
+	return {
+		signerCert,
+		wwdr,
+		signerKey: parseSignerKey(credentials, signerCert),
+	};
+}
+
+function parseSignerKey(
+	{ signerKey }: AppleCredentials,
+	signerCert: X509Certificate
+): KeyObject {
+	if (!signerKey) {
+		throw new WalletError(
+			"APPLE_INVALID_SIGNER_KEY",
+			"Invalid Apple signing key: signerKey is required when no external signer is provided"
+		);
+	}
+	let key: KeyObject;
+	try {
+		key = createPrivateKey(unescapePem(signerKey));
+	} catch (cause) {
+		throw new WalletError("APPLE_INVALID_SIGNER_KEY", undefined, { cause });
+	}
+	// SignerInfo advertises rsaEncryption, so any other key type would emit a
+	// signature no device can verify.
+	if (key.asymmetricKeyType !== "rsa") {
+		throw new WalletError(
+			"APPLE_INVALID_SIGNER_KEY",
+			`Invalid Apple signing key: signerKey must be an RSA key, got ${key.asymmetricKeyType}`
+		);
+	}
+	if (!signerCert.checkPrivateKey(key)) {
+		throw new WalletError(
+			"APPLE_INVALID_SIGNER_KEY",
+			"Invalid Apple signing key: signerKey does not match signerCert"
+		);
+	}
+	return key;
 }
 
 /**
@@ -73,7 +155,7 @@ function parseCertificate(
 export async function signManifest(
 	options: SignManifestOptions
 ): Promise<Uint8Array> {
-	const { manifest, signer, signerCert, signerKey, wwdr } = options;
+	const { manifest, signer, signerCert: cert, signerKey, wwdr } = options;
 
 	const digest: Digest = signer?.digestAlgorithm ?? "sha256";
 	const digestAlgorithm = DIGEST_ALGORITHMS[digest];
@@ -84,8 +166,6 @@ export async function signManifest(
 		);
 	}
 
-	const cert = parseCertificate(signerCert, "APPLE_INVALID_SIGNER_CERT");
-	const wwdrCert = parseCertificate(wwdr, "APPLE_INVALID_WWDR");
 	const signAttributes = signer
 		? externalSigner(signer, cert, digest)
 		: keySigner(signerKey, digest);
@@ -118,34 +198,14 @@ export async function signManifest(
 				set(digestAlgorithm),
 				// Detached: the manifest itself lives next to the signature.
 				sequence(DATA),
-				context0(cert.raw, wwdrCert.raw),
+				context0(cert.raw, wwdr.raw),
 				set(signerInfo)
 			)
 		)
 	);
 }
 
-function keySigner(pem: string | undefined, digest: Digest): SignAttributes {
-	if (!pem) {
-		throw new WalletError(
-			"APPLE_INVALID_SIGNER_KEY",
-			"Apple signing failed: signerKey is required when no external signer is provided"
-		);
-	}
-	let key: KeyObject;
-	try {
-		key = createPrivateKey(pem);
-	} catch (cause) {
-		throw new WalletError("APPLE_INVALID_SIGNER_KEY", undefined, { cause });
-	}
-	// SignerInfo advertises rsaEncryption, so any other key type would emit a
-	// signature no device can verify.
-	if (key.asymmetricKeyType !== "rsa") {
-		throw new WalletError(
-			"APPLE_INVALID_SIGNER_KEY",
-			`Apple signing failed: signerKey must be an RSA key, got ${key.asymmetricKeyType}`
-		);
-	}
+function keySigner(key: KeyObject, digest: Digest): SignAttributes {
 	return (signedAttributes) => {
 		try {
 			return sign(digest, signedAttributes, key);

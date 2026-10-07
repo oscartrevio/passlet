@@ -23,7 +23,7 @@ const DOS_DATE = 0x00_21;
  * files, so compression gains little. No zip64 support — a pass is far below
  * the 4 GiB / 65535-entry limits of the classic format.
  */
-export function createZip(entries: ZipEntry[]): Uint8Array {
+export function createZip(entries: ZipEntry[]): Uint8Array<ArrayBuffer> {
 	const encoder = new TextEncoder();
 	const records = entries.map((entry) => ({
 		name: encoder.encode(entry.name),

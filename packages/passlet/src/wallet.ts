@@ -31,6 +31,10 @@ const MAX_BUNDLE_PASSES = 10;
  * Omit a provider's credentials to skip that platform entirely —
  * `apple` and `google` are both optional.
  *
+ * Create one `Wallet` per process and reuse it, so `update` keeps one APNs
+ * connection open as Apple asks. That connection never keeps the process
+ * alive and closes itself after an hour idle.
+ *
  * @example
  * const wallet = new Wallet({ apple: appleCredentials, google: googleCredentials });
  * const result = await wallet.loyalty({ id: "rewards", name: "Rewards Card", fields: [] })
@@ -53,8 +57,12 @@ export class Wallet {
 	private readonly templates = new WeakSet<PassTemplate>();
 
 	/**
-	 * @throws {WalletError} `APPLE_WEB_SERVICE_INVALID` if `apple.webService` is
-	 * malformed, or `UPDATES_NOT_CONFIGURED` if it is set without `load`.
+	 * @throws {WalletError} `APPLE_INVALID_SIGNER_CERT`, `APPLE_INVALID_WWDR`
+	 * or `APPLE_INVALID_SIGNER_KEY` if the Apple signing credentials are
+	 * unusable, `APPLE_WEB_SERVICE_INVALID` if `apple.webService` is malformed,
+	 * `UPDATES_NOT_CONFIGURED` if it is set without `load`, or
+	 * `GOOGLE_INVALID_PRIVATE_KEY` if `google.privateKey` is not an RSA PEM
+	 * private key.
 	 */
 	constructor(config: WalletConfig) {
 		this.config = config;
@@ -86,7 +94,8 @@ export class Wallet {
 	 *
 	 * @throws {WalletError} `UPDATES_NOT_CONFIGURED` without `load`,
 	 * `PASS_NOT_FOUND` when `load` returns `null`, `CREATE_CONFIG_INVALID` when
-	 * the loaded content is invalid, or the provider's error.
+	 * the loaded content is invalid, or the provider's error, which carries
+	 * `results` when both wallets are configured.
 	 */
 	async update(
 		serialNumber: string,
@@ -123,7 +132,8 @@ export class Wallet {
 	 * @throws {WalletError} `PASS_BUNDLE_INVALID` without 1 to 10 items, when two
 	 * items share a serialNumber, when a template comes from another Wallet, or
 	 * when the Apple bundle passes 150 MB; `CREATE_CONFIG_INVALID` if any
-	 * content fails validation.
+	 * content fails validation. A provider's error carries `results` when both
+	 * wallets are configured.
 	 */
 	async createBundle(
 		items: readonly { template: PassTemplate; content: PassContent }[]

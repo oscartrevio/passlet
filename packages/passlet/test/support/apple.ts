@@ -28,8 +28,8 @@ export const PNG = new Uint8Array([
 export const ICON = { base: PNG, retina: PNG };
 
 /**
- * Credentials whose PEM fields are placeholders. Only for unit tests that
- * exercise `buildPassJson` and never sign — signing with these throws.
+ * Credentials whose PEM fields are placeholders. Only for `buildPassJson`,
+ * which never signs — an `AppleProvider` rejects these at construction.
  */
 export const UNSIGNED_APPLE_CREDENTIALS: AppleCredentials = {
 	passTypeIdentifier: PASS_TYPE_IDENTIFIER,
@@ -39,7 +39,7 @@ export const UNSIGNED_APPLE_CREDENTIALS: AppleCredentials = {
 	wwdr: "unused",
 };
 
-/** Self-signed material generated once per run by `global-setup.ts`. */
+/** Signing material generated once per run by `global-setup.ts`. */
 export function appleCredentials(): AppleCredentials & { signerKey: string } {
 	return {
 		passTypeIdentifier: PASS_TYPE_IDENTIFIER,

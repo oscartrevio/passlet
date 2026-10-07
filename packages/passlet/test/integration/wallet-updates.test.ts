@@ -335,6 +335,31 @@ describe("wallet.update", () => {
 		expect(stub.requests.map((r) => r.method)).toEqual(["GET", "PATCH"]);
 	});
 
+	it("reports Google's failure after Apple succeeds, with both outcomes", async () => {
+		stubGoogleFetch((request) =>
+			request.method === "PATCH"
+				? new Response("", { status: 429, headers: { "retry-after": "30" } })
+				: existingClasses(request)
+		);
+		const { wallet } = setup({ google: true });
+
+		await expect(wallet.update(SERIAL)).rejects.toMatchObject({
+			code: "GOOGLE_RATE_LIMITED",
+			status: 429,
+			retryAfter: 30,
+			results: {
+				apple: {
+					status: "fulfilled",
+					value: { notified: 0, failed: 0, removed: 0 },
+				},
+				google: {
+					status: "rejected",
+					reason: expect.objectContaining({ code: "GOOGLE_RATE_LIMITED" }),
+				},
+			},
+		});
+	});
+
 	it("validates the loaded content before notifying anyone", async () => {
 		const stub = stubGoogleFetch();
 		const { template } = setup();
@@ -363,5 +388,48 @@ describe("wallet.update", () => {
 		});
 		expect(devices).not.toHaveBeenCalled();
 		expect(stub.requests).toEqual([]);
+	});
+});
+
+describe("create() when one wallet fails", () => {
+	const template = {
+		...TEMPLATE,
+		id: "unreachable-icon",
+		apple: { icon: "https://example.com/icon.png" },
+	};
+
+	it("reports Apple's failure with the save link Google already issued", async () => {
+		stubGoogleFetch(existingClasses);
+		const wallet = new Wallet({ apple, google: googleCredentials() });
+
+		await expect(
+			wallet.loyalty(template).create({ serialNumber: SERIAL })
+		).rejects.toMatchObject({
+			code: "IMAGE_FETCH_NETWORK_ERROR",
+			cause: expect.objectContaining({
+				message: "unexpected fetch: https://example.com/icon.png",
+			}),
+			results: {
+				apple: {
+					status: "rejected",
+					reason: expect.objectContaining({
+						code: "IMAGE_FETCH_NETWORK_ERROR",
+					}),
+				},
+				google: { status: "fulfilled", value: expect.any(String) },
+			},
+		});
+	});
+
+	it("reports no results when only Apple is configured", async () => {
+		stubGoogleFetch();
+		const wallet = new Wallet({ apple });
+
+		await expect(
+			wallet.loyalty(template).create({ serialNumber: SERIAL })
+		).rejects.toMatchObject({
+			code: "IMAGE_FETCH_NETWORK_ERROR",
+			results: undefined,
+		});
 	});
 });

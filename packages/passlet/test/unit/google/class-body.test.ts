@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { WalletErrorCode } from "../../../src/errors";
 import { buildClassBody } from "../../../src/google/class-body";
-import { validateGoogleRequirements } from "../../../src/google/index";
 import type {
 	GoogleTransitOptions,
 	ParsedTemplate,
@@ -20,10 +18,6 @@ const LOGO = { sourceUri: { uri: LOGO_URL } };
 
 function en(value: string) {
 	return { defaultValue: { language: "en-US", value } };
-}
-
-function walletError(code: WalletErrorCode) {
-	return expect.objectContaining({ code });
 }
 
 const EVENT = FIXTURES.eventTicket.pass;
@@ -46,13 +40,23 @@ const GOLDEN: Record<FixtureName, Golden> = {
 		resource: "loyaltyClass",
 		required: [...BASE_REQUIRED, "programName", "programLogo"],
 		// loyaltyClass names its title programName and its logo programLogo; the
-		// title is a plain string, so the fixture's locales do not reach it.
+		// title is a plain string, so the fixture's name translation goes to
+		// localizedProgramName, and to localizedIssuerName as the issuer name.
 		body: {
 			programName: "Acme Rewards",
+			localizedProgramName: {
+				...en("Acme Rewards"),
+				translatedValues: [{ language: "es", value: "Recompensas Acme" }],
+			},
 			hexBackgroundColor: "#1a1a2e",
 			issuerName: "Acme Rewards",
+			localizedIssuerName: {
+				...en("Acme Rewards"),
+				translatedValues: [{ language: "es", value: "Recompensas Acme" }],
+			},
 			reviewStatus: "UNDER_REVIEW",
 			programLogo: LOGO,
+			enableSmartTap: false,
 		},
 	},
 	eventTicket: {
@@ -67,6 +71,7 @@ const GOLDEN: Record<FixtureName, Golden> = {
 			issuerName: "Summer Festival",
 			reviewStatus: "UNDER_REVIEW",
 			logo: LOGO,
+			enableSmartTap: false,
 		},
 	},
 	boardingPass: {
@@ -95,6 +100,7 @@ const GOLDEN: Record<FixtureName, Golden> = {
 			hexBackgroundColor: "#003087",
 			issuerName: "AA 100",
 			reviewStatus: "UNDER_REVIEW",
+			enableSmartTap: false,
 		},
 	},
 	transit: {
@@ -106,6 +112,7 @@ const GOLDEN: Record<FixtureName, Golden> = {
 			issuerName: "Northern Line",
 			reviewStatus: "UNDER_REVIEW",
 			logo: LOGO,
+			enableSmartTap: false,
 		},
 	},
 	coupon: {
@@ -119,6 +126,7 @@ const GOLDEN: Record<FixtureName, Golden> = {
 			issuerName: "20% Off",
 			reviewStatus: "UNDER_REVIEW",
 			titleImage: LOGO,
+			enableSmartTap: false,
 		},
 	},
 	giftCard: {
@@ -132,13 +140,14 @@ const GOLDEN: Record<FixtureName, Golden> = {
 			issuerName: "Store Gift Card",
 			reviewStatus: "UNDER_REVIEW",
 			programLogo: LOGO,
+			enableSmartTap: false,
 		},
 	},
 	generic: {
 		resource: "genericClass",
 		required: [],
 		// genericClass has no branding fields at all; they live on the object.
-		body: {},
+		body: { enableSmartTap: false },
 	},
 };
 
@@ -148,7 +157,6 @@ describe("buildClassBody", () => {
 
 		it(`builds exactly the expected ${resource}`, () => {
 			const { pass } = FIXTURES[name];
-			expect(() => validateGoogleRequirements(pass)).not.toThrow();
 			const body = buildClassBody(pass);
 			assertGoogleSchema(resource, body);
 			assertRequiredKeys(resource, body, required);
@@ -219,14 +227,60 @@ describe("buildClassBody", () => {
 			...FIXTURES.loyalty.pass,
 			google: { logo: LOGO_URL, links: [], images: [], valueAdded: [] },
 		});
-		expect(empty).not.toHaveProperty("linksModuleData");
-		expect(empty).not.toHaveProperty("imageModulesData");
-		expect(empty).not.toHaveProperty("valueAddedModuleData");
+		expect(empty.linksModuleData).toBeUndefined();
+		expect(empty.imageModulesData).toBeUndefined();
+		expect(empty.valueAddedModuleData).toBeUndefined();
+	});
+
+	// publish() PUTs the existing class with this body spread over it, and
+	// update replaces the whole class, so a key passlet owns has to be stated
+	// to clear the value an earlier template set.
+	// https://developers.google.com/wallet/reference/rest/v1/loyaltyclass/update
+	it("states every key passlet owns, so a template that drops one clears it", () => {
+		const body = buildClassBody({
+			type: "loyalty",
+			id: "bare",
+			name: "Bare",
+			google: { logo: LOGO_URL },
+			fields: [],
+		});
+		expect(body).toEqual({
+			programName: "Bare",
+			issuerName: "Bare",
+			reviewStatus: "UNDER_REVIEW",
+			programLogo: LOGO,
+			enableSmartTap: false,
+		});
+		expect(Object.keys(body).sort()).toEqual(
+			[
+				"appLinkData",
+				"enableSmartTap",
+				"heroImage",
+				"hexBackgroundColor",
+				"imageModulesData",
+				"issuerName",
+				"linksModuleData",
+				"localizedIssuerName",
+				"localizedProgramName",
+				"merchantLocations",
+				"messages",
+				"programLogo",
+				"programName",
+				"redemptionIssuers",
+				"reviewStatus",
+				"valueAddedModuleData",
+				"wideProgramLogo",
+			].sort()
+		);
 	});
 
 	it.each([
 		["eventTicket", "eventName", "Festival de Verano"],
 		["giftCard", "localizedMerchantName", "Tarjeta Regalo"],
+		["loyalty", "localizedProgramName", "Recompensas"],
+		["coupon", "localizedTitle", "20% de descuento"],
+		["coupon", "localizedProvider", "20% de descuento"],
+		["coupon", "localizedIssuerName", "20% de descuento"],
 	] as const)("%s translates %s from locales.<lang>.name", (name, key, translation) => {
 		const { pass } = FIXTURES[name];
 		const body = buildClassBody({
@@ -245,6 +299,15 @@ describe("buildClassBody", () => {
 			locales: { es: { balance: "Saldo" } },
 		});
 		expect(body.localizedMerchantName).toBeUndefined();
+	});
+
+	it("translates the issuer name only when it is the pass name", () => {
+		const body = buildClassBody({
+			...FIXTURES.loyalty.pass,
+			google: { logo: LOGO_URL, issuerName: "Acme Inc" },
+		});
+		expect(body.issuerName).toBe("Acme Inc");
+		expect(body.localizedIssuerName).toBeUndefined();
 	});
 
 	it("forwards the offset on event datetimes but strips it from flight local times", () => {
@@ -309,43 +372,5 @@ describe("buildClassBody", () => {
 				transitOperatorName: en("City Transit"),
 			});
 		});
-	});
-});
-
-describe("validateGoogleRequirements", () => {
-	it("requires google.logo on loyalty and transit passes but not on an air flight", () => {
-		expect(() =>
-			validateGoogleRequirements({
-				type: "loyalty",
-				id: "l",
-				name: "Rewards",
-				fields: [],
-			})
-		).toThrow(walletError("GOOGLE_MISSING_LOGO"));
-		expect(() =>
-			validateGoogleRequirements({
-				type: "boardingPass",
-				id: "t",
-				name: "Bus",
-				google: { transit: {} },
-				fields: [],
-			})
-		).toThrow(walletError("GOOGLE_MISSING_LOGO"));
-		expect(() =>
-			validateGoogleRequirements({ ...FLIGHT, google: undefined })
-		).not.toThrow();
-	});
-
-	it("requires the IATA class fields on an air flight but not on a transit pass", () => {
-		expect(() =>
-			validateGoogleRequirements({ ...FLIGHT, departure: undefined })
-		).toThrow(walletError("GOOGLE_FLIGHT_MISSING_CLASS_FIELDS"));
-		expect(() =>
-			validateGoogleRequirements({
-				...FLIGHT,
-				departure: undefined,
-				google: { logo: LOGO_URL, transit: {} },
-			})
-		).not.toThrow();
 	});
 });
