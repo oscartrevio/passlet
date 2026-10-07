@@ -45,7 +45,8 @@ const { apple, google } = await card.create({               // per recipient
 
 - `apple` is a `Uint8Array` — the `.pkpass` archive, or `null` if you left Apple credentials out.
 - `google` is a JWT `string` — or `null` if you left Google credentials out.
-- A named image that fails to load rejects `create()` with a `WalletError`; there are no partial results.
+- A named image that fails to load rejects `create()` with a `WalletError`. With both wallets
+  configured, its `results` show what the other wallet returned.
 
 `new Wallet()` and `wallet.loyalty()` are cheap and side-effect free; only `create()`
 does signing and network I/O. Build the template at module scope and call `create()`

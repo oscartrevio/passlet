@@ -9,11 +9,15 @@ import { isAppleAuthToken } from "./auth-token";
 
 export interface AppleWebServiceContext {
 	load: LoadPass;
+	onError?: (error: unknown, request: Request) => void;
 	onLog?: (messages: string[]) => void;
 	passTypeIdentifier: string;
 	registrations: PassRegistrations;
 	/** Render the latest .pkpass for a loaded pass. */
-	renderPass(loaded: LoadedPass, serialNumber: string): Promise<Uint8Array>;
+	renderPass(
+		loaded: LoadedPass,
+		serialNumber: string
+	): Promise<Uint8Array<ArrayBuffer>>;
 	secret: string;
 }
 
@@ -64,7 +68,7 @@ type Route =
  *
  * Routes match the path from its last `/v1/...` suffix, so the handler works at
  * any mount point. Unknown routes and methods get 404; thrown errors from your
- * storage, `load`, or rendering get a bare 500.
+ * storage, `load`, or rendering go to `onError` and get a bare 500.
  */
 export function createAppleWebService(
 	context: AppleWebServiceContext
@@ -141,19 +145,27 @@ export function createAppleWebService(
 		// we never issued, means "send everything", as on a device's first ask.
 		const tag = url.searchParams.get("passesUpdatedSince");
 		const since = tag !== null && DECIMAL.test(tag) ? Number(tag) : -1;
-		const serials = await context.registrations.serialNumbers(
-			route.deviceLibraryIdentifier
-		);
-		const loaded = await Promise.all(
-			serials.map(async (serialNumber) => ({
-				pass: await context.load(serialNumber),
-				serialNumber,
-			}))
-		);
+		const { registrations } = context;
+		const device = route.deviceLibraryIdentifier;
+		const passes: { serialNumber: string; updatedAt: Date | undefined }[] =
+			registrations.updatablePasses
+				? await registrations.updatablePasses(
+						device,
+						since < 0 ? undefined : new Date(since)
+					)
+				: await Promise.all(
+						(await registrations.serialNumbers(device)).map(
+							async (serialNumber) => ({
+								serialNumber,
+								updatedAt: (await context.load(serialNumber))?.updatedAt,
+							})
+						)
+					);
 		const serialNumbers: string[] = [];
 		let lastUpdated = -1;
-		for (const { pass, serialNumber } of loaded) {
-			const updated = pass?.updatedAt.getTime();
+		// Filtered here too: an adapter may return every registered pass.
+		for (const { serialNumber, updatedAt } of passes) {
+			const updated = updatedAt?.getTime();
 			if (updated !== undefined && updated > since) {
 				serialNumbers.push(serialNumber);
 				lastUpdated = Math.max(lastUpdated, updated);
@@ -194,12 +206,7 @@ export function createAppleWebService(
 		) {
 			return respond(304, null, { "last-modified": lastModified });
 		}
-		// BodyInit excludes SharedArrayBuffer views; a rendered archive is
-		// always backed by a plain ArrayBuffer.
-		const pkpass = (await context.renderPass(
-			loaded,
-			route.serialNumber
-		)) as Uint8Array<ArrayBuffer>;
+		const pkpass = await context.renderPass(loaded, route.serialNumber);
 		return respond(200, pkpass, {
 			"content-type": "application/vnd.apple.pkpass",
 			"last-modified": lastModified,
@@ -244,7 +251,16 @@ export function createAppleWebService(
 	return async (request) => {
 		try {
 			return await dispatch(request);
-		} catch {
+		} catch (error) {
+			try {
+				const reported: unknown = context.onError?.(error, request);
+				// An async reporter's rejection must not go unhandled either.
+				if (reported instanceof Promise) {
+					reported.catch(() => undefined);
+				}
+			} catch {
+				// Reporting must not change what the device gets.
+			}
 			// Error details can name storage internals; devices need none.
 			return respond(500);
 		}

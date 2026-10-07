@@ -50,3 +50,66 @@ jobs:
 
       - name: Test
         run: pnpm -F passlet test
+
+  package:
+    name: Package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm -F passlet build
+
+      # attw's --pack only runs npm pack, so check the tarball pnpm publishes:
+      # https://github.com/arethetypeswrong/arethetypeswrong.github.io/tree/main/packages/cli#pack
+      - name: Pack
+        working-directory: packages/passlet
+        run: pnpm pack --out "$RUNNER_TEMP/passlet.tgz"
+
+      - name: Lint package
+        run: pnpm dlx publint --strict "$RUNNER_TEMP/passlet.tgz"
+
+      - name: Check published types
+        run: pnpm dlx @arethetypeswrong/cli "$RUNNER_TEMP/passlet.tgz"
+
+  examples:
+    name: Example (${{ matrix.example }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        example: [express, hono, nextjs]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Pack this commit's passlet
+        working-directory: packages/passlet
+        run: pnpm build && pnpm pack --out "$RUNNER_TEMP/passlet.tgz"
+
+      # The examples depend on passlet from npm; type-check them against this
+      # commit instead, without touching their package.json.
+      - name: Install
+        working-directory: examples/${{ matrix.example }}
+        run: npm install --no-save --no-package-lock --no-audit --no-fund "$RUNNER_TEMP/passlet.tgz"
+
+      - name: Type check
+        working-directory: examples/${{ matrix.example }}
+        run: npx tsc --noEmit

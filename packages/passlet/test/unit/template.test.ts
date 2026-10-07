@@ -1,16 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { GoogleCredentials } from "../../src/schema/settings";
 import { Wallet } from "../../src/wallet";
-import { UNSIGNED_APPLE_CREDENTIALS as apple, ICON } from "../support/apple";
-import { CLIENT_EMAIL, ISSUER_ID, LOGO_URL } from "../support/google";
+import { appleCredentials, ICON } from "../support/apple";
+import { googleCredentials, LOGO_URL } from "../support/google";
 
-// Construction-time validation never touches the key material — it only has
-// to be present so the provider counts as configured.
-const google: GoogleCredentials = {
-	clientEmail: CLIENT_EMAIL,
-	issuerId: ISSUER_ID,
-	privateKey: "unused",
-};
+// Both providers parse their keys when the Wallet is built, so the
+// credentials are real test material.
+const apple = appleCredentials();
+const google = googleCredentials();
 
 const BASE_LOYALTY = {
 	id: "test-pass",
@@ -51,6 +47,28 @@ describe("PassTemplate", () => {
 			issues: [
 				expect.objectContaining({ path: ["serialNumber"] }),
 				expect.objectContaining({ path: ["barcode", "value"] }),
+			],
+		});
+	});
+
+	it("names the allowed values when an option is not one of them", async () => {
+		const pass = new Wallet({}).loyalty(BASE_LOYALTY);
+		await expect(
+			pass.create({
+				serialNumber: "s-1",
+				// @ts-expect-error -- an invalid barcode format
+				barcode: { format: "QRCODE", value: "123" },
+			})
+		).rejects.toMatchObject({
+			code: "CREATE_CONFIG_INVALID",
+			message: expect.stringContaining(
+				'barcode.format: Invalid option: expected one of "QR"|"PDF417"|'
+			),
+			issues: [
+				{
+					path: ["barcode", "format"],
+					message: expect.stringContaining('"Aztec"'),
+				},
 			],
 		});
 	});
@@ -115,6 +133,37 @@ describe("template requirements", () => {
 		expect(() => new Wallet({ google }).generic(template)).not.toThrow();
 	});
 
+	it("requires an Apple transitType on boarding passes", () => {
+		expect(() =>
+			new Wallet({ apple }).boardingPass({ ...template, apple: { icon: ICON } })
+		).toThrow(
+			expect.objectContaining({ code: "APPLE_BOARDING_MISSING_TRANSIT_TYPE" })
+		);
+	});
+
+	// Apple ignores appLaunchURL without associated App Store IDs.
+	it("requires associatedStoreIdentifiers with an Apple appLaunchURL", () => {
+		const wallet = new Wallet({ apple });
+		const appLaunchURL = "https://example.com/app";
+		expect(() =>
+			wallet.generic({ ...template, apple: { icon: ICON, appLaunchURL } })
+		).toThrow(
+			expect.objectContaining({
+				code: "APPLE_APP_LAUNCH_URL_REQUIRES_STORE_IDS",
+			})
+		);
+		expect(() =>
+			wallet.generic({
+				...template,
+				apple: {
+					icon: ICON,
+					appLaunchURL,
+					associatedStoreIdentifiers: [123_456_789],
+				},
+			})
+		).not.toThrow();
+	});
+
 	it("requires a Google logo for loyalty passes only when Google credentials are configured", () => {
 		const wallet = new Wallet({ google });
 		expect(() => wallet.loyalty(template)).toThrow(
@@ -148,6 +197,42 @@ describe("template requirements", () => {
 				departure: "2026-08-01T08:00:00Z",
 			})
 		).not.toThrow();
+	});
+
+	it("requires the IATA flight details on an air flight, at construction, but not on a transit pass", () => {
+		const wallet = new Wallet({ google });
+		const flight = {
+			...template,
+			transitType: "air",
+			carrier: "AA",
+			flightNumber: "100",
+			origin: "JFK",
+			destination: "LAX",
+		} as const;
+		expect(() => wallet.boardingPass(flight)).toThrow(
+			expect.objectContaining({ code: "GOOGLE_FLIGHT_MISSING_CLASS_FIELDS" })
+		);
+		expect(() =>
+			wallet.boardingPass({
+				...flight,
+				google: { logo: LOGO_URL, transit: {} },
+			})
+		).not.toThrow();
+	});
+
+	// A class ID is `issuerId.<template id>`, and Google allows only
+	// alphanumerics, '.', '_' and '-' in the identifier.
+	// https://developers.google.com/wallet/reference/rest/v1/loyaltyclass/update
+	it("rejects a template id Google cannot use in a class ID only when Google is configured", () => {
+		for (const id of ["rewards/2026", "rewards 2026", "récompenses"]) {
+			expect(() => new Wallet({ google }).generic({ ...template, id })).toThrow(
+				expect.objectContaining({
+					code: "PASS_CONFIG_INVALID",
+					issues: [expect.objectContaining({ path: ["id"] })],
+				})
+			);
+			expect(() => new Wallet({}).generic({ ...template, id })).not.toThrow();
+		}
 	});
 
 	// "If you specify a strip image, do not specify a background image or a

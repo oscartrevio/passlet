@@ -6,9 +6,9 @@ import type {
 } from "../../src/index";
 import { Wallet } from "../../src/wallet";
 import {
+	appleCredentials,
 	PASS_TYPE_IDENTIFIER,
 	TEAM_ID,
-	UNSIGNED_APPLE_CREDENTIALS,
 } from "../support/apple";
 
 const SECRET = "s".repeat(32);
@@ -31,7 +31,7 @@ function webService(overrides: Partial<AppleWebService> = {}): AppleWebService {
 
 function appleWith(
 	service: AppleWebService,
-	apple: AppleCredentials = UNSIGNED_APPLE_CREDENTIALS
+	apple: AppleCredentials = appleCredentials()
 ): AppleCredentials {
 	return { ...apple, webService: service };
 }
@@ -66,11 +66,12 @@ describe("apple.webService validation", () => {
 	// APNs authenticates with the private key over TLS, which an external
 	// signer never hands over.
 	it("requires push credentials with an external signer", () => {
+		const { signerCert, wwdr } = appleCredentials();
 		const signed: AppleCredentials = {
 			passTypeIdentifier: PASS_TYPE_IDENTIFIER,
 			teamId: TEAM_ID,
-			signerCert: "unused",
-			wwdr: "unused",
+			signerCert,
+			wwdr,
 			signer: { sign: () => new Uint8Array() },
 		};
 		expect(
@@ -107,7 +108,7 @@ describe("apple.webService validation", () => {
 
 describe("wallet.handler", () => {
 	it("answers 404 to everything without apple.webService", async () => {
-		const { handler } = new Wallet({ apple: UNSIGNED_APPLE_CREDENTIALS });
+		const { handler } = new Wallet({ apple: appleCredentials() });
 		const response = await handler(
 			new Request("https://example.com/wallet/v1/log", {
 				method: "POST",

@@ -57,7 +57,10 @@ export interface GoogleFetchStub {
 }
 
 export interface StubGoogleFetchOptions {
-	/** Overrides the OAuth token response; the default is 200 with a fake token. */
+	/**
+	 * Overrides the OAuth token response; the default is 200 with a fake token
+	 * that, like Google's, expires in an hour.
+	 */
 	token?: () => Response;
 }
 
@@ -95,7 +98,8 @@ export function stubGoogleFetch(
 			if (url.startsWith(TOKEN_URL)) {
 				stub.tokenRequests += 1;
 				return Promise.resolve(
-					token?.() ?? Response.json({ access_token: "test-token" })
+					token?.() ??
+						Response.json({ access_token: "test-token", expires_in: 3599 })
 				);
 			}
 			if (!url.startsWith(WALLET_BASE)) {

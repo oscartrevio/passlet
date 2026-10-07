@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
-import type { AppleCredentials } from "../schema/settings";
-import { signManifest } from "./signature";
+import { type AppleSigningIdentity, signManifest } from "./signature";
 import { createZip } from "./zip";
 
 /**
@@ -9,8 +8,8 @@ import { createZip } from "./zip";
  */
 export async function packagePass(
 	files: Record<string, Uint8Array>,
-	credentials: AppleCredentials
-): Promise<Uint8Array> {
+	identity: AppleSigningIdentity
+): Promise<Uint8Array<ArrayBuffer>> {
 	const manifest: Record<string, string> = {};
 	for (const [name, content] of Object.entries(files)) {
 		manifest[name] = createHash("sha1").update(content).digest("hex");
@@ -18,11 +17,8 @@ export async function packagePass(
 	const manifestBytes = new TextEncoder().encode(JSON.stringify(manifest));
 
 	const signature = await signManifest({
+		...identity,
 		manifest: manifestBytes,
-		signerCert: credentials.signerCert,
-		signerKey: credentials.signerKey,
-		signer: credentials.signer,
-		wwdr: credentials.wwdr,
 	});
 
 	const entries = Object.entries(files).map(([name, data]) => ({ name, data }));
@@ -34,7 +30,9 @@ export async function packagePass(
 }
 
 /** Bundle signed `.pkpass` files into one `.pkpasses` archive. */
-export function packagePasses(passes: readonly Uint8Array[]): Uint8Array {
+export function packagePasses(
+	passes: readonly Uint8Array[]
+): Uint8Array<ArrayBuffer> {
 	return createZip(
 		passes.map((data, index) => ({ name: `${index}.pkpass`, data }))
 	);

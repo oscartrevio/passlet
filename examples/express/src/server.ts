@@ -48,7 +48,8 @@ const rewardsCard = wallet.loyalty({
 
 const app = express();
 
-app.get("/passes/:serial/apple", async (req: Request, res: Response) => {
+// Unannotated handlers let Express type `params.serial` from the route path.
+app.get("/passes/:serial/apple", async (req, res) => {
 	const serial = req.params.serial;
 
 	const { apple } = await rewardsCard.create({
@@ -73,7 +74,7 @@ app.get("/passes/:serial/apple", async (req: Request, res: Response) => {
 	res.end(Buffer.from(apple));
 });
 
-app.get("/passes/:serial/google", async (req: Request, res: Response) => {
+app.get("/passes/:serial/google", async (req, res) => {
 	const serial = req.params.serial;
 
 	const { google } = await rewardsCard.create({

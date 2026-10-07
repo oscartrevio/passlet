@@ -149,7 +149,9 @@ const googleOptionsSchema = z.object({
 	// Google: issuerName — displayed as the pass issuer
 	issuerName: z.optional(z.string()),
 	// Required by Google for loyalty, event, flight, coupon, and giftCard classes.
-	// Defaults to "UNDER_REVIEW" for new classes; set to "APPROVED" once approved in the console.
+	// Google writes accept only DRAFT or UNDER_REVIEW, so any other value is sent
+	// as UNDER_REVIEW (the default); Google approves the class itself.
+	// https://developers.google.com/wallet/reference/rest/v1/loyaltyclass
 	reviewStatus: z.optional(
 		z.enum(["UNDER_REVIEW", "APPROVED", "REJECTED", "DRAFT"])
 	),
@@ -237,7 +239,8 @@ export const loyaltyTemplateSchema = z.extend(baseTemplateSchema, {
 
 export const eventTicketTemplateSchema = z.extend(baseTemplateSchema, {
 	type: z.literal("eventTicket"),
-	// Venue wall-clock time. Apple: relevant date / eventStartDate semantic.
+	// Venue wall-clock time. Apple: relevant date / eventStartDate semantic,
+	// only when the value carries a time zone (Apple takes W3C timestamps).
 	// Google: dateTime.start on eventTicketClass (EventDateTime), which accepts
 	// an ISO 8601 datetime "with or without an offset" — the value is forwarded
 	// verbatim so an offset, when given, reaches Google intact.
@@ -252,7 +255,7 @@ export const eventTicketTemplateSchema = z.extend(baseTemplateSchema, {
 		)
 	),
 	// Google: eventTicketClass.venue — requires BOTH name and address.
-	// Apple: name feeds the venueName semantic tag.
+	// Apple: name feeds the venueName semantic tag unless a `venue` field is set.
 	venue: z.optional(
 		z.object({
 			name: z.string().check(z.minLength(1)),
@@ -307,7 +310,8 @@ export const boardingPassTemplateSchema = z.extend(baseTemplateSchema, {
 	),
 	// Local airport wall-clock time. Google rejects a UTC offset here (it
 	// derives the zone from the airport); an offset, if given, is kept for
-	// Apple semantics and stripped for Google.
+	// Apple semantics and stripped for Google. Apple needs the zone, so a
+	// zone-less time reaches Google only.
 	departure: z.optional(
 		localDateTime(
 			'must be an ISO datetime e.g. "2024-06-01T08:00:00Z" or "2024-06-01T08:00:00"'

@@ -1,3 +1,4 @@
+import { en } from "zod/locales";
 import type * as z from "zod/mini";
 import {
 	WalletError,
@@ -10,12 +11,18 @@ import {
 	type PassContent,
 	passContentSchema,
 } from "./schema/content";
+import { type GooglePassMessage, googleMessageSchema } from "./schema/parts";
 import type { IssuedPass } from "./schema/settings";
 import {
 	type ParsedTemplate,
 	type TemplateConfig,
 	templateConfigSchema,
 } from "./schema/template";
+
+// zod/mini loads no locale, so its own issues would read "Invalid input".
+// Passing English per parse, instead of through z.config(), leaves the global
+// zod config to the host app. https://zod.dev/packages/mini#no-default-locale
+const PARSE_OPTIONS = { error: en().localeError };
 
 function configError(
 	code: Extract<
@@ -48,7 +55,7 @@ export function parseContent(
 	providers: Providers,
 	content: PassContent
 ): ParsedContent {
-	const result = passContentSchema.safeParse(content);
+	const result = passContentSchema.safeParse(content, PARSE_OPTIONS);
 	if (!result.success) {
 		throw configError("CREATE_CONFIG_INVALID", result.error);
 	}
@@ -64,9 +71,11 @@ export function parseContent(
  * The config is validated at construction time — a {@link WalletError} with
  * code `PASS_CONFIG_INVALID` is thrown immediately if anything is wrong.
  * Template-level provider requirements are checked too: `APPLE_MISSING_ICON`
- * when Apple credentials are supplied without `apple.icon`, and
- * `GOOGLE_MISSING_LOGO` when a template type that requires `google.logo` is
- * missing it.
+ * when Apple credentials are supplied without `apple.icon`; with Google
+ * credentials, `PASS_CONFIG_INVALID` for an `id` Google cannot use in a class
+ * ID, `GOOGLE_MISSING_LOGO` when a template type that requires `google.logo`
+ * is missing it, and `GOOGLE_FLIGHT_MISSING_CLASS_FIELDS` when an air
+ * boarding pass lacks its flight details.
  */
 export class PassTemplate {
 	/**
@@ -77,7 +86,7 @@ export class PassTemplate {
 	private readonly providers: Providers;
 
 	constructor(config: TemplateConfig, providers: Providers) {
-		const result = templateConfigSchema.safeParse(config);
+		const result = templateConfigSchema.safeParse(config, PARSE_OPTIONS);
 		if (!result.success) {
 			throw configError("PASS_CONFIG_INVALID", result.error);
 		}
@@ -98,6 +107,7 @@ export class PassTemplate {
 	 * this pass's own authentication token, so `wallet.handler` can update it.
 	 *
 	 * @throws {WalletError} `CREATE_CONFIG_INVALID` if `content` fails validation.
+	 * A provider's error carries `results` when both wallets are configured.
 	 */
 	async create(content: PassContent): Promise<IssuedPass> {
 		const item = {
@@ -131,5 +141,41 @@ export class PassTemplate {
 	 */
 	async expire(serialNumber: string): Promise<void> {
 		await this.providers.google?.expire(this.config, serialNumber);
+	}
+
+	/**
+	 * Google only: add a message to an issued pass's details. With
+	 * `messageType: "TEXT_AND_NOTIFY"` Google also pushes a notification to
+	 * holders who saved the pass; Google documents that push only for messages
+	 * sent this way, not for `google.messages` written by `create()` or
+	 * `wallet.update()`. Google allows at most 3 notifying messages per pass in
+	 * 24 hours and rejects more with a quota error; send further messages as
+	 * `"TEXT"`.
+	 * https://developers.google.com/wallet/generic/use-cases/trigger-push-notifications
+	 *
+	 * The message joins the object's `messages`, which `wallet.update()`
+	 * rewrites from `content.google.messages`; keep it there to keep it shown.
+	 * Apple has no per-pass message; use a field with a `changeMessage`.
+	 *
+	 * @throws {WalletError} `GOOGLE_NOT_CONFIGURED` without Google credentials,
+	 * `CREATE_CONFIG_INVALID` for an invalid message or serial number, or the
+	 * Google API error, e.g. `GOOGLE_NOT_FOUND` for a serial never issued.
+	 */
+	async sendMessage(
+		serialNumber: string,
+		message: GooglePassMessage
+	): Promise<void> {
+		if (!this.providers.google) {
+			throw new WalletError("GOOGLE_NOT_CONFIGURED");
+		}
+		const result = googleMessageSchema.safeParse(message, PARSE_OPTIONS);
+		if (!result.success) {
+			throw configError("CREATE_CONFIG_INVALID", result.error);
+		}
+		await this.providers.google.sendMessage(
+			this.config,
+			serialNumber,
+			result.data
+		);
 	}
 }

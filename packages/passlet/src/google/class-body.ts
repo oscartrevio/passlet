@@ -69,11 +69,22 @@ function buildBoardingPassClassFields(
 	};
 }
 
+// The localized twin of a plain-string name field, carrying the template
+// name's translations; absent when no locale translates the name.
+function localizedName(template: ParsedTemplate) {
+	const translations = translationsFor("name", template.locales);
+	return translations && localized(template.name, "en-US", translations);
+}
+
 function buildClassTypeFields(
 	template: ParsedTemplate
 ): Record<string, unknown> {
 	if (template.type === "loyalty") {
-		return { programName: template.name };
+		// https://developers.google.com/wallet/reference/rest/v1/loyaltyclass
+		return {
+			programName: template.name,
+			localizedProgramName: localizedName(template),
+		};
 	}
 	if (template.type === "eventTicket") {
 		return {
@@ -99,10 +110,13 @@ function buildClassTypeFields(
 		return buildBoardingPassClassFields(template);
 	}
 	if (template.type === "coupon") {
+		// https://developers.google.com/wallet/reference/rest/v1/offerclass
 		return {
 			title: template.name,
+			localizedTitle: localizedName(template),
 			// provider is required by Google offerClass — defaults to the pass name
 			provider: template.name,
+			localizedProvider: localizedName(template),
 			redemptionChannel: template.redemptionChannel.toUpperCase(),
 		};
 	}
@@ -110,11 +124,9 @@ function buildClassTypeFields(
 		// giftCardClass has no cardTitle — merchantName is a plain string, and
 		// the API rejects a LocalizedString there; translations belong in
 		// localizedMerchantName.
-		const translations = translationsFor("name", template.locales);
 		return {
 			merchantName: template.name,
-			localizedMerchantName:
-				translations && localized(template.name, "en-US", translations),
+			localizedMerchantName: localizedName(template),
 		};
 	}
 	// Generic branding belongs on genericObject.
@@ -128,12 +140,8 @@ function assignImages(
 	logo: unknown,
 	wideLogo: unknown
 ): void {
-	if (logo) {
-		target[logoKey] = logo;
-	}
-	if (wideLogo) {
-		target[wideLogoKey] = wideLogo;
-	}
+	target[logoKey] = logo;
+	target[wideLogoKey] = wideLogo;
 }
 
 // flightClass is the one class that hides its images inside flightHeader.carrier
@@ -184,12 +192,17 @@ function applyClassImages(
 	}
 }
 
+/**
+ * The class as passlet owns it. Every key passlet can set for the class type
+ * is present, `undefined` when the template leaves it unset, so publish()
+ * clears what the template no longer has; keys passlet never sets are absent
+ * and keep their remote values.
+ */
 export function buildClassBody(
 	template: ParsedTemplate
 ): Record<string, unknown> {
 	const logo = imageUri(template.google?.logo);
 	const wideLogo = imageUri(template.google?.wideLogo);
-	const hero = imageUri(template.google?.hero);
 
 	const body = buildClassTypeFields(template);
 
@@ -197,35 +210,33 @@ export function buildClassBody(
 	if (template.type !== "generic") {
 		body.hexBackgroundColor = template.color;
 		body.issuerName = template.google?.issuerName ?? template.name;
-		if (hero) {
-			body.heroImage = hero;
-		}
+		// Name translations apply only when the issuer name is the pass name.
+		body.localizedIssuerName = template.google?.issuerName
+			? undefined
+			: localizedName(template);
+		body.heroImage = imageUri(template.google?.hero);
 		body.reviewStatus = template.google?.reviewStatus ?? "UNDER_REVIEW";
-		if (template.google?.messages) {
-			body.messages = template.google.messages;
-		}
-		if (template.google?.appLinkData) {
-			body.appLinkData = buildAppLinkData(template.google.appLinkData);
-		}
+		body.messages = template.google?.messages;
+		body.appLinkData = template.google?.appLinkData
+			? buildAppLinkData(template.google.appLinkData)
+			: undefined;
 	}
 	applyClassImages(body, template, logo, wideLogo);
-	if (template.google?.enableSmartTap) {
-		body.enableSmartTap = template.google.enableSmartTap;
-	}
-	if (template.google?.redemptionIssuers) {
-		body.redemptionIssuers = template.google.redemptionIssuers;
-	}
+	// Stated even when false, so publish() turns Smart Tap off again.
+	body.enableSmartTap = template.google?.enableSmartTap ?? false;
+	body.redemptionIssuers = template.google?.redemptionIssuers;
 	// Deprecated locations[] cannot trigger geo notifications.
 	// merchantLocations supports up to ten locations per class.
-	if (template.locations?.length) {
-		body.merchantLocations = template.locations.map(
-			({ latitude, longitude }) => ({
+	body.merchantLocations = template.locations?.length
+		? template.locations.map(({ latitude, longitude }) => ({
 				latitude,
 				longitude,
-			})
-		);
-	}
-
+			}))
+		: undefined;
+	// buildModuleData omits empty modules, so each is stated here first.
+	body.linksModuleData = undefined;
+	body.imageModulesData = undefined;
+	body.valueAddedModuleData = undefined;
 	Object.assign(body, buildModuleData(template.google));
 
 	return body;

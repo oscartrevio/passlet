@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { validateAppleRequirements } from "../../../src/apple/index";
 import { buildPassJson } from "../../../src/apple/pass-json";
 import type { ParsedContent } from "../../../src/schema/content";
 import type { ParsedTemplate } from "../../../src/schema/template";
 import {
-	ICON,
 	PASS_TYPE_IDENTIFIER,
 	TEAM_ID,
 	UNSIGNED_APPLE_CREDENTIALS,
@@ -144,11 +142,13 @@ const PASS_JSON: Record<FixtureName, Json> = {
 		relevantDates: [
 			{ startDate: "2026-07-15T20:00:00Z", endDate: "2026-07-15T23:00:00Z" },
 		],
+		// Pre-iOS 18 systems read only the deprecated singular key.
+		relevantDate: "2026-07-15T20:00:00Z",
 		eventLogoText: "Festival",
 		footerBackgroundColor: "rgb(18, 52, 86)",
 		preferredStyleSchemes: ["posterEventTicket"],
 		bagPolicyURL: "https://example.com/bags",
-		// The venue and seat tags come from the fields, not from pass.venue.
+		// The per-pass `venue` field outranks the template's venue.name.
 		semantics: {
 			eventName: "Summer Festival",
 			eventStartDate: "2026-07-15T20:00:00Z",
@@ -196,6 +196,7 @@ const PASS_JSON: Record<FixtureName, Json> = {
 		relevantDates: [
 			{ startDate: "2026-07-15T08:00:00Z", endDate: "2026-07-15T11:30:00Z" },
 		],
+		relevantDate: "2026-07-15T08:00:00Z",
 		upgradeURL: "https://example.com/upgrade",
 		// flightNumber is numeric; flightCode includes the carrier.
 		semantics: {
@@ -241,6 +242,7 @@ const PASS_JSON: Record<FixtureName, Json> = {
 				endDate: "2026-07-15T09:45:00+01:00",
 			},
 		],
+		relevantDate: "2026-07-15T08:00:00+01:00",
 		semantics: {
 			departureAirportCode: "PAD",
 			destinationAirportCode: "BRI",
@@ -629,44 +631,76 @@ describe("semantics and relevantDates", () => {
 		const json = passJson(
 			event({
 				endsAt: "2026-07-15T23:00:00Z",
-				apple: { relevantDates: [{ date: "2026-07-14T20:00:00Z" }] },
+				apple: {
+					relevantDates: [
+						{
+							startDate: "2026-07-14T20:00-07:00",
+							endDate: "2026-07-14T23:00-07:00",
+						},
+						{ date: "2026-07-16T20:00:00Z" },
+					],
+				},
 			})
 		);
-		expect(json.relevantDates).toEqual([{ date: "2026-07-14T20:00:00Z" }]);
+		expect(json.relevantDates).toEqual([
+			{
+				startDate: "2026-07-14T20:00-07:00",
+				endDate: "2026-07-14T23:00-07:00",
+			},
+			{ date: "2026-07-16T20:00:00Z" },
+		]);
+		// The singular key holds one date: the first entry's start.
+		expect(json.relevantDate).toBe("2026-07-14T20:00-07:00");
 	});
 
 	it("emits a single-moment relevantDate when only the start time is known", () => {
-		expect(passJson(event()).relevantDates).toEqual([
-			{ date: "2026-07-15T20:00:00Z" },
-		]);
-		expect(passJson({ ...FLIGHT, arrival: undefined }).relevantDates).toEqual([
-			{ date: "2026-07-15T08:00:00Z" },
-		]);
+		expect(passJson(event())).toMatchObject({
+			relevantDates: [{ date: "2026-07-15T20:00:00Z" }],
+			relevantDate: "2026-07-15T20:00:00Z",
+		});
+		expect(passJson({ ...FLIGHT, arrival: undefined })).toMatchObject({
+			relevantDates: [{ date: "2026-07-15T08:00:00Z" }],
+			relevantDate: "2026-07-15T08:00:00Z",
+		});
 	});
-});
 
-describe("validateAppleRequirements", () => {
-	it.each<[string, ParsedTemplate]>([
-		["APPLE_MISSING_ICON", loyalty()],
-		[
-			"APPLE_BOARDING_MISSING_TRANSIT_TYPE",
-			{
-				type: "boardingPass",
-				id: "f1",
-				name: "Flight",
-				fields: [],
-				apple: { icon: ICON },
-			},
-		],
-		[
-			"APPLE_APP_LAUNCH_URL_REQUIRES_STORE_IDS",
-			loyalty({
-				apple: { icon: ICON, appLaunchURL: "https://example.com/app" },
-			}),
-		],
-	])("throws %s", (code, pass) => {
-		expect(() => validateAppleRequirements(pass)).toThrow(
-			expect.objectContaining({ code })
+	// Apple dates are W3C timestamps, which need a time zone; Google takes
+	// these venue-local times as they are.
+	it("keeps zone-less event times out of Apple's date keys", () => {
+		const json = passJson(
+			event({
+				startsAt: "2026-07-15T20:00:00",
+				endsAt: "2026-07-15T23:00:00",
+			})
 		);
+		expect(json).not.toHaveProperty("relevantDates");
+		expect(json).not.toHaveProperty("relevantDate");
+		expect(json.semantics).toEqual({ eventName: "Show" });
+	});
+
+	it("keeps zone-less flight times out of Apple's date keys", () => {
+		const json = passJson({
+			...FLIGHT,
+			departure: "2026-07-15T08:00:00",
+			arrival: "2026-07-15T11:30:00",
+		});
+		expect(json).not.toHaveProperty("relevantDates");
+		expect(json).not.toHaveProperty("relevantDate");
+		expect(json.semantics).not.toHaveProperty("originalDepartureDate");
+		expect(json.semantics).not.toHaveProperty("originalArrivalDate");
+	});
+
+	it("narrows to a single moment when only the end time lacks a zone", () => {
+		expect(
+			passJson(event({ endsAt: "2026-07-15T23:00:00" })).relevantDates
+		).toEqual([{ date: "2026-07-15T20:00:00Z" }]);
+	});
+
+	it("names the venue from the template when no venue field is set", () => {
+		expect(
+			passJson(
+				event({ venue: { name: "Madison Square Garden", address: "NY" } })
+			).semantics
+		).toMatchObject({ venueName: "Madison Square Garden" });
 	});
 });

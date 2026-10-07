@@ -26,14 +26,14 @@ export const WALLET_ERROR_CODES = {
 	APPLE_INVALID_SIGNER_KEY: {
 		status: 500,
 		message: "Invalid Apple signing key.",
-		why: "signerKey could not be parsed as an unencrypted PEM private key.",
+		why: "signerKey is missing, is not an unencrypted RSA PEM private key, or does not match signerCert.",
 		fix: "Export the private key matching signerCert as unencrypted PEM.",
 	},
 	APPLE_INVALID_WWDR: {
 		status: 500,
 		message: "Invalid Apple WWDR certificate.",
-		why: "wwdr could not be parsed as a PEM certificate.",
-		fix: "Download the Apple WWDR G4 intermediate certificate and convert DER to PEM.",
+		why: "wwdr could not be parsed as a PEM certificate, or is not the intermediate that issued signerCert.",
+		fix: "Download the Apple WWDR intermediate that issued your Pass Type ID certificate (G4 for current certificates) and convert DER to PEM.",
 	},
 	APPLE_SIGNING_FAILED: {
 		status: 500,
@@ -152,8 +152,8 @@ export const WALLET_ERROR_CODES = {
 	GOOGLE_NOT_CONFIGURED: {
 		status: 500,
 		message: "Google Wallet is not configured.",
-		why: "Template publication was requested without Google credentials.",
-		fix: "Configure google credentials on Wallet before calling publish().",
+		why: "A Google-only operation (publish or sendMessage) was requested without Google credentials.",
+		fix: "Configure google credentials on Wallet before calling publish() or sendMessage().",
 	},
 	GOOGLE_MISSING_LOGO: {
 		status: 400,
@@ -176,7 +176,7 @@ export const WALLET_ERROR_CODES = {
 	IMAGE_FETCH_NETWORK_ERROR: {
 		status: 502,
 		message: "Could not download the image.",
-		why: "The image request failed before its bytes could be read.",
+		why: "The image request failed, or took over 10 seconds, before its bytes could be read.",
 		fix: "Check the image URL and network access, or supply Apple image bytes directly.",
 	},
 	IMAGE_FETCH_FAILED: {
@@ -194,8 +194,19 @@ export interface WalletValidationIssue {
 	path: readonly (string | number)[];
 }
 
+/** How each platform's side of one call settled, as `Promise.allSettled` reports it. */
+export interface PlatformResults {
+	apple: PromiseSettledResult<unknown>;
+	google: PromiseSettledResult<unknown>;
+}
+
 export interface WalletErrorOptions extends ErrorOptions {
 	issues?: readonly WalletValidationIssue[];
+	/**
+	 * How Apple and Google each settled, when both are configured and this
+	 * error failed one of them. The other may already have applied its change.
+	 */
+	results?: PlatformResults;
 	/** Seconds to wait, as requested by the remote server. No retry is performed. */
 	retryAfter?: number;
 	/** Upstream HTTP status, when available; otherwise the catalog default is used. */
@@ -209,6 +220,7 @@ export class WalletError extends Error {
 	readonly fix: string;
 	readonly retryAfter: number | undefined;
 	readonly issues: readonly WalletValidationIssue[];
+	readonly results: PlatformResults | undefined;
 
 	constructor(
 		code: WalletErrorCode,
@@ -224,5 +236,6 @@ export class WalletError extends Error {
 		this.fix = definition.fix;
 		this.retryAfter = options?.retryAfter;
 		this.issues = options?.issues ?? [];
+		this.results = options?.results;
 	}
 }
