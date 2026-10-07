@@ -1,6 +1,6 @@
 {
   "name": "passlet",
-  "version": "3.1.1",
+  "version": "3.2.0",
   "type": "module",
   "description": "Generate Apple Wallet and Google Wallet passes from a single API",
   "keywords": [

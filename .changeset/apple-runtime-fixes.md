@@ -1,5 +1,0 @@
----
-"passlet": minor
----
-
-Apple pass updates are lighter on APNs and your servers. `wallet.update()` now keeps its APNs connection open for later updates instead of opening one per call, as Apple asks; the idle connection never keeps your process alive and closes after an hour unused. When the connection drops mid-update, every push APNs already answered still counts, including tokens it reported as unregistered, whose registrations are still removed; pushes the drop took down are retried once on a new connection, then count as `failed`. Apple image URLs are now downloaded once per template instead of on every pass the web service renders (a failed download is retried by the next pass), and a download that takes over 10 seconds fails with `IMAGE_FETCH_NETWORK_ERROR`. New: `apple.webService.onError(error, request)` sees the errors behind the web service's bare 500 responses, and `registrations.updatablePasses(deviceLibraryIdentifier, passesUpdatedSince)` lets a device's poll for changed passes run one query instead of calling `load` for every pass it holds. Importing passlet no longer loads `node:http2` until the first push.
