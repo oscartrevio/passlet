@@ -451,7 +451,7 @@ export function PassPlayground({
 									style={
 										{
 											backgroundColor: c.color,
-											"--swatch": c.ring,
+											"--swatch": c.color,
 										} as CSSProperties
 									}
 									title={c.label}
