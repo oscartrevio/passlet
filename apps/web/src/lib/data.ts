@@ -3,7 +3,9 @@ export type PatternType = "waves" | "zigzag" | "chessboard" | "dots";
 // Pass presets come from Radix Colors (light scales): the fill is the solid
 // step 9, the strip pattern uses step 11, and the text is Radix's pairing for
 // step 9 (white, or step 12 on bright Amber). Midnight and Sand are neutrals
-// with no step-9 solid, so they use Slate 12 and Brown 3 instead.
+// with no step-9 solid, so they use Slate 12 and Brown 3 instead. `ring`
+// outlines the selected swatch: the fill itself, except on Sand, whose fill
+// is too close to the page, so it takes Brown 8.
 export const COLORS = [
 	{
 		label: "Green",
@@ -12,6 +14,7 @@ export const COLORS = [
 		secondary: "#218358",
 		text: "#FFFFFF",
 		subtle: "rgba(255,255,255,0.45)",
+		ring: "#30A46C",
 	},
 	{
 		label: "Amber",
@@ -20,6 +23,7 @@ export const COLORS = [
 		secondary: "#AB6400",
 		text: "#4F3422",
 		subtle: "rgba(79,52,34,0.45)",
+		ring: "#FFC53D",
 	},
 	{
 		label: "Orange",
@@ -28,6 +32,7 @@ export const COLORS = [
 		secondary: "#CC4E00",
 		text: "#FFFFFF",
 		subtle: "rgba(255,255,255,0.45)",
+		ring: "#F76B15",
 	},
 	{
 		label: "Red",
@@ -36,6 +41,7 @@ export const COLORS = [
 		secondary: "#CE2C31",
 		text: "#FFFFFF",
 		subtle: "rgba(255,255,255,0.45)",
+		ring: "#E5484D",
 	},
 	{
 		label: "Purple",
@@ -44,6 +50,7 @@ export const COLORS = [
 		secondary: "#8145B5",
 		text: "#FFFFFF",
 		subtle: "rgba(255,255,255,0.45)",
+		ring: "#8E4EC6",
 	},
 	{
 		label: "Blue",
@@ -52,6 +59,7 @@ export const COLORS = [
 		secondary: "#0D74CE",
 		text: "#FFFFFF",
 		subtle: "rgba(255,255,255,0.45)",
+		ring: "#0090FF",
 	},
 	{
 		label: "Midnight",
@@ -60,6 +68,7 @@ export const COLORS = [
 		secondary: "#60646C",
 		text: "#FFFFFF",
 		subtle: "rgba(255,255,255,0.45)",
+		ring: "#1C2024",
 	},
 	{
 		label: "Sand",
@@ -68,6 +77,7 @@ export const COLORS = [
 		secondary: "#EBDACA",
 		text: "#3E332E",
 		subtle: "rgba(62,51,46,0.45)",
+		ring: "#DCBC9F",
 	},
 ] as const;
 
