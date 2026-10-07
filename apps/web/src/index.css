@@ -7,6 +7,13 @@
 @layer base {
 	html {
 		scrollbar-gutter: stable;
+		/* No rubber-band bounce at the page edges with a mouse or trackpad.
+		   (pointer: fine) tests the primary input, so touch devices, including
+		   phones, keep pull-to-refresh.
+		   https://developer.mozilla.org/en-US/docs/Web/CSS/@media/pointer */
+		@media (pointer: fine) {
+			overscroll-behavior: none;
+		}
 	}
 	body {
 		@apply bg-background text-foreground font-sans;
