@@ -7,8 +7,6 @@
 
 <h3>Apple Wallet and Google Wallet passes from one TypeScript API</h3>
 
-<p>Issue, update and bundle passes with zero runtime dependencies.</p>
-
 <p>
   <a href="https://www.npmjs.com/package/passlet"><img src="https://img.shields.io/npm/v/passlet?style=flat-square&color=000" alt="npm"></a>
   <a href="https://github.com/oscartrevio/passlet/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/oscartrevio/passlet/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
