@@ -105,10 +105,4 @@ Issues and PRs welcome. Setup, tests and releases are in [CONTRIBUTING.md](CONTR
 
 ---
 
-<div align="center">
-
 Built by [Oscar Treviño](https://www.oscartrev.io)
-
-[X](https://twitter.com/oscartrevio_) | [GitHub](https://github.com/oscartrevio)
-
-</div>
