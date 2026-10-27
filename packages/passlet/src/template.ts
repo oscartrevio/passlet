@@ -1,81 +1,25 @@
-import { en } from "zod/locales";
-import type * as z from "zod/mini";
-import {
-	WalletError,
-	type WalletErrorCode,
-	type WalletValidationIssue,
-} from "./errors";
-import { type Providers, runProviders } from "./providers";
-import {
-	type ParsedContent,
-	type PassContent,
-	passContentSchema,
-} from "./schema/content";
-import { type GooglePassMessage, googleMessageSchema } from "./schema/parts";
-import type { IssuedPass } from "./schema/settings";
-import {
-	type ParsedTemplate,
-	type TemplateConfig,
-	templateConfigSchema,
-} from "./schema/template";
+import { WalletError } from "./errors";
+import type { IssuedPass } from "./output";
+import { type PassItem, type Providers, runProviders } from "./providers";
+import type { PassContent } from "./schema/content";
+import { type GooglePassMessage, parseGoogleMessage } from "./schema/google";
+import type { ParsedTemplate } from "./schema/template";
 
-// zod/mini loads no locale, so its own issues would read "Invalid input".
-// Passing English per parse, instead of through z.config(), leaves the global
-// zod config to the host app. https://zod.dev/packages/mini#no-default-locale
-const PARSE_OPTIONS = { error: en().localeError };
-
-function configError(
-	code: Extract<
-		WalletErrorCode,
-		"PASS_CONFIG_INVALID" | "CREATE_CONFIG_INVALID"
-	>,
-	error: z.core.$ZodError
-): WalletError {
-	const issues: WalletValidationIssue[] = error.issues.map(
-		({ path, message }) => ({
-			path: path.map((part) =>
-				typeof part === "symbol" ? String(part) : part
-			),
-			message,
-		})
-	);
-	const first = issues[0];
-	return new WalletError(
-		code,
-		first ? `${first.path.join(".") || "config"}: ${first.message}` : undefined,
-		{ issues }
-	);
+/** What a template needs from the {@link Wallet} that built it. */
+export interface TemplateHost {
+	/** The checked item to render `content` from `template`. */
+	item(template: PassTemplate, content: PassContent): PassItem;
+	readonly providers: Providers;
 }
 
-/**
- * Parse recipient content, defaults applied, and check each configured
- * platform's rules against it.
- */
-export function parseContent(
-	providers: Providers,
-	content: PassContent
-): ParsedContent {
-	const result = passContentSchema.safeParse(content, PARSE_OPTIONS);
-	if (!result.success) {
-		throw configError("CREATE_CONFIG_INVALID", result.error);
-	}
-	providers.apple?.checkContent();
-	providers.google?.checkContent(result.data);
-	return result.data;
-}
+let construct: (config: ParsedTemplate, host: TemplateHost) => PassTemplate;
 
 /**
- * A configured pass template. Obtain one from {@link Wallet} rather than
- * constructing directly.
- *
- * The config is validated at construction time — a {@link WalletError} with
- * code `PASS_CONFIG_INVALID` is thrown immediately if anything is wrong.
- * Template-level provider requirements are checked too: `APPLE_MISSING_ICON`
- * when Apple credentials are supplied without `apple.icon`; with Google
- * credentials, `PASS_CONFIG_INVALID` for an `id` Google cannot use in a class
- * ID, `GOOGLE_MISSING_LOGO` when a template type that requires `google.logo`
- * is missing it, and `GOOGLE_FLIGHT_MISSING_CLASS_FIELDS` when an air
- * boarding pass lacks its flight details.
+ * A validated pass template, built by the {@link Wallet} methods named after
+ * each pass type (`wallet.loyalty()`, `wallet.eventTicket()`, …), which
+ * throw `PASS_CONFIG_INVALID` for an invalid config and the provider codes
+ * for configs your credentials cannot issue: `APPLE_MISSING_ICON`,
+ * `GOOGLE_MISSING_LOGO`, `GOOGLE_FLIGHT_MISSING_CLASS_FIELDS`, ….
  */
 export class PassTemplate {
 	/**
@@ -83,17 +27,15 @@ export class PassTemplate {
 	 * factory, with every default applied.
 	 */
 	readonly config: ParsedTemplate;
-	private readonly providers: Providers;
+	readonly #host: TemplateHost;
 
-	constructor(config: TemplateConfig, providers: Providers) {
-		const result = templateConfigSchema.safeParse(config, PARSE_OPTIONS);
-		if (!result.success) {
-			throw configError("PASS_CONFIG_INVALID", result.error);
-		}
-		providers.apple?.checkTemplate(result.data);
-		providers.google?.checkTemplate(result.data);
-		this.config = result.data;
-		this.providers = providers;
+	static {
+		construct = (config, host) => new PassTemplate(config, host);
+	}
+
+	private constructor(config: ParsedTemplate, host: TemplateHost) {
+		this.config = config;
+		this.#host = host;
 	}
 
 	/**
@@ -110,12 +52,9 @@ export class PassTemplate {
 	 * A provider's error carries `results` when both wallets are configured.
 	 */
 	async create(content: PassContent): Promise<IssuedPass> {
-		const item = {
-			template: this.config,
-			content: parseContent(this.providers, content),
-		};
+		const item = this.#host.item(this, content);
 		return await runProviders(
-			this.providers,
+			this.#host.providers,
 			(apple) => apple.issue(item),
 			(google) => google.issue(item)
 		);
@@ -124,23 +63,27 @@ export class PassTemplate {
 	/**
 	 * Publish shared Google template changes. create() only creates missing classes;
 	 * it does not overwrite existing ones. Apple templates are embedded in each pass.
+	 *
+	 * @throws {WalletError} `GOOGLE_NOT_CONFIGURED` without Google credentials.
 	 */
 	async publish(): Promise<void> {
-		if (!this.providers.google) {
-			throw new WalletError("GOOGLE_NOT_CONFIGURED");
-		}
-		await this.providers.google.publish(this.config);
+		await this.#google().publish(this.config);
 	}
 
 	/**
-	 * Mark a pass as expired / invalid.
+	 * Mark a Google pass as expired: moves its object to the `EXPIRED` state
+	 * through the Wallet REST API.
 	 *
-	 * Google: transitions the object state to `EXPIRED` via the Wallet REST API.
-	 * Apple: no-op — Apple passes expire automatically when `expiresAt` is reached.
-	 * To void one, return `apple: { voided: true }` from `load` and call `wallet.update()`.
+	 * Apple has no such call. Apple passes expire on their own at
+	 * `expiresAt`; to void one, return `apple: { voided: true }` from `load`
+	 * and call `wallet.update()`.
+	 *
+	 * @throws {WalletError} `GOOGLE_NOT_CONFIGURED` without Google credentials,
+	 * `CREATE_CONFIG_INVALID` for a serial number Google cannot use, or the
+	 * Google API error.
 	 */
 	async expire(serialNumber: string): Promise<void> {
-		await this.providers.google?.expire(this.config, serialNumber);
+		await this.#google().expire(this.config, serialNumber);
 	}
 
 	/**
@@ -165,17 +108,27 @@ export class PassTemplate {
 		serialNumber: string,
 		message: GooglePassMessage
 	): Promise<void> {
-		if (!this.providers.google) {
-			throw new WalletError("GOOGLE_NOT_CONFIGURED");
-		}
-		const result = googleMessageSchema.safeParse(message, PARSE_OPTIONS);
-		if (!result.success) {
-			throw configError("CREATE_CONFIG_INVALID", result.error);
-		}
-		await this.providers.google.sendMessage(
+		const google = this.#google();
+		await google.sendMessage(
 			this.config,
 			serialNumber,
-			result.data
+			parseGoogleMessage(message)
 		);
 	}
+
+	#google() {
+		const { google } = this.#host.providers;
+		if (!google) {
+			throw new WalletError("GOOGLE_NOT_CONFIGURED");
+		}
+		return google;
+	}
+}
+
+/** A template of `config`, already validated, issued through `host`. */
+export function createTemplate(
+	config: ParsedTemplate,
+	host: TemplateHost
+): PassTemplate {
+	return construct(config, host);
 }

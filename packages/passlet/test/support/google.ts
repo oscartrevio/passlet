@@ -1,7 +1,13 @@
-import { generateKeyPairSync, type KeyObject, verify } from "node:crypto";
-import { onTestFinished, vi } from "vitest";
-import type { GoogleObjectType } from "../../src/google/client";
-import type { GoogleCredentials } from "../../src/schema/settings";
+import {
+	createPublicKey,
+	generateKeyPairSync,
+	type KeyObject,
+	verify,
+} from "node:crypto";
+import { vi } from "vitest";
+import type { GoogleCredentials } from "../../src/config";
+import type { GoogleVertical } from "../../src/google/utils";
+import { assertWalletRequest } from "./google-schema";
 
 export const ISSUER_ID = "3388000000022801234";
 export const CLIENT_EMAIL = "test@test-project.iam.gserviceaccount.com";
@@ -12,32 +18,42 @@ const TOKEN_URL = "https://oauth2.googleapis.com/token";
 
 let privateKey: string | undefined;
 
-/**
- * Service-account style credentials backed by an RSA-2048 PKCS#8 key,
- * generated once per test file.
- *
- * The Wallet client caches OAuth tokens per `issuerId:clientEmail` for the
- * life of the module, so tests that count token requests must pass a
- * distinct `clientEmail`.
- */
-export function googleCredentials(
-	overrides?: Partial<GoogleCredentials>
-): GoogleCredentials {
+function testKey(): string {
 	privateKey ??= generateKeyPairSync("rsa", {
 		modulusLength: 2048,
 		privateKeyEncoding: { type: "pkcs8", format: "pem" },
 		publicKeyEncoding: { type: "spki", format: "pem" },
 	}).privateKey;
+	return privateKey;
+}
+
+/**
+ * Service-account style credentials backed by an RSA-2048 PKCS#8 key,
+ * generated once per test file.
+ */
+export function googleCredentials(
+	overrides?: Partial<GoogleCredentials>
+): GoogleCredentials {
 	return {
 		issuerId: ISSUER_ID,
 		clientEmail: CLIENT_EMAIL,
-		privateKey,
+		privateKey: testKey(),
 		...overrides,
 	};
 }
 
+/** The public half of {@link googleCredentials}' key, for verifying JWTs. */
+export function googlePublicKey(): KeyObject {
+	return createPublicKey(testKey());
+}
+
 export interface WalletRequest {
 	body: Record<string, unknown> | undefined;
+	/**
+	 * How many Wallet round trips deep the request was sent: one more than
+	 * the deepest response delivered before it.
+	 */
+	depth: number;
 	/** Request headers with lower-cased names. */
 	headers: Record<string, string>;
 	method: string;
@@ -48,8 +64,12 @@ export interface WalletRequest {
 export type WalletResponder = (request: WalletRequest) => Response | undefined;
 
 export interface GoogleFetchStub {
+	/** Claims of each OAuth assertion, verified against the test key. */
+	assertions: Record<string, unknown>[];
 	/** Body of the first Wallet request matching `method` and `path` substring. */
 	body(method: string, path: string): Record<string, unknown>;
+	/** Most Wallet requests awaiting a response at the same time. */
+	maxInFlight: number;
 	/** Wallet API requests in call order. OAuth token requests are not recorded. */
 	requests: WalletRequest[];
 	/** OAuth token requests made so far. */
@@ -64,22 +84,51 @@ export interface StubGoogleFetchOptions {
 	token?: () => Response;
 }
 
+// Google's token endpoint rejects an assertion it cannot verify.
+// https://developers.google.com/identity/protocols/oauth2/service-account#httprest
+function tokenResponse(
+	stub: GoogleFetchStub,
+	init: RequestInit | undefined,
+	token: (() => Response) | undefined
+): Response {
+	const form = new URLSearchParams(String(init?.body));
+	try {
+		if (
+			form.get("grant_type") !== "urn:ietf:params:oauth:grant-type:jwt-bearer"
+		) {
+			throw new Error("unexpected grant_type");
+		}
+		stub.assertions.push(
+			verifyJwt(form.get("assertion") ?? "", googlePublicKey()).claims
+		);
+	} catch {
+		return Response.json({ error: "invalid_grant" }, { status: 400 });
+	}
+	return (
+		token?.() ?? Response.json({ access_token: "test-token", expires_in: 3599 })
+	);
+}
+
 /**
- * Replaces global `fetch` with a Google Wallet API stand-in until the current
- * test finishes.
+ * Replaces global `fetch` with a Google Wallet API stand-in.
  *
- * Defaults: the OAuth token endpoint returns a fake token; `GET` requests
- * return 404 so class creation takes the `POST` path; everything else returns
- * 200 `{}`. `respond` gets first chance at every Wallet request and may return
- * `undefined` to fall through to the defaults.
+ * Defaults: the OAuth token endpoint verifies the assertion and returns a
+ * fake token; `GET` requests return 404 so class creation takes the `POST`
+ * path; everything else returns 200 `{}`. `respond` gets first chance at
+ * every Wallet request and may return `undefined` to fall through to the
+ * defaults. Every Wallet body is checked against Google's discovery document,
+ * and a body Google would not accept fails the request. Responses arrive on a
+ * later macrotask, so requests sent together are observed in flight together.
  */
 export function stubGoogleFetch(
 	respond?: WalletResponder,
 	{ token }: StubGoogleFetchOptions = {}
 ): GoogleFetchStub {
 	const stub: GoogleFetchStub = {
+		assertions: [],
 		requests: [],
 		tokenRequests: 0,
+		maxInFlight: 0,
 		body(method, path) {
 			const match = stub.requests.find(
 				(r) => r.method === method && r.path.includes(path)
@@ -90,6 +139,8 @@ export function stubGoogleFetch(
 			return match.body;
 		},
 	};
+	let inFlight = 0;
+	let deliveredDepth = 0;
 
 	vi.stubGlobal(
 		"fetch",
@@ -97,10 +148,7 @@ export function stubGoogleFetch(
 			const url = String(input);
 			if (url.startsWith(TOKEN_URL)) {
 				stub.tokenRequests += 1;
-				return Promise.resolve(
-					token?.() ??
-						Response.json({ access_token: "test-token", expires_in: 3599 })
-				);
+				return Promise.resolve(tokenResponse(stub, init, token));
 			}
 			if (!url.startsWith(WALLET_BASE)) {
 				return Promise.reject(new Error(`unexpected fetch: ${url}`));
@@ -109,26 +157,59 @@ export function stubGoogleFetch(
 				method: init?.method ?? "GET",
 				path: url.slice(WALLET_BASE.length),
 				headers: Object.fromEntries(new Headers(init?.headers)),
-				body: init?.body
-					? (JSON.parse(String(init.body)) as Record<string, unknown>)
-					: undefined,
+				body: init?.body ? JSON.parse(String(init.body)) : undefined,
+				depth: deliveredDepth + 1,
 			};
 			stub.requests.push(request);
+			assertWalletRequest(request.method, request.path, request.body);
 			const response =
 				respond?.(request) ??
 				(request.method === "GET"
 					? new Response("", { status: 404 })
 					: Response.json({}));
-			return Promise.resolve(response);
+			inFlight += 1;
+			stub.maxInFlight = Math.max(stub.maxInFlight, inFlight);
+			return new Promise<Response>((resolve) => {
+				setTimeout(() => {
+					inFlight -= 1;
+					deliveredDepth = Math.max(deliveredDepth, request.depth);
+					resolve(response);
+				});
+			});
 		})
 	);
-	onTestFinished(() => {
-		vi.unstubAllGlobals();
-	});
 
 	return stub;
 }
 
+/**
+ * Google's PATCH as observed against the live API: nested objects merge,
+ * null clears, and lists and scalars replace.
+ * https://developers.google.com/wallet/retail/loyalty-cards/use-cases/updates
+ */
+export function applyGooglePatch(
+	stored: object,
+	patch: object
+): Record<string, unknown> {
+	const result: Record<string, unknown> = { ...stored };
+	for (const [key, value] of Object.entries(patch)) {
+		const current = result[key];
+		if (value === null) {
+			result[key] = undefined;
+		} else if (typeof value === "object" && !Array.isArray(value)) {
+			const base =
+				typeof current === "object" &&
+				current !== null &&
+				!Array.isArray(current)
+					? current
+					: {};
+			result[key] = applyGooglePatch(base, value);
+		} else {
+			result[key] = value;
+		}
+	}
+	return result;
+}
 /**
  * Responder under which every class already exists, as after the first pass
  * was issued from a template. Other requests fall through to the defaults.
@@ -180,15 +261,15 @@ export function verifyJwt(jwt: string, publicKey: KeyObject): DecodedJwt {
 /** The single Wallet object embedded in a save-to-wallet JWT. */
 export function decodeJwtObject(
 	jwt: string,
-	objectType: GoogleObjectType
+	vertical: GoogleVertical
 ): Record<string, unknown> {
 	const payload = decodeJwt(jwt).claims.payload as Record<
 		string,
 		Record<string, unknown>[]
 	>;
-	const object = payload[`${objectType}s`]?.[0];
+	const object = payload[`${vertical}Objects`]?.[0];
 	if (!object) {
-		throw new Error(`JWT payload has no ${objectType}s entry`);
+		throw new Error(`JWT payload has no ${vertical}Objects entry`);
 	}
 	return object;
 }

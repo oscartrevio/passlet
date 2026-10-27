@@ -8,3 +8,8 @@
 export function discardBody(response: Response): void {
 	response.body?.cancel().catch(() => undefined);
 }
+
+/** Every route's answer when there is no Apple web service to serve it. */
+export function notFound(): Promise<Response> {
+	return Promise.resolve(new Response(null, { status: 404 }));
+}

@@ -1,6 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { resolveImageSet } from "../../../src/apple/images";
-import type { AppleCredentials } from "../../../src/schema/settings";
+import type { AppleCredentials } from "../../../src/config";
 import type { LoyaltyTemplateConfig } from "../../../src/schema/template";
 import type { PassTemplate } from "../../../src/template";
 import { Wallet } from "../../../src/wallet";
@@ -8,6 +7,7 @@ import {
 	appleCredentials,
 	ICON,
 	type Pkpass,
+	PNG,
 	readPkpass,
 } from "../../support/apple";
 
@@ -40,6 +40,13 @@ function stubFetch(
 			Promise.resolve(respond(String(input)))
 		)
 	);
+}
+
+function expectBytes(
+	actual: Uint8Array | undefined,
+	expected: Uint8Array
+): void {
+	expect(actual && Buffer.from(actual).equals(expected)).toBe(true);
 }
 
 /** Serves each URL's bytes; anything else is a 404. */
@@ -97,11 +104,9 @@ describe("icon", () => {
 			"pass.json",
 			"signature",
 		]);
-		expect([
-			full.files["icon.png"],
-			full.files["icon@2x.png"],
-			full.files["icon@3x.png"],
-		]).toEqual([Uint8Array.of(1), Uint8Array.of(2), Uint8Array.of(3)]);
+		expectBytes(full.files["icon.png"], Uint8Array.of(1));
+		expectBytes(full.files["icon@2x.png"], Uint8Array.of(2));
+		expectBytes(full.files["icon@3x.png"], Uint8Array.of(3));
 
 		const bare = await generate({ icon: ICON_URLS.base });
 		expect(bare.entries).toEqual([
@@ -140,7 +145,7 @@ describe("other images", () => {
 			"pass.json",
 			"signature",
 		]);
-		expect(files["logo.png"]).toEqual(Uint8Array.of(4));
+		expectBytes(files["logo.png"], Uint8Array.of(4));
 	});
 
 	// The template asked for the image; a pass silently missing it is a bug.
@@ -182,8 +187,8 @@ describe("downloads", () => {
 		stubFetch(respond);
 		const pass = template();
 
-		expect(await logoOf(pass, "img-001")).toEqual(Uint8Array.of(4));
-		expect(await logoOf(pass, "img-002")).toEqual(Uint8Array.of(4));
+		expectBytes(await logoOf(pass, "img-001"), Uint8Array.of(4));
+		expectBytes(await logoOf(pass, "img-002"), Uint8Array.of(4));
 		expect(respond).toHaveBeenCalledTimes(1);
 	});
 
@@ -198,7 +203,7 @@ describe("downloads", () => {
 		await expect(logoOf(pass, "img-001")).rejects.toMatchObject({
 			code: "IMAGE_FETCH_FAILED",
 		});
-		expect(await logoOf(pass, "img-001")).toEqual(Uint8Array.of(4));
+		expectBytes(await logoOf(pass, "img-001"), Uint8Array.of(4));
 		expect(respond).toHaveBeenCalledTimes(2);
 	});
 
@@ -222,10 +227,68 @@ describe("downloads", () => {
 			)
 		);
 
-		await expect(resolveImageSet("logo", LOGO_URL)).rejects.toMatchObject({
+		await expect(
+			generate({ icon: ICON, logo: LOGO_URL })
+		).rejects.toMatchObject({
 			code: "IMAGE_FETCH_NETWORK_ERROR",
 			cause: expect.objectContaining({ name: "TimeoutError" }),
 		});
+	});
+
+	it("downloads every resolution of an image at once", async () => {
+		let inFlight = 0;
+		let mostInFlight = 0;
+		stubFetch(async (url) => {
+			inFlight += 1;
+			mostInFlight = Math.max(mostInFlight, inFlight);
+			await new Promise((resolve) => setTimeout(resolve, 5));
+			inFlight -= 1;
+			return new Response(Uint8Array.of(url.length));
+		});
+
+		await generate({ icon: ICON_URLS });
+		expect(mostInFlight).toBe(3);
+	});
+
+	it("downloads a URL a template names twice once", async () => {
+		const respond = vi.fn(served({ [LOGO_URL]: Uint8Array.of(4) }));
+		stubFetch(respond);
+
+		const { files } = await generate({
+			icon: { base: LOGO_URL, retina: LOGO_URL },
+			logo: LOGO_URL,
+		});
+		expect(respond).toHaveBeenCalledOnce();
+		expectBytes(files["icon.png"], Uint8Array.of(4));
+		expectBytes(files["icon@2x.png"], Uint8Array.of(4));
+		expectBytes(files["logo.png"], Uint8Array.of(4));
+	});
+});
+
+describe("image bytes", () => {
+	// Images are hashed once per template; the archive must still match them.
+	// `fs.readFile` hands out Buffers, whose slice() shares memory.
+	it.each([
+		["Uint8Array", () => PNG.slice()],
+		["Buffer", () => Buffer.from(PNG)],
+	])("keeps the bytes a template was given, even if the caller reuses its %s", async (_, copy) => {
+		const icon = copy();
+		const pass = new Wallet({ apple: credentials }).loyalty({
+			id: "img-bytes",
+			name: "Images",
+			fields: [],
+			apple: { icon },
+		});
+		await pass.create({ serialNumber: "img-001" });
+		icon.fill(0);
+
+		const { apple } = await pass.create({ serialNumber: "img-002" });
+		if (!apple) {
+			throw new Error("no .pkpass issued");
+		}
+		const { files, manifest, sha1 } = await readPkpass(apple);
+		expectBytes(files["icon.png"], PNG);
+		expect(manifest["icon.png"]).toBe(sha1["icon.png"]);
 	});
 });
 
@@ -239,7 +302,7 @@ describe("image failures", () => {
 				Promise.resolve(new Response("private-response", { status: 403 }))
 			)
 		);
-		await expect(resolveImageSet("icon", imageUrl)).rejects.toMatchObject({
+		await expect(generate({ icon: imageUrl })).rejects.toMatchObject({
 			code: "IMAGE_FETCH_FAILED",
 			status: 403,
 			message: expect.not.stringContaining("private"),
@@ -262,7 +325,7 @@ describe("image failures", () => {
 				)
 			)
 		);
-		await expect(resolveImageSet("icon", imageUrl)).rejects.toMatchObject({
+		await expect(generate({ icon: imageUrl })).rejects.toMatchObject({
 			code: "IMAGE_FETCH_NETWORK_ERROR",
 			status: 502,
 			cause,

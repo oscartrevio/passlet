@@ -1,145 +1,98 @@
-// biome-ignore lint/performance/noNamespaceImport: the namespace tree-shakes; zod/mini's named `z` export bundles all of zod.
-import * as z from "zod/mini";
 import {
-	type Barcode,
-	barcodeSchema,
-	type GoogleModules,
-	type GooglePassMessage,
-	googleMessageSchema,
-	googleModulesSchema,
-	type ParsedBarcode,
-	type ParsedGooglePassMessage,
-} from "./parts";
+	array,
+	boolean,
+	nonEmpty,
+	nullable,
+	object,
+	optional,
+	record,
+	string,
+	validate,
+} from "./check";
+import {
+	type GoogleContentOptions,
+	googleContentOptions,
+	type ParsedGoogleContentOptions,
+} from "./google";
+import { type Barcode, barcode, type ParsedBarcode, timestamp } from "./parts";
 
-// TOTP-based rotating barcode — generates a new barcode value every periodMillis ms.
-// valuePattern uses {totp_value_hex} or {totp_value_decimal} as the rotating placeholder.
-const googleRotatingBarcodeSchema = z.object({
-	// Only QR_CODE and PDF_417 support rotation — the other BarcodeType values
-	// (AZTEC, CODE_128, …) are rejected for a RotatingBarcode.
-	type: z._default(z.enum(["QR_CODE", "PDF_417"]), "QR_CODE"),
-	// Pattern containing the TOTP placeholder, e.g. "https://example.com/redeem/{totp_value_hex}"
-	valuePattern: z
-		.string()
-		.check(z.minLength(1, "rotatingBarcode.valuePattern must not be empty")),
-	totpDetails: z.object({
-		periodMillis: z._default(z.string(), "30000"),
-		algorithm: z._default(z.literal("TOTP_SHA1"), "TOTP_SHA1"),
-		parameters: z.array(
-			z.object({
-				key: z.string(),
-				valueLength: z.int().check(z.minimum(1), z.maximum(8)),
-			})
-		),
-	}),
-	renderEncoding: z.optional(z.literal("UTF_8")),
-});
-
-export const passContentSchema = z.object({
-	serialNumber: z
-		.string()
-		.check(z.minLength(1, "PassContent missing: serialNumber")),
-	barcode: z.optional(barcodeSchema),
-	// Multiple barcodes. Apple emits every entry in `barcodes` and renders the
-	// first one the device can display (iOS 27 and later reads more than one), so
-	// list the preferred format first and a widely-supported fallback after it.
-	// Google keeps a single barcode per object and uses the first entry.
-	// Takes precedence over `barcode` when both are given.
-	barcodes: z.optional(z.array(barcodeSchema)),
-	// Apple: no equivalent — ignored
-	// Google: validTimeInterval.start
-	validFrom: z.optional(
-		z.iso.datetime({
-			message: 'must be an ISO datetime e.g. "2024-01-01T00:00:00Z"',
-		})
-	),
-	expiresAt: z.optional(
-		z.iso.datetime({
-			message: 'must be an ISO datetime e.g. "2025-01-01T00:00:00Z"',
-		})
-	),
-	// Per-recipient field values. null hides the field for this recipient.
-	values: z.optional(z.record(z.string(), z.nullable(z.string()))),
-	// Passes sharing a group are shown together. Apple: groupingIdentifier,
-	// which Wallet honors only on boarding passes and event tickets, so it is
-	// written for flight and event templates only. Google:
-	// groupingInfo.groupingId on the object, for every pass type.
-	group: z.optional(
-		z.string().check(z.minLength(1, "group must not be empty"))
-	),
-	// Apple-specific per-recipient options.
-	apple: z.optional(
-		z.object({
-			// Mark this issued pass as void. Displays a "Void" banner on the pass.
-			// For Google, use pass.expire() instead — it transitions state via the API.
-			voided: z.optional(z.boolean()),
-		})
-	),
-	// Google-specific per-recipient options.
-	google: z.optional(
-		z.object({
-			// Smart Tap NFC value for this specific pass holder (required when enableSmartTap is true)
-			smartTapRedemptionValue: z.optional(z.string()),
-			// TOTP rotating barcode — replaces the static barcode for this pass holder
-			rotatingBarcode: z.optional(googleRotatingBarcodeSchema),
-			// Per-recipient info messages shown inside the pass view
-			messages: z.optional(z.array(googleMessageSchema)),
-			// Per-recipient links, images, and value-added modules. Google merges
-			// these with the class-level modules of the same name.
-			...googleModulesSchema.shape,
-			// Google transitObject requires tripType — per-recipient override of
-			// google.transit.tripType (ignored outside the transit vertical).
-			tripType: z.optional(z.enum(["oneWay", "roundTrip"])),
-		})
-	),
-});
-
-export interface RotatingBarcode {
-	renderEncoding?: "UTF_8";
-	totpDetails: {
-		/** Defaults to `"30000"`. */
-		periodMillis?: string;
-		/** Defaults to `"TOTP_SHA1"`. */
-		algorithm?: "TOTP_SHA1";
-		parameters: { key: string; valueLength: number }[];
-	};
-	/** Defaults to `"QR_CODE"`. */
-	type?: "QR_CODE" | "PDF_417";
-	valuePattern: string;
+/** Apple-only options of one recipient's pass. */
+export interface AppleContentOptions {
+	/**
+	 * Shows the pass as void. For Google, call `template.expire()`, which moves
+	 * the pass to the expired state.
+	 */
+	voided?: boolean;
 }
 
-export interface GoogleContentOptions extends GoogleModules {
-	messages?: GooglePassMessage[];
-	rotatingBarcode?: RotatingBarcode;
-	smartTapRedemptionValue?: string;
-	tripType?: "oneWay" | "roundTrip";
-}
-
+/** One recipient's pass: what `create()` issues and `load` returns. */
 export interface PassContent {
-	apple?: { voided?: boolean };
+	/** Apple-only options of this pass. */
+	apple?: AppleContentOptions;
+	/** The pass's barcode. */
 	barcode?: Barcode;
+	/**
+	 * Several barcodes, taking precedence over `barcode`. Apple writes them
+	 * all and shows the first the device can render (iOS 27 and later read
+	 * more than one), so list the preferred format first and a widely
+	 * supported fallback after it. Google keeps one barcode: the first.
+	 */
 	barcodes?: Barcode[];
+	/**
+	 * When the pass expires, as a W3C timestamp with a time zone like
+	 * `"2025-12-09T13:00-07:00"`. Apple: `expirationDate`. Google:
+	 * `validTimeInterval.end`.
+	 */
 	expiresAt?: string;
+	/** Google-only options of this pass. */
 	google?: GoogleContentOptions;
+	/**
+	 * Passes with the same group show together. Apple: `groupingIdentifier`,
+	 * which Wallet honors on boarding passes and event tickets only, so it is
+	 * written for those. Google: `groupingInfo.groupingId`, on every pass type.
+	 */
 	group?: string;
+	/**
+	 * Identifies the pass. With Google credentials it may hold only letters,
+	 * digits, `.`, `_` and `-`, because Google uses it in the object ID.
+	 */
 	serialNumber: string;
+	/**
+	 * Google only: when the pass becomes valid, as a W3C timestamp with a time
+	 * zone. Google: `validTimeInterval.start`.
+	 */
 	validFrom?: string;
+	/** This recipient's field values by field key; `null` hides the field. */
 	values?: Record<string, string | null>;
-}
-
-/** A rotating barcode as validated, with every default applied. */
-export interface ParsedRotatingBarcode extends RotatingBarcode {
-	totpDetails: Required<RotatingBarcode["totpDetails"]>;
-	type: "QR_CODE" | "PDF_417";
-}
-
-interface ParsedGoogleContentOptions extends GoogleContentOptions {
-	messages?: ParsedGooglePassMessage[];
-	rotatingBarcode?: ParsedRotatingBarcode;
 }
 
 /** Recipient content as validated, with every default applied. */
 export interface ParsedContent extends PassContent {
+	/** The barcode, with its format default applied. */
 	barcode?: ParsedBarcode;
+	/** The barcodes, each with its format default applied. */
 	barcodes?: ParsedBarcode[];
+	/** Google-only options, with every default applied. */
 	google?: ParsedGoogleContentOptions;
+}
+
+const content = object<ParsedContent>({
+	serialNumber: nonEmpty,
+	barcode: optional(barcode),
+	barcodes: optional(array(barcode)),
+	validFrom: optional(timestamp),
+	expiresAt: optional(timestamp),
+	values: optional(record(nullable(string))),
+	group: optional(nonEmpty),
+	apple: optional(object<AppleContentOptions>({ voided: optional(boolean) })),
+	google: optional(googleContentOptions),
+});
+
+/**
+ * The content as validated, with every default applied.
+ *
+ * @throws {WalletError} `CREATE_CONFIG_INVALID` listing every issue.
+ */
+export function parseContent(input: PassContent): ParsedContent {
+	return validate(content, input, "CREATE_CONFIG_INVALID", "content");
 }

@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { buildClassBody } from "../../../src/google/class-body";
-import type {
-	GoogleTransitOptions,
-	ParsedTemplate,
-} from "../../../src/schema/template";
+import { patchBody } from "../../../src/google/utils";
+import type { GoogleTransitOptions } from "../../../src/schema/google";
+import type { ParsedTemplate } from "../../../src/schema/template";
 import { FIXTURES, type FixtureName } from "../../support/fixtures";
-import { LOGO_URL } from "../../support/google";
+import { applyGooglePatch, LOGO_URL } from "../../support/google";
 import {
 	assertGoogleSchema,
 	assertRequiredKeys,
@@ -146,10 +145,81 @@ const GOLDEN: Record<FixtureName, Golden> = {
 	generic: {
 		resource: "genericClass",
 		required: [],
-		// genericClass has no branding fields at all; they live on the object.
+		// genericClass has no title, images or branding; genericObject has them.
 		body: { enableSmartTap: false },
 	},
 };
+
+const EXAMPLE_IMAGE = "https://example.com/image.png";
+
+// Everything passlet can put on a class, so a later publish that leaves it
+// out shows whether the field is cleared or left stale.
+function rich(pass: ParsedTemplate): ParsedTemplate {
+	const google: NonNullable<ParsedTemplate["google"]> = {
+		logo: LOGO_URL,
+		wideLogo: EXAMPLE_IMAGE,
+		hero: EXAMPLE_IMAGE,
+		messages: [{ header: "Hi", body: "All holders", messageType: "TEXT" }],
+		appLinkData: {
+			android: { packageName: "com.example.app" },
+			web: { uri: "https://example.com", description: "Your account" },
+			displayText: "Open the app",
+		},
+		enableSmartTap: true,
+		redemptionIssuers: ["3388000000022801234"],
+		links: [{ uri: "https://example.com/terms", description: "Terms" }],
+		images: [{ url: EXAMPLE_IMAGE, id: "banner" }],
+		valueAdded: [
+			{ header: "Perks", body: "See all", uri: "https://example.com/perks" },
+		],
+	};
+	const common = {
+		color: "#000000",
+		locales: { es: { name: "Nombre" } },
+		locations: [{ latitude: 1, longitude: 2 }],
+	};
+	if (pass.type !== "boardingPass") {
+		return { ...pass, ...common, google };
+	}
+	const transit = pass.google?.transit;
+	return {
+		...pass,
+		...common,
+		google: {
+			...google,
+			transit: transit && { ...transit, operatorName: "City Transit" },
+		},
+	};
+}
+
+// Only what each class type requires.
+function sparse(pass: ParsedTemplate): ParsedTemplate {
+	const common = {
+		color: undefined,
+		locales: undefined,
+		locations: undefined,
+		google: { logo: LOGO_URL },
+	};
+	switch (pass.type) {
+		case "eventTicket":
+			return {
+				...pass,
+				...common,
+				startsAt: undefined,
+				endsAt: undefined,
+				venue: undefined,
+			};
+		case "boardingPass":
+			return {
+				...pass,
+				...common,
+				arrival: undefined,
+				google: { logo: LOGO_URL, transit: pass.google?.transit && {} },
+			};
+		default:
+			return { ...pass, ...common };
+	}
+}
 
 describe("buildClassBody", () => {
 	describe.each(Object.keys(GOLDEN) as FixtureName[])("%s", (name) => {
@@ -161,6 +231,61 @@ describe("buildClassBody", () => {
 			assertGoogleSchema(resource, body);
 			assertRequiredKeys(resource, body, required);
 			expect(body).toEqual(expected);
+		});
+	});
+
+	// genericClass documents messages[] like every other class.
+	// https://developers.google.com/wallet/reference/rest/v1/genericclass
+	it("carries a generic template's class-level messages", () => {
+		const messages = [
+			{
+				header: "Welcome",
+				body: "Show this card",
+				messageType: "TEXT" as const,
+			},
+		];
+		const body = buildClassBody({
+			...FIXTURES.generic.pass,
+			google: { logo: LOGO_URL, messages },
+		});
+		assertGoogleSchema("genericClass", body);
+		expect(body.messages).toEqual(messages);
+	});
+
+	// Google's own example: an Android package name, a web URI with its
+	// description, and the button's display text.
+	// https://developers.google.com/wallet/retail/loyalty-cards/use-cases/link-from-loyalty-card
+	it("writes app links the way Google documents them", () => {
+		const body = buildClassBody({
+			...FIXTURES.loyalty.pass,
+			google: {
+				logo: LOGO_URL,
+				appLinkData: {
+					android: { packageName: "com.google.android.gm" },
+					web: {
+						uri: "https://mail.google.com/mail/",
+						description: "Web link for Gmail",
+					},
+					displayText: "Our awesome app!",
+				},
+			},
+		});
+		assertGoogleSchema("loyaltyClass", body);
+		expect(body.appLinkData).toEqual({
+			androidAppLinkInfo: {
+				appTarget: { packageName: "com.google.android.gm" },
+			},
+			webAppLinkInfo: {
+				appTarget: {
+					targetUri: {
+						uri: "https://mail.google.com/mail/",
+						description: "Web link for Gmail",
+					},
+				},
+			},
+			displayText: {
+				defaultValue: { language: "en-US", value: "Our awesome app!" },
+			},
 		});
 	});
 
@@ -232,46 +357,20 @@ describe("buildClassBody", () => {
 		expect(empty.valueAddedModuleData).toBeUndefined();
 	});
 
-	// publish() PUTs the existing class with this body spread over it, and
-	// update replaces the whole class, so a key passlet owns has to be stated
-	// to clear the value an earlier template set.
-	// https://developers.google.com/wallet/reference/rest/v1/loyaltyclass/update
-	it("states every key passlet owns, so a template that drops one clears it", () => {
-		const body = buildClassBody({
-			type: "loyalty",
-			id: "bare",
-			name: "Bare",
-			google: { logo: LOGO_URL },
-			fields: [],
+	// publish() patches the class: nested objects merge and only null clears,
+	// so every key passlet owns has to be stated to clear the value an earlier
+	// template set, at every depth.
+	// https://developers.google.com/wallet/reference/rest/v1/loyaltyclass/patch
+	describe.each(
+		Object.keys(FIXTURES) as FixtureName[]
+	)("publishing %s over a richer class", (name) => {
+		const { pass } = FIXTURES[name];
+		const stored = JSON.parse(JSON.stringify(buildClassBody(rich(pass))));
+
+		it("leaves exactly the sparser template's class", () => {
+			const body = buildClassBody(sparse(pass));
+			expect(applyGooglePatch(stored, patchBody(body))).toEqual(body);
 		});
-		expect(body).toEqual({
-			programName: "Bare",
-			issuerName: "Bare",
-			reviewStatus: "UNDER_REVIEW",
-			programLogo: LOGO,
-			enableSmartTap: false,
-		});
-		expect(Object.keys(body).sort()).toEqual(
-			[
-				"appLinkData",
-				"enableSmartTap",
-				"heroImage",
-				"hexBackgroundColor",
-				"imageModulesData",
-				"issuerName",
-				"linksModuleData",
-				"localizedIssuerName",
-				"localizedProgramName",
-				"merchantLocations",
-				"messages",
-				"programLogo",
-				"programName",
-				"redemptionIssuers",
-				"reviewStatus",
-				"valueAddedModuleData",
-				"wideProgramLogo",
-			].sort()
-		);
 	});
 
 	it.each([

@@ -1,11 +1,8 @@
-// biome-ignore lint/performance/noNamespaceImport: the namespace tree-shakes; zod/mini's named `z` export bundles all of zod.
-import * as z from "zod/mini";
-import type {
-	LoadedPass,
-	LoadPass,
-	PassRegistrations,
-} from "../schema/settings";
-import { isAppleAuthToken } from "./auth-token";
+import type { LoadedPass, LoadPass, PassRegistrations } from "../config";
+import { APPLE_PASS_CONTENT_TYPE } from "../output";
+import { array, type Check, object, pattern, string } from "../schema/check";
+import { PUSH_TOKEN } from "./apns";
+import type { AppleAuthTokens } from "./auth-token";
 
 export interface AppleWebServiceContext {
 	load: LoadPass;
@@ -18,7 +15,7 @@ export interface AppleWebServiceContext {
 		loaded: LoadedPass,
 		serialNumber: string
 	): Promise<Uint8Array<ArrayBuffer>>;
-	secret: string;
+	tokens: AppleAuthTokens;
 }
 
 // A PushToken body is one short hex string and a LogEntries body a handful of
@@ -34,32 +31,29 @@ const NO_STORE = { "cache-control": "no-store, private" };
 // scheme from its credentials. Apple sends exactly "ApplePass <token>".
 const AUTHORIZATION = /^ApplePass +(\S+)$/i;
 
-// Apple's PushToken object. APNs device tokens are hex; rejecting anything
-// else keeps request input from shaping the `/3/device/{pushToken}` path we
-// later push to.
-const PushToken = z.object({
-	pushToken: z.string().check(z.regex(/^[0-9a-f]+$/i)),
+// Apple's PushToken object. Rejecting a token APNs can't have issued keeps
+// request input from shaping the `/3/device/{pushToken}` path we push to.
+const PushToken = object<{ pushToken: string }>({
+	pushToken: pattern(PUSH_TOKEN, "must be an APNs device token"),
 });
 
 // Apple's LogEntries object.
-const LogEntries = z.object({ logs: z.array(z.string()) });
+const LogEntries = object<{ logs: string[] }>({ logs: array(string) });
 
 const DECIMAL = /^\d+$/;
 
-type Route =
-	| {
-			kind: "registration";
-			deviceLibraryIdentifier: string;
-			passTypeIdentifier: string;
-			serialNumber: string;
-	  }
-	| {
-			kind: "list";
-			deviceLibraryIdentifier: string;
-			passTypeIdentifier: string;
-	  }
-	| { kind: "pass"; passTypeIdentifier: string; serialNumber: string }
-	| { kind: "log" };
+// Apple's endpoint paths, matched at the end of the request path so the
+// handler works at any mount point. Each group is one non-empty segment.
+// "/v1/devices/{deviceLibraryIdentifier}/registrations/{passTypeIdentifier}/{serialNumber}"
+const REGISTRATION = /\/v1\/devices\/([^/]+)\/registrations\/([^/]+)\/([^/]+)$/;
+// "/v1/devices/{deviceLibraryIdentifier}/registrations/{passTypeIdentifier}"
+const LIST = /\/v1\/devices\/([^/]+)\/registrations\/([^/]+)$/;
+// "/v1/passes/{passTypeIdentifier}/{serialNumber}"
+const PASS = /\/v1\/passes\/([^/]+)\/([^/]+)$/;
+const LOG = /\/v1\/log$/;
+
+/** Answers one route, given the request and its decoded path segments. */
+type Handle = (request: Request, ...segments: string[]) => Promise<Response>;
 
 /**
  * The web service Apple Wallet calls to register devices for a pass and fetch
@@ -73,6 +67,10 @@ type Route =
 export function createAppleWebService(
 	context: AppleWebServiceContext
 ): (request: Request) => Promise<Response> {
+	// Concurrent requests for one version of a pass, like a holder's iPhone and
+	// Watch fetching it right after a push, share one render.
+	const rendering = new Map<string, Promise<Uint8Array<ArrayBuffer>>>();
+
 	/** Whether the request's token authorizes this pass. */
 	function authorize(
 		request: Request,
@@ -87,74 +85,68 @@ export function createAppleWebService(
 		const token = AUTHORIZATION.exec(
 			request.headers.get("authorization") ?? ""
 		)?.[1];
-		return (
-			token !== undefined &&
-			isAppleAuthToken(context.secret, passTypeIdentifier, serialNumber, token)
-		);
+		return token !== undefined && context.tokens.verifies(serialNumber, token);
 	}
 
 	async function register(
 		request: Request,
-		route: Extract<Route, { kind: "registration" }>
+		deviceLibraryIdentifier: string,
+		passTypeIdentifier: string,
+		serialNumber: string
 	): Promise<Response> {
 		// Apple: check the token first; on mismatch return 401 and disregard
 		// the request, so nothing reaches storage or even parses the body.
-		if (!authorize(request, route.passTypeIdentifier, route.serialNumber)) {
+		if (!authorize(request, passTypeIdentifier, serialNumber)) {
 			return respond(401);
 		}
-		const body = await readJson(request, REGISTER_BODY_LIMIT);
+		const body = await readBody(request, REGISTER_BODY_LIMIT, PushToken);
 		if (body instanceof Response) {
 			return body;
 		}
-		const parsed = PushToken.safeParse(body);
-		if (!parsed.success) {
-			return respond(400);
-		}
 		const created = await context.registrations.add({
-			deviceLibraryIdentifier: route.deviceLibraryIdentifier,
-			pushToken: parsed.data.pushToken,
-			serialNumber: route.serialNumber,
+			deviceLibraryIdentifier,
+			pushToken: body.pushToken,
+			serialNumber,
 		});
 		return respond(created ? 201 : 200);
 	}
 
 	async function unregister(
 		request: Request,
-		route: Extract<Route, { kind: "registration" }>
+		deviceLibraryIdentifier: string,
+		passTypeIdentifier: string,
+		serialNumber: string
 	): Promise<Response> {
-		if (!authorize(request, route.passTypeIdentifier, route.serialNumber)) {
+		if (!authorize(request, passTypeIdentifier, serialNumber)) {
 			return respond(401);
 		}
-		await context.registrations.remove(
-			route.deviceLibraryIdentifier,
-			route.serialNumber
-		);
+		await context.registrations.remove(deviceLibraryIdentifier, serialNumber);
 		return respond(200);
 	}
 
 	async function list(
-		url: URL,
-		route: Extract<Route, { kind: "list" }>
+		request: Request,
+		deviceLibraryIdentifier: string,
+		passTypeIdentifier: string
 	): Promise<Response> {
 		// No token here: the device library ID is the shared secret (Apple).
 		// We register no passes of any other type, so none of them can match.
-		if (route.passTypeIdentifier !== context.passTypeIdentifier) {
+		if (passTypeIdentifier !== context.passTypeIdentifier) {
 			return respond(204);
 		}
 		// Our tags are `updatedAt` in epoch milliseconds. A missing tag, or one
 		// we never issued, means "send everything", as on a device's first ask.
-		const tag = url.searchParams.get("passesUpdatedSince");
+		const tag = new URL(request.url).searchParams.get("passesUpdatedSince");
 		const since = tag !== null && DECIMAL.test(tag) ? Number(tag) : -1;
 		const { registrations } = context;
-		const device = route.deviceLibraryIdentifier;
 		const passes: { serialNumber: string; updatedAt: Date | undefined }[] =
 			registrations.updatablePasses
 				? await registrations.updatablePasses(
-						device,
+						deviceLibraryIdentifier,
 						since < 0 ? undefined : new Date(since)
 					)
 				: await Promise.all(
-						(await registrations.serialNumbers(device)).map(
+						(await registrations.serialNumbers(deviceLibraryIdentifier)).map(
 							async (serialNumber) => ({
 								serialNumber,
 								updatedAt: (await context.load(serialNumber))?.updatedAt,
@@ -183,67 +175,82 @@ export function createAppleWebService(
 
 	async function pass(
 		request: Request,
-		route: Extract<Route, { kind: "pass" }>
+		passTypeIdentifier: string,
+		serialNumber: string
 	): Promise<Response> {
-		if (!authorize(request, route.passTypeIdentifier, route.serialNumber)) {
+		if (!authorize(request, passTypeIdentifier, serialNumber)) {
 			return respond(401);
 		}
-		const loaded = await context.load(route.serialNumber);
+		const loaded = await context.load(serialNumber);
 		// Apple documents only 200 and 401 here. A pass your app no longer has
 		// is one the token no longer authorizes, and 401 makes Wallet keep the
 		// copy it holds.
 		if (!loaded) {
 			return respond(401);
 		}
-		const lastModified = loaded.updatedAt.toUTCString();
 		// Archived Wallet Developer Guide ("Updating a Pass"; the current pages
 		// are silent): support If-Modified-Since and answer 304 when unchanged.
-		// HTTP dates have whole seconds, so compare at that precision.
+		// HTTP dates have whole seconds, so a date is only a validator once its
+		// second is over: a change later in that second would carry the same
+		// date and be answered 304 (RFC 9110 §8.8.2.2).
+		const second = Math.floor(loaded.updatedAt.getTime() / 1000) * 1000;
+		const validator =
+			Date.now() >= second + 1000
+				? { "last-modified": loaded.updatedAt.toUTCString() }
+				: undefined;
 		const since = Date.parse(request.headers.get("if-modified-since") ?? "");
-		if (
-			!Number.isNaN(since) &&
-			Math.floor(loaded.updatedAt.getTime() / 1000) * 1000 <= since
-		) {
-			return respond(304, null, { "last-modified": lastModified });
+		if (validator && second <= since) {
+			return respond(304, null, validator);
 		}
-		const pkpass = await context.renderPass(loaded, route.serialNumber);
-		return respond(200, pkpass, {
-			"content-type": "application/vnd.apple.pkpass",
-			"last-modified": lastModified,
+		const key = `${serialNumber}\0${loaded.updatedAt.getTime()}`;
+		let pkpass = rendering.get(key);
+		if (!pkpass) {
+			pkpass = context
+				.renderPass(loaded, serialNumber)
+				.finally(() => rendering.delete(key));
+			rendering.set(key, pkpass);
+		}
+		const bytes = await pkpass;
+		return respond(200, bytes, {
+			"content-type": APPLE_PASS_CONTENT_TYPE,
+			"content-length": String(bytes.byteLength),
+			...validator,
 		});
 	}
 
 	async function log(request: Request): Promise<Response> {
-		const body = await readJson(request, LOG_BODY_LIMIT);
+		const body = await readBody(request, LOG_BODY_LIMIT, LogEntries);
 		if (body instanceof Response) {
 			return body;
 		}
-		const parsed = LogEntries.safeParse(body);
-		if (!parsed.success) {
-			return respond(400);
-		}
-		context.onLog?.(parsed.data.logs);
+		context.onLog?.(body.logs);
 		return respond(200);
 	}
 
+	// Segments are decoded after matching, so an encoded `/` stays inside one.
+	const routes: [method: string, pattern: RegExp, handle: Handle][] = [
+		["POST", REGISTRATION, register],
+		["DELETE", REGISTRATION, unregister],
+		["GET", LIST, list],
+		["GET", PASS, pass],
+		["POST", LOG, log],
+	];
+
 	async function dispatch(request: Request): Promise<Response> {
-		const url = new URL(request.url);
-		const route = matchRoute(url.pathname);
-		const method = request.method;
-		if (route?.kind === "registration" && method === "POST") {
-			return await register(request, route);
-		}
-		if (route?.kind === "registration" && method === "DELETE") {
-			return await unregister(request, route);
-		}
-		if (route?.kind === "list" && method === "GET") {
-			return await list(url, route);
-		}
-		if (route?.kind === "pass" && method === "GET") {
-			return await pass(request, route);
-		}
-		if (route?.kind === "log" && method === "POST") {
-			return await log(request);
+		const { pathname } = new URL(request.url);
+		for (const [method, pattern, handle] of routes) {
+			const match = request.method === method && pattern.exec(pathname);
+			if (!match) {
+				continue;
+			}
+			let segments: string[];
+			try {
+				segments = match.slice(1).map(decodeURIComponent);
+			} catch {
+				// Malformed percent-encoding names no pass or device.
+				return respond(404);
+			}
+			return await handle(request, ...segments);
 		}
 		return respond(404);
 	}
@@ -267,66 +274,6 @@ export function createAppleWebService(
 	};
 }
 
-/**
- * Matches the path's `/v1/...` suffix, longest route first, decoding each
- * segment after splitting so an encoded `/` stays inside its segment.
- */
-function matchRoute(pathname: string): Route | undefined {
-	const parts = pathname.split("/");
-	for (const length of [6, 5, 4, 2]) {
-		// `>` keeps the leading empty segment out of the tail, so the suffix
-		// always begins right after a "/".
-		if (parts.length <= length) {
-			continue;
-		}
-		const tail = decodeSegments(parts.slice(-length));
-		if (tail?.[0] !== "v1") {
-			continue;
-		}
-		const route = toRoute(tail);
-		if (route) {
-			return route;
-		}
-	}
-}
-
-function toRoute(tail: string[]): Route | undefined {
-	const [, resource, a, b, c, d] = tail;
-	if (tail.length === 2) {
-		return resource === "log" ? { kind: "log" } : undefined;
-	}
-	if (tail.some((segment) => segment === "")) {
-		return;
-	}
-	if (tail.length === 4 && resource === "passes" && a && b) {
-		return { kind: "pass", passTypeIdentifier: a, serialNumber: b };
-	}
-	if (resource !== "devices" || b !== "registrations" || !a || !c) {
-		return;
-	}
-	if (tail.length === 5) {
-		return { deviceLibraryIdentifier: a, kind: "list", passTypeIdentifier: c };
-	}
-	if (tail.length === 6 && d) {
-		// Same path for POST (register) and DELETE (unregister).
-		return {
-			deviceLibraryIdentifier: a,
-			kind: "registration",
-			passTypeIdentifier: c,
-			serialNumber: d,
-		};
-	}
-}
-
-function decodeSegments(segments: string[]): string[] | undefined {
-	try {
-		return segments.map(decodeURIComponent);
-	} catch {
-		// Malformed percent-encoding names no route.
-		return;
-	}
-}
-
 function respond(
 	status: number,
 	body: BodyInit | null = null,
@@ -336,14 +283,15 @@ function respond(
 }
 
 /**
- * The parsed JSON body, or the response to send instead: 413 past `limit`
- * bytes, 400 when it isn't JSON. Apple documents neither (devices never send
- * such bodies), so these are plain HTTP semantics.
+ * The body parsed as JSON against `check`, or the response to send instead:
+ * 413 past `limit` bytes, 400 when it isn't such JSON. Apple documents neither
+ * (devices never send such bodies), so these are plain HTTP semantics.
  */
-async function readJson(
+async function readBody<T>(
 	request: Request,
-	limit: number
-): Promise<unknown | Response> {
+	limit: number,
+	check: Check<T>
+): Promise<T | Response> {
 	const declared = Number(request.headers.get("content-length"));
 	if (declared > limit) {
 		request.body?.cancel().catch(() => undefined);
@@ -361,9 +309,12 @@ async function readJson(
 			chunks.push(chunk);
 		}
 	}
+	let json: unknown;
 	try {
-		return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+		json = JSON.parse(Buffer.concat(chunks).toString("utf8"));
 	} catch {
 		return respond(400);
 	}
+	const parsed = check(json);
+	return parsed.ok ? parsed.value : respond(400);
 }

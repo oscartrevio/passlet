@@ -1,4 +1,5 @@
 import type { ClientHttp2Session } from "node:http2";
+import type { PassRegistration } from "../config";
 import { WalletError } from "../errors";
 
 // Pass update pushes only work in production ("Adding a Web Service to Update
@@ -21,13 +22,10 @@ const NGHTTP2_CANCEL = 0x8;
 const MAX_ERROR_BODY = 4096;
 // Device tokens are hex ("Sending notification requests to APNs" > :path).
 // Apple warns not to assume a length, so only the alphabet is checked.
-const DEVICE_TOKEN_RE = /^[0-9a-f]+$/i;
+export const PUSH_TOKEN = /^[0-9a-f]+$/i;
 const REASON_RE = /^[A-Za-z]{1,64}$/;
 
-export interface ApnsTarget {
-	deviceLibraryIdentifier: string;
-	pushToken: string;
-}
+export type ApnsTarget = Omit<PassRegistration, "serialNumber">;
 
 export interface ApnsResult {
 	failed: number;
@@ -39,11 +37,16 @@ export interface ApnsResult {
 export interface ApnsOptions {
 	cert: string;
 	key: string;
-	origin?: string;
 	topic: string;
 }
 
 type Outcome = "notified" | "failed" | "unregistered";
+
+interface Connection {
+	/** Close the connection now, so later pushes open a new one. */
+	retire(): void;
+	session: ClientHttp2Session;
+}
 
 /**
  * Sends pass update pushes over one certificate-based HTTP/2 connection to
@@ -57,22 +60,18 @@ type Outcome = "notified" | "failed" | "unregistered";
  */
 export class ApnsClient {
 	readonly #options: ApnsOptions;
-	readonly #origin: string;
-	// The promise of the current connection; cleared once that connection
-	// closes, fails to open, or receives GOAWAY.
+	// The current connection; cleared once it closes, fails to open, receives
+	// GOAWAY or is retired by a push.
 	#current: Promise<ClientHttp2Session> | undefined;
-	// Pushes in flight per connection, so an old connection still draining
-	// keeps its own count.
-	readonly #inFlight = new WeakMap<ClientHttp2Session, number>();
 
 	constructor(options: ApnsOptions) {
 		this.#options = options;
-		this.#origin = options.origin ?? APNS_ORIGIN;
 	}
 
 	/**
 	 * Tells every device holding a pass to fetch its new version: one empty
 	 * push per distinct token, as concurrent streams on the client's connection.
+	 * Every device holding a token APNs no longer accepts is `unregistered`.
 	 *
 	 * @throws {WalletError} `APPLE_PUSH_FAILED` when APNs rejects the
 	 * certificate, or when no push could be sent at all.
@@ -83,7 +82,7 @@ export class ApnsClient {
 		for (const target of targets) {
 			// A token that isn't hex is invalid as surely as a BadDeviceToken
 			// reply, and must never be spliced into the request path.
-			if (!DEVICE_TOKEN_RE.test(target.pushToken)) {
+			if (!PUSH_TOKEN.test(target.pushToken)) {
 				result.unregistered.push(target);
 				continue;
 			}
@@ -118,14 +117,17 @@ export class ApnsClient {
 	 */
 	async #deliver(tokens: string[]): Promise<Map<string, Outcome>> {
 		const outcomes = new Map<string, Outcome>();
-		const session = await this.#connection();
-		const unanswered = await this.#pushAll(session, tokens, outcomes);
-		if (unanswered.length === 0 || !isClosed(session)) {
+		const unanswered = await this.#pushAll(
+			await this.#connect(),
+			tokens,
+			outcomes
+		);
+		if (unanswered.length === 0) {
 			return outcomes;
 		}
-		let fresh: ClientHttp2Session;
+		let fresh: Connection;
 		try {
-			fresh = await this.#connection();
+			fresh = await this.#connect();
 		} catch (error) {
 			// With nothing delivered there is no partial result to return.
 			if (outcomes.size === 0) {
@@ -139,54 +141,63 @@ export class ApnsClient {
 
 	/**
 	 * Push to every token on one connection, recording each answered push in
-	 * `outcomes`. Resolves the tokens whose stream broke before APNs answered.
+	 * `outcomes`. Resolves the tokens whose stream broke along with the
+	 * connection before APNs answered, after retiring that connection.
 	 */
 	async #pushAll(
-		session: ClientHttp2Session,
+		{ session, retire }: Connection,
 		tokens: string[],
 		outcomes: Map<string, Outcome>
 	): Promise<string[]> {
-		this.#hold(session);
-		let settled: PromiseSettledResult<Outcome>[];
-		try {
-			settled = await Promise.allSettled(
-				tokens.map((token) => push(session, token, this.#options.topic))
-			);
-		} finally {
-			this.#release(session);
-		}
 		const unanswered: string[] = [];
-		for (const [index, push] of settled.entries()) {
-			const token = tokens[index] as string;
-			if (push.status === "fulfilled") {
-				outcomes.set(token, push.value);
-			} else if (push.reason instanceof WalletError) {
-				// A rejected certificate fails every push alike; surface it.
-				throw push.reason;
-			} else {
-				unanswered.push(token);
-			}
+		let refused: unknown;
+		await Promise.all(
+			tokens.map(async (token) => {
+				try {
+					outcomes.set(
+						token,
+						await push(session, token, this.#options.topic, retire)
+					);
+				} catch (error) {
+					if (error instanceof WalletError) {
+						// A rejected certificate fails every push alike; surface it.
+						refused = error;
+					} else {
+						unanswered.push(token);
+					}
+				}
+			})
+		);
+		if (refused) {
+			throw refused;
 		}
+		// A stream reset on a live connection is that push's failure alone.
+		if (!(session.closed || session.destroyed)) {
+			return [];
+		}
+		retire();
 		return unanswered;
 	}
 
-	/** The open connection, opening one if there is none. */
-	async #connection(): Promise<ClientHttp2Session> {
-		// The current connection can be closing (closed is set at once, its
-		// "close" event fires later). Re-read it after every await: another
-		// caller may already have replaced it, and that replacement is the one
-		// to share.
-		for (let cached = this.#current; cached; cached = this.#current) {
-			const session = await cached;
-			if (!isClosed(session)) {
-				return session;
-			}
-			if (this.#current === cached) {
-				this.#current = undefined;
-			}
-		}
-		const opening = openSession(this.#origin, this.#options);
-		this.#current = opening;
+	async #connect(): Promise<Connection> {
+		this.#current ??= this.#open();
+		const opening = this.#current;
+		const session = await opening;
+		return {
+			session,
+			// Synchronous, so the next push already opens a new connection
+			// though the old one's "close" event comes later.
+			retire: () => {
+				if (this.#current === opening) {
+					this.#current = undefined;
+				}
+				session.close();
+			},
+		};
+	}
+
+	#open(): Promise<ClientHttp2Session> {
+		const opening = openSession(this.#options);
 		const forget = () => {
 			if (this.#current === opening) {
 				this.#current = undefined;
@@ -197,34 +208,14 @@ export class ApnsClient {
 			// APNs ends connections with GOAWAY; no new stream may use it.
 			session.once("goaway", forget);
 		}, forget);
-		return await opening;
-	}
-
-	#hold(session: ClientHttp2Session): void {
-		const count = this.#inFlight.get(session) ?? 0;
-		if (count === 0) {
-			session.ref();
-		}
-		this.#inFlight.set(session, count + 1);
-	}
-
-	#release(session: ClientHttp2Session): void {
-		const count = (this.#inFlight.get(session) ?? 1) - 1;
-		this.#inFlight.set(session, count);
-		if (count === 0) {
-			session.unref();
-		}
+		return opening;
 	}
 }
 
-function isClosed(session: ClientHttp2Session): boolean {
-	return session.closed || session.destroyed;
-}
-
-async function openSession(
-	origin: string,
-	options: { cert: string; key: string }
-): Promise<ClientHttp2Session> {
+async function openSession(options: {
+	cert: string;
+	key: string;
+}): Promise<ClientHttp2Session> {
 	let session: ClientHttp2Session;
 	try {
 		// Loaded on first push, so importing passlet works on runtimes without
@@ -232,7 +223,7 @@ async function openSession(
 		const { connect } = await import("node:http2");
 		// Certificate-based trust: the Pass Type ID certificate is the TLS
 		// client certificate, so requests carry no authorization header.
-		session = connect(origin, { cert: options.cert, key: options.key });
+		session = connect(APNS_ORIGIN, { cert: options.cert, key: options.key });
 	} catch (cause) {
 		throw pushFailed(undefined, cause);
 	}
@@ -258,7 +249,8 @@ async function openSession(
 		session.once("remoteSettings", () => {
 			clearTimeout(timer);
 			session.setTimeout(IDLE_TIMEOUT_MS, () => session.close());
-			// Idle until a push holds it.
+			// Never keeps the process alive; each push's own timer does while
+			// it is in flight.
 			session.unref();
 			resolve(session);
 		});
@@ -268,12 +260,13 @@ async function openSession(
 /**
  * One push. Rejects with `APPLE_PUSH_FAILED` when APNs refuses the
  * certificate, and with the stream's own error when the stream broke before
- * APNs answered.
+ * APNs answered. `retire` closes the connection for every later push.
  */
 function push(
 	session: ClientHttp2Session,
 	token: string,
-	topic: string
+	topic: string,
+	retire: () => void
 ): Promise<Outcome> {
 	return new Promise((resolve, reject) => {
 		// apns-topic is required ("Sending notification requests to APNs") and,
@@ -290,13 +283,15 @@ function push(
 		let timedOut = false;
 		let streamError: unknown;
 		stream.setEncoding("utf8");
-		stream.setTimeout(TIMEOUT_MS, () => {
+		// A ref'd timer, unlike stream.setTimeout's: it also keeps the process
+		// alive until APNs answers, while the idle connection itself doesn't.
+		const timer = setTimeout(() => {
 			timedOut = true;
 			stream.close(NGHTTP2_CANCEL);
 			// A stalled connection would stall every later update too; let the
 			// streams still on it finish, and open a new one next time.
-			session.close();
-		});
+			retire();
+		}, TIMEOUT_MS);
 		stream.on("response", (headers) => {
 			status = headers[":status"];
 		});
@@ -309,6 +304,7 @@ function push(
 			streamError = cause;
 		});
 		stream.on("close", () => {
+			clearTimeout(timer);
 			if (status === undefined) {
 				// A push that APNs never answered is a failed delivery; a stream
 				// torn down under us means the connection itself may have broken.
@@ -326,7 +322,7 @@ function push(
 				// "If you experience a revoked provider certificate ... close all
 				// connections to APNs, fix the problem, and then open new
 				// connections." (Sending notification requests to APNs)
-				session.close();
+				retire();
 				reject(
 					pushFailed(
 						`APNs rejected the push certificate${reason ? ` (${reason})` : ""}.`

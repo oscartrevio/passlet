@@ -402,6 +402,91 @@ describe("barcodes", () => {
 		]);
 		expect(json).not.toHaveProperty("barcode");
 	});
+
+	// Values from https://developer.apple.com/documentation/walletpasses/pass/barcodes-data.dictionary
+	it.each([
+		["QR", "PKBarcodeFormatQR"],
+		["PDF417", "PKBarcodeFormatPDF417"],
+		["Aztec", "PKBarcodeFormatAztec"],
+		["Code128", "PKBarcodeFormatCode128"],
+		["Code39", "PKBarcodeFormatCode39"],
+		["Codabar", "PKBarcodeFormatCodabar"],
+		["EAN13", "PKBarcodeFormatEAN13"],
+		["ITF", "PKBarcodeFormatI2of5"],
+	] as const)("emits a %s barcode as %s", (format, expected) => {
+		const json = passJson(loyalty(), {
+			...CREATE,
+			barcodes: [{ value: "1", format }],
+		});
+		expect(json.barcodes).toEqual([
+			expect.objectContaining({ format: expected }),
+		]);
+	});
+});
+
+// Values from https://developer.apple.com/documentation/walletpasses/passfieldcontent
+describe("field style constants", () => {
+	function backField(options: Partial<LoyaltyPass["fields"][number]>): Json {
+		const card = storeCard(
+			loyalty({
+				fields: [{ slot: "back", key: "k", value: "v", ...options }],
+			})
+		);
+		return card.backFields[0] ?? {};
+	}
+
+	it.each([
+		["none", "PKDateStyleNone"],
+		["short", "PKDateStyleShort"],
+		["medium", "PKDateStyleMedium"],
+		["long", "PKDateStyleLong"],
+		["full", "PKDateStyleFull"],
+	] as const)("emits dateStyle and timeStyle %s as %s", (style, expected) => {
+		expect(backField({ dateStyle: style, timeStyle: style })).toMatchObject({
+			dateStyle: expected,
+			timeStyle: expected,
+		});
+	});
+
+	it.each([
+		["decimal", "PKNumberStyleDecimal"],
+		["percent", "PKNumberStylePercent"],
+		["scientific", "PKNumberStyleScientific"],
+		["spellOut", "PKNumberStyleSpellOut"],
+	] as const)("emits numberStyle %s as %s", (style, expected) => {
+		expect(backField({ numberStyle: style })).toMatchObject({
+			numberStyle: expected,
+		});
+	});
+
+	it.each([
+		["left", "PKTextAlignmentLeft"],
+		["center", "PKTextAlignmentCenter"],
+		["right", "PKTextAlignmentRight"],
+		["natural", "PKTextAlignmentNatural"],
+	] as const)("emits textAlignment %s as %s", (alignment, expected) => {
+		const card = storeCard(
+			loyalty({
+				fields: [
+					{ slot: "secondary", key: "k", value: "v", textAlignment: alignment },
+				],
+			})
+		);
+		expect(card.secondaryFields[0]).toMatchObject({ textAlignment: expected });
+	});
+
+	it("emits every data detector type", () => {
+		expect(
+			backField({
+				dataDetectorTypes: ["phoneNumber", "link", "address", "calendarEvent"],
+			}).dataDetectorTypes
+		).toEqual([
+			"PKDataDetectorTypePhoneNumber",
+			"PKDataDetectorTypeLink",
+			"PKDataDetectorTypeAddress",
+			"PKDataDetectorTypeCalendarEvent",
+		]);
+	});
 });
 
 describe("field slots", () => {

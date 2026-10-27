@@ -1,9 +1,10 @@
 import { createPrivateKey, type KeyObject } from "node:crypto";
+import type { GoogleCredentials } from "../config";
 import { WalletError, type WalletErrorCode } from "../errors";
 import { discardBody } from "../http";
-import type { ParsedGooglePassMessage } from "../schema/parts";
-import type { GoogleCredentials } from "../schema/settings";
+import type { ParsedGooglePassMessage } from "../schema/google";
 import { signJwt } from "./jwt";
+import { type GoogleVertical, patchBody } from "./utils";
 
 const WALLET_BASE = "https://walletobjects.googleapis.com/walletobjects/v1";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -12,18 +13,7 @@ const BEARER_TOKEN_RE = /^[A-Za-z0-9._~+/-]+=*$/;
 const RETRY_SECONDS_RE = /^\d+$/;
 const HTTP_DATE_PREFIX_RE = /^[A-Za-z]/;
 
-type WalletMethod = "GET" | "POST" | "PUT" | "PATCH";
-type GoogleVertical =
-	| "loyalty"
-	| "eventTicket"
-	| "flight"
-	| "offer"
-	| "giftCard"
-	| "generic"
-	| "transit";
-
-export type GoogleClassType = `${GoogleVertical}Class`;
-export type GoogleObjectType = `${GoogleVertical}Object`;
+type WalletMethod = "GET" | "POST" | "PATCH";
 
 // Access tokens are reused until shortly before the `expires_in` Google sends
 // with each one: "Access tokens can be reused during the duration window
@@ -37,12 +27,14 @@ interface AccessToken {
 	token: string;
 }
 
-export function importGoogleKey(credentials: GoogleCredentials): KeyObject {
+function importGoogleKey(privateKey: string): KeyObject {
 	try {
 		// Service-account JSON copied into env vars may retain literal "\n".
 		// PEM cannot contain backslashes, so unescaping leaves valid keys untouched.
-		const privateKey = credentials.privateKey.replace(/\\n/g, "\n");
-		const key = createPrivateKey({ key: privateKey, format: "pem" });
+		const key = createPrivateKey({
+			key: privateKey.replace(/\\n/g, "\n"),
+			format: "pem",
+		});
 		// RS256 needs an RSA key; reject EC/Ed keys at import like before.
 		if (key.asymmetricKeyType !== "rsa") {
 			throw new Error(`Expected an RSA key, got ${key.asymmetricKeyType}`);
@@ -57,142 +49,78 @@ export function importGoogleKey(credentials: GoogleCredentials): KeyObject {
 
 /**
  * Google Wallet API calls for one service account. Its access token is cached
- * on the client and reused until shortly before it expires.
+ * on the client and reused until shortly before it expires; concurrent calls
+ * share one exchange.
  */
 export class GoogleClient {
+	readonly clientEmail: string;
 	/** The service account key, imported once; also signs save links. */
 	readonly privateKey: KeyObject;
-	readonly #credentials: GoogleCredentials;
 	#token: { token: string; expiresAt: number } | undefined;
+	#exchange: Promise<string> | undefined;
 
 	/**
 	 * @throws {WalletError} `GOOGLE_INVALID_PRIVATE_KEY` if the key is not an
 	 * RSA PEM private key.
 	 */
-	constructor(credentials: GoogleCredentials) {
-		this.#credentials = credentials;
-		this.privateKey = importGoogleKey(credentials);
+	constructor({ clientEmail, privateKey }: GoogleCredentials) {
+		this.clientEmail = clientEmail;
+		this.privateKey = importGoogleKey(privateKey);
 	}
 
-	// Issuance may create a missing class, but never rewrites a shared template.
+	/**
+	 * Create the class if Google has none. Issuance never rewrites a shared
+	 * class, so `build` runs only when the class must be inserted.
+	 */
 	async ensureClass(
-		classType: GoogleClassType,
+		vertical: GoogleVertical,
 		classId: string,
-		classBody: Record<string, unknown>
+		build: () => Record<string, unknown>
 	): Promise<void> {
-		if (await this.#getClass(classType, classId)) {
+		if (
+			(await this.#send(
+				"GET",
+				`/${vertical}Class/${classId}`,
+				undefined,
+				404
+			)) !== 404
+		) {
 			return;
 		}
-		const response = await this.#request(
-			"POST",
-			`/${classType}`,
-			classWrite(classId, classBody)
-		);
 		// Concurrent issues can both find the class missing. Google answers 409
 		// to the later insert because the ID now exists, so the class is there.
 		// https://developers.google.com/wallet/retail/loyalty-cards/resources/error-codes
-		if (response.status === 409) {
-			discardBody(response);
-			return;
-		}
-		assertOk(response);
+		await this.#send(
+			"POST",
+			`/${vertical}Class`,
+			classWrite(classId, build()),
+			409
+		);
 	}
 
+	/**
+	 * Write the class as the template states it, creating it if Google has
+	 * none. A patch merges into nested objects, so fields passlet does not own
+	 * (a flight's `origin.gate`, an event's `dateTime.doorsOpen`) keep their
+	 * remote values while every owned field passlet leaves unset is cleared.
+	 * https://developers.google.com/wallet/reference/rest/v1/loyaltyclass/patch
+	 */
 	async publishClass(
-		classType: GoogleClassType,
+		vertical: GoogleVertical,
 		classId: string,
-		classBody: Record<string, unknown>
+		body: Record<string, unknown>
 	): Promise<void> {
-		const existing = await this.#getClass(classType, classId);
-		if (!existing) {
-			assertOk(
-				await this.#request(
-					"POST",
-					`/${classType}`,
-					classWrite(classId, classBody)
-				)
-			);
-			return;
+		const write = classWrite(classId, body);
+		if (
+			(await this.#send(
+				"PATCH",
+				`/${vertical}Class/${classId}`,
+				patchBody(write),
+				404
+			)) === 404
+		) {
+			await this.#send("POST", `/${vertical}Class`, write);
 		}
-
-		// update (PUT) replaces the whole class, unlike patch: keep the
-		// attributes passlet does not own, and let every key passlet owns,
-		// `undefined` when the template leaves it unset, drop out of the body so
-		// Google clears it.
-		// https://developers.google.com/wallet/reference/rest/v1/loyaltyclass/update
-		assertOk(
-			await this.#request(
-				"PUT",
-				`/${classType}/${classId}`,
-				classWrite(classId, { ...existing, ...classBody })
-			)
-		);
-	}
-
-	/** Write the given fields of an object; `undefined` ones are cleared. */
-	async patchObject(
-		objectType: GoogleObjectType,
-		objectId: string,
-		patch: Record<string, unknown>,
-		options?: { notify?: boolean }
-	): Promise<void> {
-		const body = patchBody(patch);
-		const response = await this.#request(
-			"PATCH",
-			`/${objectType}/${objectId}`,
-			// notifyPreference is a request-body field on the object, not a query
-			// parameter. It is ephemeral: Google requires it on every PATCH/UPDATE
-			// that should trigger a field-update notification.
-			options?.notify ? { ...body, notifyPreference: "NOTIFY_ON_UPDATE" } : body
-		);
-		assertOk(response);
-	}
-
-	/**
-	 * Add a message to an object's details through Google's AddMessage
-	 * endpoint. Google documents the TEXT_AND_NOTIFY push for messages sent
-	 * this way, not for messages written with the object.
-	 * https://developers.google.com/wallet/generic/use-cases/trigger-push-notifications
-	 * https://developers.google.com/wallet/reference/rest/v1/loyaltyobject/addmessage
-	 */
-	async addObjectMessage(
-		objectType: GoogleObjectType,
-		objectId: string,
-		message: ParsedGooglePassMessage
-	): Promise<void> {
-		assertOk(
-			await this.#request("POST", `/${objectType}/${objectId}/addMessage`, {
-				message,
-			})
-		);
-	}
-
-	/**
-	 * Bring an object to exactly this content, creating it if Google has none.
-	 * Patching first suits updates, where the object almost always exists; the
-	 * insert covers objects never created through the API, so updates work
-	 * before the holder saves the pass.
-	 * https://developers.google.com/wallet/retail/loyalty-cards/resources/error-codes
-	 */
-	async upsertObject(
-		objectType: GoogleObjectType,
-		objectId: string,
-		body: Record<string, unknown>,
-		options?: { notify?: boolean }
-	): Promise<"updated" | "created"> {
-		try {
-			await this.patchObject(objectType, objectId, body, options);
-			return "updated";
-		} catch (error) {
-			if (
-				!(error instanceof WalletError && error.code === "GOOGLE_NOT_FOUND")
-			) {
-				throw error;
-			}
-		}
-		// A new object has no holder to notify, so the flag is not sent.
-		assertOk(await this.#request("POST", `/${objectType}`, insertBody(body)));
-		return "created";
 	}
 
 	/**
@@ -203,49 +131,89 @@ export class GoogleClient {
 	 * https://developers.google.com/wallet/retail/loyalty-cards/resources/error-codes
 	 */
 	async insertObject(
-		objectType: GoogleObjectType,
+		vertical: GoogleVertical,
 		objectId: string,
 		body: Record<string, unknown>
 	): Promise<void> {
-		const response = await this.#request(
-			"POST",
-			`/${objectType}`,
-			insertBody(body)
+		// A new object starts ACTIVE; `state` is required on insert. Only inserts
+		// set it, so neither an update nor a re-issue revives a pass that
+		// expire() moved to EXPIRED.
+		// https://developers.google.com/wallet/reference/rest/v1/loyaltyobject
+		if (
+			(await this.#send(
+				"POST",
+				`/${vertical}Object`,
+				{ ...body, state: "ACTIVE" },
+				409
+			)) === 409
+		) {
+			await this.patchObject(vertical, objectId, body);
+		}
+	}
+
+	/**
+	 * Bring an existing object to exactly this content; `false` when Google
+	 * has no such object. `notify` asks Google to alert holders about
+	 * allowlisted field changes: notifyPreference is a request-body field and
+	 * ephemeral, so only the request carrying it notifies.
+	 * https://developers.google.com/wallet/reference/rest/v1/loyaltyobject
+	 */
+	async updateObject(
+		vertical: GoogleVertical,
+		objectId: string,
+		body: Record<string, unknown>,
+		notify: boolean
+	): Promise<boolean> {
+		const patch = patchBody(body);
+		const status = await this.#send(
+			"PATCH",
+			`/${vertical}Object/${objectId}`,
+			notify ? { ...patch, notifyPreference: "NOTIFY_ON_UPDATE" } : patch,
+			404
 		);
-		if (response.status !== 409) {
-			assertOk(response);
-			return;
-		}
-		discardBody(response);
-		// The patch carries no state, so re-issuing an expired pass keeps it
-		// expired.
-		await this.patchObject(objectType, objectId, body);
+		return status !== 404;
 	}
 
-	async #getClass(
-		classType: GoogleClassType,
-		classId: string
-	): Promise<Record<string, unknown> | null> {
-		const response = await this.#request("GET", `/${classType}/${classId}`);
-		if (response.status === 404) {
-			discardBody(response);
-			return null;
-		}
-		assertOk(response);
-		const body = await readGoogleResponse(response);
-		if (body.id !== classId) {
-			throw new WalletError("GOOGLE_INVALID_RESPONSE", undefined, {
-				retryAfter: retryAfterSeconds(response),
-			});
-		}
-		return body;
+	/** Write the given fields of an object; `undefined` ones are cleared. */
+	async patchObject(
+		vertical: GoogleVertical,
+		objectId: string,
+		patch: Record<string, unknown>
+	): Promise<void> {
+		await this.#send(
+			"PATCH",
+			`/${vertical}Object/${objectId}`,
+			patchBody(patch)
+		);
 	}
 
-	async #request(
+	/**
+	 * Add a message to an object's details through Google's AddMessage
+	 * endpoint. Google documents the TEXT_AND_NOTIFY push for messages sent
+	 * this way, not for messages written with the object.
+	 * https://developers.google.com/wallet/generic/use-cases/trigger-push-notifications
+	 * https://developers.google.com/wallet/reference/rest/v1/loyaltyobject/addmessage
+	 */
+	async addObjectMessage(
+		vertical: GoogleVertical,
+		objectId: string,
+		message: ParsedGooglePassMessage
+	): Promise<void> {
+		await this.#send("POST", `/${vertical}Object/${objectId}/addMessage`, {
+			message,
+		});
+	}
+
+	/**
+	 * Send one Wallet request and release its body. Returns the status, which
+	 * is either successful or `tolerated`; any other failure throws.
+	 */
+	async #send(
 		method: WalletMethod,
 		path: string,
-		body?: Record<string, unknown>
-	): Promise<Response> {
+		body?: Record<string, unknown>,
+		tolerated?: 404 | 409
+	): Promise<number> {
 		const send = (accessToken: string) =>
 			googleFetch(`${WALLET_BASE}${path}`, {
 				method,
@@ -256,16 +224,19 @@ export class GoogleClient {
 				body: body === undefined ? undefined : JSON.stringify(body),
 			});
 		const first = await this.#accessToken();
-		const response = await send(first.token);
-		if (response.status !== 401 || !first.cached) {
-			return response;
+		let response = await send(first.token);
+		if (response.status === 401 && first.cached) {
+			// A cached token can stop working before its expires_in, e.g. when the
+			// key is rotated. Retry once with a freshly exchanged token; a 401 on a
+			// fresh token is a real authentication failure.
+			discardBody(response);
+			response = await send((await this.#accessToken(first.token)).token);
 		}
-		// A cached token can stop working before its expires_in, e.g. when the
-		// key is rotated. Retry once with a freshly exchanged token; a 401 on a
-		// fresh token is a real authentication failure.
+		if (response.status !== tolerated) {
+			assertOk(response);
+		}
 		discardBody(response);
-		const fresh = await this.#accessToken(first.token);
-		return await send(fresh.token);
+		return response.status;
 	}
 
 	/** A token for this service account; `rejected` names one Google refused. */
@@ -274,26 +245,25 @@ export class GoogleClient {
 		if (cached && cached.token !== rejected && Date.now() < cached.expiresAt) {
 			return { token: cached.token, cached: true };
 		}
+		this.#exchange ??= this.#exchangeToken().finally(() => {
+			this.#exchange = undefined;
+		});
+		return { token: await this.#exchange, cached: false };
+	}
 
-		let assertion: string;
-		try {
-			const iat = Math.floor(Date.now() / 1000);
-			assertion = signJwt(
-				{
-					scope: WALLET_SCOPE,
-					iat,
-					exp: iat + 3600,
-					iss: this.#credentials.clientEmail,
-					aud: TOKEN_URL,
-				},
-				this.privateKey
-			);
-		} catch (cause) {
-			throw new WalletError("GOOGLE_SIGNING_FAILED", undefined, {
-				cause: cause instanceof Error ? cause : undefined,
-			});
-		}
-
+	// https://developers.google.com/identity/protocols/oauth2/service-account#httprest
+	async #exchangeToken(): Promise<string> {
+		const iat = Math.floor(Date.now() / 1000);
+		const assertion = signJwt(
+			{
+				scope: WALLET_SCOPE,
+				iat,
+				exp: iat + 3600,
+				iss: this.clientEmail,
+				aud: TOKEN_URL,
+			},
+			this.privateKey
+		);
 		const response = await googleFetch(TOKEN_URL, {
 			method: "POST",
 			headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -320,7 +290,7 @@ export class GoogleClient {
 				expiresAt: Date.now() + expiresIn * 1000 - TOKEN_EXPIRY_MARGIN_MS,
 			};
 		}
-		return { token, cached: false };
+		return token;
 	}
 }
 
@@ -417,42 +387,10 @@ function classWrite(
 	classId: string,
 	body: Record<string, unknown>
 ): Record<string, unknown> {
-	const write: Record<string, unknown> = { ...body, id: classId };
-	if (write.reviewStatus !== undefined && write.reviewStatus !== "DRAFT") {
-		write.reviewStatus = "UNDER_REVIEW";
-	}
-	return write;
-}
-
-/**
- * The PATCH body for an object write: every `undefined` field becomes `null`.
- * Google merges a PATCH into the stored object, recursing into nested objects,
- * so an omitted field keeps its old value and only `null` clears it. Lists are
- * replaced whole, so their entries are sent as they are.
- */
-export function patchBody(body: object): Record<string, unknown> {
-	const patch: Record<string, unknown> = {};
-	for (const [key, value] of Object.entries(body)) {
-		if (value === undefined) {
-			patch[key] = null;
-		} else if (
-			typeof value === "object" &&
-			value !== null &&
-			!Array.isArray(value)
-		) {
-			patch[key] = patchBody(value);
-		} else {
-			patch[key] = value;
-		}
-	}
-	return patch;
-}
-
-/**
- * A new object starts ACTIVE; `state` is required on insert. Only inserts set
- * it, so an update never revives a pass that expire() moved to EXPIRED.
- * https://developers.google.com/wallet/reference/rest/v1/loyaltyobject
- */
-function insertBody(body: Record<string, unknown>): Record<string, unknown> {
-	return { ...body, state: "ACTIVE" };
+	return {
+		...body,
+		id: classId,
+		...(body.reviewStatus !== undefined &&
+			body.reviewStatus !== "DRAFT" && { reviewStatus: "UNDER_REVIEW" }),
+	};
 }

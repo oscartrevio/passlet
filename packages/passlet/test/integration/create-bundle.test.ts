@@ -1,6 +1,5 @@
 import JSZip from "jszip";
 import { beforeAll, describe, expect, it, onTestFinished, vi } from "vitest";
-import { appleAuthToken } from "../../src/apple/auth-token";
 import {
 	type AppleCredentials,
 	type PassContent,
@@ -26,6 +25,7 @@ import {
 } from "../support/google";
 
 const SECRET = "s".repeat(32);
+const WEB_SERVICE_URL = "https://example.com/api/wallet";
 const { loyalty, eventTicket, boardingPass } = FIXTURES;
 
 let apple: AppleCredentials & { signerKey: string };
@@ -39,13 +39,34 @@ function appleWallet(): Wallet {
 		apple: {
 			...apple,
 			webService: {
-				url: "https://example.com/api/wallet",
+				url: WEB_SERVICE_URL,
 				secret: SECRET,
 				registrations: memoryRegistrations(),
 			},
 		},
 		load: () => null,
 	});
+}
+
+/** A device registering for pass `serialNumber` with `token`, as Wallet does. */
+function register(
+	wallet: Wallet,
+	serialNumber: string,
+	token: string
+): Promise<Response> {
+	return wallet.handler(
+		new Request(
+			`${WEB_SERVICE_URL}/v1/devices/device-1/registrations/${PASS_TYPE_IDENTIFIER}/${serialNumber}`,
+			{
+				method: "POST",
+				headers: {
+					authorization: `ApplePass ${token}`,
+					"content-type": "application/json",
+				},
+				body: JSON.stringify({ pushToken: "a1b2c3d4" }),
+			}
+		)
+	);
 }
 
 /** Every `.pkpass` inside a `.pkpasses` bundle, keyed by member name. */
@@ -101,6 +122,7 @@ describe("wallet.createBundle on Apple", () => {
 			"1.pkpass",
 			"2.pkpass",
 		]);
+		const tokens = new Set<string>();
 		for (const [index, serialNumber] of serials.entries()) {
 			const pass = passes[`${index}.pkpass`];
 			if (!pass) {
@@ -112,13 +134,18 @@ describe("wallet.createBundle on Apple", () => {
 			expect(pass.passJson).toMatchObject({
 				passTypeIdentifier: PASS_TYPE_IDENTIFIER,
 				serialNumber,
-				authenticationToken: appleAuthToken(
-					SECRET,
-					PASS_TYPE_IDENTIFIER,
-					serialNumber
-				),
+				webServiceURL: WEB_SERVICE_URL,
 			});
+			const token = String(pass.passJson.authenticationToken);
+			tokens.add(token);
+			// The token is the pass's own: the web service accepts it for this
+			// serial and refuses it for every other one.
+			for (const other of serials) {
+				const response = await register(wallet, other, token);
+				expect(response.status).toBe(other === serialNumber ? 201 : 401);
+			}
 		}
+		expect(tokens.size).toBe(serials.length);
 		expect(passes["1.pkpass"]?.passJson.eventTicket).toBeDefined();
 	});
 
@@ -227,20 +254,30 @@ describe("wallet.createBundle checks", () => {
 		expect(error.message).toContain("items[1]");
 	});
 
-	it("rejects a template built by another wallet", async () => {
+	// A template built by another Wallet never ran this one's checks: it is
+	// checked against this Wallet's providers, then accepted if it passes.
+	it("checks a template built by another wallet against this one", async () => {
 		const wallet = new Wallet({ apple });
-		const foreign = walletTemplate(new Wallet({ apple }), loyalty.pass);
+		const unchecked = new Wallet({}).generic({
+			id: "no-icon",
+			name: "No icon",
+			fields: [],
+		});
 		const error = await rejection(
 			wallet.createBundle([
-				{
-					template: walletTemplate(wallet, eventTicket.pass),
-					content: eventTicket.create,
-				},
-				{ template: foreign, content: loyalty.create },
+				{ template: unchecked, content: { serialNumber: "x-1" } },
 			])
 		);
-		expect(error.code).toBe("PASS_BUNDLE_INVALID");
-		expect(error.message).toContain("items[1]");
+		expect(error.code).toBe("APPLE_MISSING_ICON");
+
+		const foreign = walletTemplate(new Wallet({ apple }), loyalty.pass);
+		const { apple: bytes } = await wallet.createBundle([
+			{ template: foreign, content: loyalty.create },
+		]);
+		if (!bytes) {
+			throw new Error("no .pkpasses issued");
+		}
+		expect(Object.keys(await readBundle(bytes))).toEqual(["0.pkpass"]);
 	});
 
 	it("validates every item's content", async () => {
@@ -258,7 +295,7 @@ describe("wallet.createBundle checks", () => {
 });
 
 describe("wallet.createBundle on Google", () => {
-	it("writes every object, checks each class once and signs one JWT grouped by object type", async () => {
+	it("writes every object concurrently, checks each class once and signs one JWT grouped by object type", async () => {
 		const stub = stubGoogleFetch();
 		const credentials = googleCredentials();
 		const wallet = new Wallet({ google: credentials });
@@ -277,15 +314,27 @@ describe("wallet.createBundle on Google", () => {
 		]);
 
 		expect(bytes).toBeNull();
-		expect(stub.requests.map(({ method, path }) => [method, path])).toEqual([
-			["GET", `/loyaltyClass/${loyaltyClass}`],
-			["POST", "/loyaltyClass"],
-			["GET", `/flightClass/${flightClass}`],
-			["POST", "/flightClass"],
-			["POST", "/loyaltyObject"],
-			["POST", "/flightObject"],
-			["POST", "/loyaltyObject"],
-		]);
+		const sent = stub.requests.map(({ method, path }) => `${method} ${path}`);
+		expect([...sent].sort()).toEqual(
+			[
+				`GET /loyaltyClass/${loyaltyClass}`,
+				`GET /flightClass/${flightClass}`,
+				"POST /loyaltyClass",
+				"POST /flightClass",
+				"POST /loyaltyObject",
+				"POST /loyaltyObject",
+				"POST /flightObject",
+			].sort()
+		);
+		// An object is inserted only once its class exists; the two classes and
+		// the three objects are written side by side, three round trips deep.
+		expect(sent.indexOf("POST /loyaltyObject")).toBeGreaterThan(
+			sent.indexOf("POST /loyaltyClass")
+		);
+		expect(sent.indexOf("POST /flightObject")).toBeGreaterThan(
+			sent.indexOf("POST /flightClass")
+		);
+		expect(Math.max(...stub.requests.map(({ depth }) => depth))).toBe(3);
 		if (!jwt) {
 			throw new Error("no JWT issued");
 		}
@@ -310,6 +359,32 @@ describe("wallet.createBundle on Google", () => {
 			])
 		).rejects.toMatchObject({ code: "GOOGLE_FLIGHT_MISSING_PASSENGER_NAME" });
 		expect(stub.requests).toEqual([]);
+	});
+
+	it("rejects only once every other write has finished", async () => {
+		const stub = stubGoogleFetch((request) =>
+			request.path.startsWith("/flightClass/")
+				? new Response("", { status: 500 })
+				: undefined
+		);
+		const wallet = new Wallet({ google: googleCredentials() });
+		await expect(
+			wallet.createBundle([
+				{
+					template: walletTemplate(wallet, loyalty.pass),
+					content: loyalty.create,
+				},
+				{
+					template: walletTemplate(wallet, boardingPass.pass),
+					content: boardingPass.create,
+				},
+			])
+		).rejects.toMatchObject({ code: "GOOGLE_UNAVAILABLE" });
+		// The flight class failed in the first round trip; the loyalty pass,
+		// two round trips further on, was still written before the rejection.
+		expect(
+			stub.requests.map(({ method, path }) => `${method} ${path}`)
+		).toContain("POST /loyaltyObject");
 	});
 });
 

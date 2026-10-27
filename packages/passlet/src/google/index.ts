@@ -1,32 +1,14 @@
+import type { GoogleCredentials } from "../config";
 import { WalletError, type WalletValidationIssue } from "../errors";
 import type { PassItem, Provider } from "../providers";
 import type { ParsedContent } from "../schema/content";
-import type { ParsedGooglePassMessage } from "../schema/parts";
-import type { GoogleCredentials } from "../schema/settings";
-import type { ParsedTemplate, TemplateType } from "../schema/template";
+import type { ParsedGooglePassMessage } from "../schema/google";
+import type { ParsedTemplate } from "../schema/template";
 import { buildClassBody } from "./class-body";
-import { GoogleClient, type GoogleObjectType } from "./client";
+import { GoogleClient } from "./client";
 import { signJwt } from "./jwt";
 import { buildObjectBody } from "./object-body";
-import { transitOptions } from "./utils";
-
-const CLASS_TYPE = {
-	loyalty: "loyaltyClass",
-	eventTicket: "eventTicketClass",
-	boardingPass: "flightClass",
-	coupon: "offerClass",
-	giftCard: "giftCardClass",
-	generic: "genericClass",
-} as const satisfies Record<TemplateType, string>;
-
-const OBJECT_TYPE = {
-	loyalty: "loyaltyObject",
-	eventTicket: "eventTicketObject",
-	boardingPass: "flightObject",
-	coupon: "offerObject",
-	giftCard: "giftCardObject",
-	generic: "genericObject",
-} as const satisfies Record<TemplateType, string>;
+import { type GoogleVertical, vertical } from "./utils";
 
 // Class and object IDs are `issuerId.identifier`, where the identifier
 // "should only include alphanumeric characters, '.', '_', or '-'". It is the
@@ -50,19 +32,13 @@ function checkIdentifier(
 	throw new WalletError(code, `${key}: ${issue.message}`, { issues: [issue] });
 }
 
-function objectType(template: ParsedTemplate): GoogleObjectType {
-	return transitOptions(template)
-		? "transitObject"
-		: OBJECT_TYPE[template.type];
-}
-
 /** One object to write: its ids, its class's template, and its body. */
 interface ObjectWrite {
 	body: Record<string, unknown>;
 	classId: string;
 	objectId: string;
-	objectType: GoogleObjectType;
 	template: ParsedTemplate;
+	vertical: GoogleVertical;
 }
 
 /**
@@ -70,16 +46,25 @@ interface ObjectWrite {
  * save links signed as JWTs that point at those objects.
  */
 export class GoogleProvider implements Provider<string, "updated" | "created"> {
-	private readonly credentials: GoogleCredentials;
-	private readonly client: GoogleClient;
+	readonly #client: GoogleClient;
+	readonly #issuerId: string;
+	readonly #origins: readonly string[] | undefined;
+	/**
+	 * Classes known to exist, by class ID. The Wallet API cannot delete a
+	 * class, so once ensured or published it stays for the provider's life.
+	 * A pending entry is shared by concurrent writes and dropped on failure.
+	 * https://developers.google.com/wallet/reference/rest/v1/loyaltyclass
+	 */
+	readonly #classes = new Map<string, Promise<void>>();
 
 	/**
 	 * @throws {WalletError} `GOOGLE_INVALID_PRIVATE_KEY` if the service account
 	 * key is not an RSA PEM private key.
 	 */
 	constructor(credentials: GoogleCredentials) {
-		this.credentials = credentials;
-		this.client = new GoogleClient(credentials);
+		this.#client = new GoogleClient(credentials);
+		this.#issuerId = credentials.issuerId;
+		this.#origins = credentials.origins;
 	}
 
 	/**
@@ -136,8 +121,8 @@ export class GoogleProvider implements Provider<string, "updated" | "created"> {
 	}
 
 	/**
-	 * Write every item's object, checking each distinct class once, then sign
-	 * one save link that adds them all.
+	 * Write every item's object, each right after its class is ensured, then
+	 * sign one save link that adds them all.
 	 */
 	async issueBundle(items: readonly PassItem[]): Promise<string> {
 		// Google's documented flow creates objects in advance through the API and
@@ -147,106 +132,96 @@ export class GoogleProvider implements Provider<string, "updated" | "created"> {
 		// keeps the link short; Google suggests it past 1,800 characters.
 		// https://developers.google.com/wallet/retail/loyalty-cards/overview/add-to-google-wallet-flow
 		// https://developers.google.com/wallet/tickets/events/use-cases/save-multiple-passes
-		const writes = items.map((item) => this.prepare(item));
-		await this.ensureClasses(writes);
-		for (const { objectType: type, objectId, body } of writes) {
-			await this.client.insertObject(type, objectId, body);
+		const writes = items.map((item) => this.#prepare(item));
+		// Every write settles before the first failure is thrown, so nothing is
+		// still landing on Google once createBundle() has rejected.
+		const settled = await Promise.allSettled(
+			writes.map(async (write) => {
+				await this.#ensureClass(write);
+				await this.#client.insertObject(
+					write.vertical,
+					write.objectId,
+					write.body
+				);
+			})
+		);
+		const failure = settled.find((result) => result.status === "rejected");
+		if (failure) {
+			throw failure.reason;
 		}
 
 		// One array of `{ id, classId }` refs per object type.
 		// https://developers.google.com/wallet/reference/rest/v1/Jwt
-		const objects: Record<string, { id: string; classId: string }[]> = {};
-		for (const { objectType: type, objectId, classId } of writes) {
-			const key = `${type}s`;
-			objects[key] ??= [];
-			objects[key].push({ id: objectId, classId });
+		const objects: Partial<
+			Record<`${GoogleVertical}Objects`, { id: string; classId: string }[]>
+		> = {};
+		for (const { vertical: v, objectId, classId } of writes) {
+			const refs = objects[`${v}Objects`] ?? [];
+			refs.push({ id: objectId, classId });
+			objects[`${v}Objects`] = refs;
 		}
-		const { clientEmail, origins } = this.credentials;
-		const payload = {
-			iss: clientEmail,
-			aud: "google",
-			typ: "savetowallet",
-			iat: Math.floor(Date.now() / 1000),
-			// Approved domains for the embeddable "Add to Google Wallet" button.
-			// The web button does not render unless origins is present.
-			...(origins?.length && { origins }),
-			payload: objects,
-		};
-
-		try {
-			return signJwt(payload, this.client.privateKey);
-		} catch (cause) {
-			throw new WalletError("GOOGLE_SIGNING_FAILED", undefined, {
-				cause: cause instanceof Error ? cause : undefined,
-			});
-		}
+		return signJwt(
+			{
+				iss: this.#client.clientEmail,
+				aud: "google",
+				typ: "savetowallet",
+				iat: Math.floor(Date.now() / 1000),
+				// Approved domains for the embeddable "Add to Google Wallet" button.
+				// The web button does not render unless origins is present.
+				...(this.#origins?.length && { origins: this.#origins }),
+				payload: objects,
+			},
+			this.#client.privateKey
+		);
 	}
 
 	/**
-	 * Write a pass's object, creating its class first if Google has none, so an
-	 * update never fails just because nothing was issued from the template yet.
+	 * Write a pass's object. An existing object proves its class exists, so
+	 * the class is ensured only when Google has no object yet; that way an
+	 * update works before anything was issued from the template.
 	 */
 	async update(
 		item: PassItem,
-		options: { notify?: boolean }
+		{ notify = false }: { notify?: boolean }
 	): Promise<"updated" | "created"> {
-		const write = this.prepare(item);
-		await this.ensureClasses([write]);
-		return await this.client.upsertObject(
-			write.objectType,
-			write.objectId,
-			write.body,
-			options
-		);
-	}
-
-	// Built before any request, so invalid recipient data never half-writes.
-	private prepare({ template, content }: PassItem): ObjectWrite {
-		const classId = `${this.credentials.issuerId}.${template.id}`;
-		const objectId = `${this.credentials.issuerId}.${content.serialNumber}`;
-		return {
-			template,
-			classId,
-			objectId,
-			objectType: objectType(template),
-			body: buildObjectBody(template, content, classId, objectId),
-		};
-	}
-
-	/** Create each missing class once, however many objects share it. */
-	private async ensureClasses(writes: readonly ObjectWrite[]): Promise<void> {
-		const classes = new Map<string, ParsedTemplate>();
-		for (const { classId, template } of writes) {
-			if (!classes.has(classId)) {
-				classes.set(classId, template);
-			}
+		const write = this.#prepare(item);
+		// genericObject has no notifyPreference; Google notifies generic holders
+		// only through AddMessage (PassTemplate.sendMessage).
+		// https://developers.google.com/wallet/reference/rest/v1/genericobject
+		const notifies = notify && write.vertical !== "generic";
+		if (
+			await this.#client.updateObject(
+				write.vertical,
+				write.objectId,
+				write.body,
+				notifies
+			)
+		) {
+			return "updated";
 		}
-		for (const [classId, template] of classes) {
-			await this.client.ensureClass(
-				transitOptions(template) ? "transitClass" : CLASS_TYPE[template.type],
-				classId,
-				buildClassBody(template)
-			);
-		}
+		// A new object has no holder to notify, so the flag is not sent.
+		await this.#ensureClass(write);
+		await this.#client.insertObject(write.vertical, write.objectId, write.body);
+		return "created";
 	}
 
-	/** Overwrite the template's class with its current content. */
+	/** Write the template's class as it stands, creating it if missing. */
 	async publish(template: ParsedTemplate): Promise<void> {
-		await this.client.publishClass(
-			transitOptions(template) ? "transitClass" : CLASS_TYPE[template.type],
-			`${this.credentials.issuerId}.${template.id}`,
+		const classId = this.#id(template.id);
+		await this.#client.publishClass(
+			vertical(template),
+			classId,
 			buildClassBody(template)
 		);
+		this.#classes.set(classId, Promise.resolve());
 	}
 
 	/** Move a pass's object to the `EXPIRED` state. */
 	async expire(template: ParsedTemplate, serialNumber: string): Promise<void> {
 		checkIdentifier("CREATE_CONFIG_INVALID", "serialNumber", serialNumber);
-		await this.client.patchObject(
-			objectType(template),
-			`${this.credentials.issuerId}.${serialNumber}`,
-			{ state: "EXPIRED" }
-		);
+		await this.#client.patchObject(vertical(template), this.#id(serialNumber), {
+			state: "EXPIRED",
+		});
 	}
 
 	/** Add a message to a pass's object; TEXT_AND_NOTIFY also pushes it. */
@@ -256,10 +231,46 @@ export class GoogleProvider implements Provider<string, "updated" | "created"> {
 		message: ParsedGooglePassMessage
 	): Promise<void> {
 		checkIdentifier("CREATE_CONFIG_INVALID", "serialNumber", serialNumber);
-		await this.client.addObjectMessage(
-			objectType(template),
-			`${this.credentials.issuerId}.${serialNumber}`,
+		await this.#client.addObjectMessage(
+			vertical(template),
+			this.#id(serialNumber),
 			message
 		);
+	}
+
+	/** A Wallet resource ID: the issuer ID, then the template ID or serial. */
+	#id(suffix: string): string {
+		return `${this.#issuerId}.${suffix}`;
+	}
+
+	// Built before any request, so invalid recipient data never half-writes.
+	#prepare({ template, content }: PassItem): ObjectWrite {
+		const classId = this.#id(template.id);
+		const objectId = this.#id(content.serialNumber);
+		return {
+			template,
+			classId,
+			objectId,
+			vertical: vertical(template),
+			body: buildObjectBody(template, content, classId, objectId),
+		};
+	}
+
+	/** Create the write's class once per provider, however many objects share it. */
+	#ensureClass({ template, vertical: v, classId }: ObjectWrite): Promise<void> {
+		const known = this.#classes.get(classId);
+		if (known) {
+			return known;
+		}
+		const ensured = this.#client.ensureClass(v, classId, () =>
+			buildClassBody(template)
+		);
+		this.#classes.set(classId, ensured);
+		ensured.catch(() => {
+			if (this.#classes.get(classId) === ensured) {
+				this.#classes.delete(classId);
+			}
+		});
+		return ensured;
 	}
 }

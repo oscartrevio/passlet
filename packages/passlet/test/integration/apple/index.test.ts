@@ -1,16 +1,14 @@
-import { beforeAll, describe, expect, it, vi } from "vitest";
-import type { ApnsOptions } from "../../../src/apple/apns";
-import { type ApnsSender, AppleProvider } from "../../../src/apple/index";
-import { WalletError } from "../../../src/errors";
+import { X509Certificate } from "node:crypto";
+import { beforeAll, describe, expect, it } from "vitest";
 import {
 	type AppleCredentials,
+	field,
 	type LoyaltyTemplateConfig,
 	Wallet,
 } from "../../../src/index";
 import {
 	appleCredentials,
-	issueApplePass,
-	memoryRegistrations,
+	expectSignedBy,
 	PASS_TYPE_IDENTIFIER,
 	type Pkpass,
 	PNG,
@@ -18,7 +16,11 @@ import {
 	readPkpass,
 } from "../../support/apple";
 import { generateTestCerts, generateTestWwdr } from "../../support/certs";
-import { FIXTURES, type FixtureName } from "../../support/fixtures";
+import {
+	FIXTURES,
+	type FixtureName,
+	walletTemplate,
+} from "../../support/fixtures";
 
 // Payload members per fixture; manifest.json and signature are always added.
 const MEMBERS: Record<FixtureName, string[]> = {
@@ -49,9 +51,14 @@ beforeAll(async () => {
 	await Promise.all(
 		NAMES.map(async (name) => {
 			const { pass, create } = FIXTURES[name];
-			archives[name] = await readPkpass(
-				await issueApplePass(pass, create, credentials)
-			);
+			const { apple } = await walletTemplate(
+				new Wallet({ apple: credentials }),
+				pass
+			).create(create);
+			if (!apple) {
+				throw new Error("no .pkpass issued");
+			}
+			archives[name] = await readPkpass(apple);
 		})
 	);
 });
@@ -75,17 +82,16 @@ describe.each(NAMES)("%s .pkpass", (name) => {
 });
 
 describe("signature", () => {
-	it("is a detached PKCS#7 over manifest.json that verifies against the signer cert", () => {
+	it("is a detached PKCS#7 over manifest.json naming the signer, with its WWDR", () => {
 		const { manifestSha256, signature } = archives.loyalty;
 		const signed = parseSignature(signature);
 
 		expect(signed).toMatchObject({
-			certificateCount: 2,
 			detached: true,
 			digestAlgorithmOid: SHA256_OID,
 			messageDigestHex: manifestSha256,
 		});
-		expect(signed.verifies(credentials.signerCert)).toBe(true);
+		expectSignedBy(signed, credentials);
 	});
 });
 
@@ -105,6 +111,82 @@ describe("localization", () => {
 		expect(manifest["es.lproj/pass.strings"]).toBe(
 			sha1["es.lproj/pass.strings"]
 		);
+	});
+
+	/** es.lproj/pass.strings of a loyalty pass with these fields and values. */
+	async function passStrings(
+		config: Pick<LoyaltyTemplateConfig, "fields"> & {
+			name?: string;
+			translations: Record<string, string>;
+			values?: Record<string, string | null>;
+		}
+	): Promise<string> {
+		const { apple } = await new Wallet({ apple: credentials })
+			.loyalty({
+				id: "strings",
+				name: config.name ?? "Acme Rewards",
+				fields: config.fields,
+				apple: { icon: PNG },
+				locales: { es: config.translations },
+			})
+			.create({ serialNumber: "strings-1", values: config.values });
+		if (!apple) {
+			throw new Error("no .pkpass issued");
+		}
+		const { files } = await readPkpass(apple);
+		return new TextDecoder().decode(files["es.lproj/pass.strings"]);
+	}
+
+	it("keys a _value entry by the recipient's value and skips a hidden field", async () => {
+		const fields = [field.primary("tier", "Tier", "Gold")];
+		const translations = { tier_value: "Plata" };
+		expect(
+			await passStrings({ fields, translations, values: { tier: "Silver" } })
+		).toBe('"Silver" = "Plata";');
+		expect(
+			await passStrings({ fields, translations, values: { tier: null } })
+		).toBe("");
+	});
+
+	it("passes unmatched keys through so literals such as logoText can be translated", async () => {
+		expect(
+			await passStrings({
+				fields: [],
+				translations: { "Fly Away": "Vuela lejos" },
+			})
+		).toBe('"Fly Away" = "Vuela lejos";');
+	});
+
+	it("skips a field with no label — there is no literal to key on", async () => {
+		expect(
+			await passStrings({
+				fields: [{ slot: "primary", key: "points", value: "500" }],
+				translations: { points: "Puntos" },
+			})
+		).toBe("");
+	});
+
+	it("keeps one entry when two fields share a label", async () => {
+		expect(
+			await passStrings({
+				fields: [
+					field.primary("points", "Total"),
+					field.back("spend", "Total"),
+				],
+				translations: { points: "Total ES", spend: "Ignored" },
+			})
+		).toBe('"Total" = "Total ES";');
+	});
+
+	// pass.strings is a NeXTSTEP-style strings file, not JSON.
+	it("escapes backslashes, quotes and line breaks in both the literal and the translation", async () => {
+		expect(
+			await passStrings({
+				name: 'The "Best" \\ Pass',
+				fields: [],
+				translations: { name: 'Say "Hola"\nAdiós\r' },
+			})
+		).toBe('"The \\"Best\\" \\\\ Pass" = "Say \\"Hola\\"\\nAdiós\\r";');
 	});
 });
 
@@ -189,7 +271,13 @@ describe("Apple signing credentials", () => {
 
 	it.each([
 		// Same subject as the real issuer, but a different key.
-		["a same-named CA with another key", () => generateTestWwdr().cert],
+		[
+			"a same-named CA with another key",
+			() =>
+				generateTestWwdr(
+					new X509Certificate(credentials.wwdr).subject.slice("CN=".length)
+				).cert,
+		],
 		["a certificate that issued nothing", () => generateTestCerts().signerCert],
 	])("rejects %s as wwdr", (_, wwdr) => {
 		expect(build({ wwdr: wwdr() })).toThrow(
@@ -203,111 +291,5 @@ describe("Apple signing credentials", () => {
 			build({ signerKey: undefined, signer, wwdr: generateTestWwdr().cert })
 		).toThrow(expect.objectContaining({ code: "APPLE_INVALID_WWDR" }));
 		expect(build({ signerKey: undefined, signer })).not.toThrow();
-	});
-});
-
-describe("AppleProvider.update", () => {
-	const SERIAL = "member-123";
-	const item = {
-		template: FIXTURES.loyalty.pass,
-		content: { serialNumber: SERIAL },
-	};
-	let apnsOptions: ApnsOptions[] = [];
-
-	function provider(
-		send: ApnsSender["send"],
-		registrations = memoryRegistrations()
-	): AppleProvider {
-		apnsOptions = [];
-		return new AppleProvider(
-			{
-				...credentials,
-				webService: {
-					url: "https://example.com/wallet",
-					secret: "s".repeat(32),
-					registrations,
-				},
-			},
-			{
-				load: () => null,
-				resolve: () => item,
-				apns: (options) => {
-					apnsOptions.push(options);
-					return { send, close: () => Promise.resolve() };
-				},
-			}
-		);
-	}
-
-	it("pushes to every registered device and drops the ones APNs reports gone", async () => {
-		const registrations = memoryRegistrations([
-			{
-				deviceLibraryIdentifier: "phone",
-				pushToken: "aa11",
-				serialNumber: SERIAL,
-			},
-			{
-				deviceLibraryIdentifier: "watch",
-				pushToken: "bb22",
-				serialNumber: SERIAL,
-			},
-			{
-				deviceLibraryIdentifier: "phone",
-				pushToken: "aa11",
-				serialNumber: "member-456",
-			},
-		]);
-		const send = vi.fn<ApnsSender["send"]>(() =>
-			Promise.resolve({
-				notified: 1,
-				failed: 0,
-				unregistered: [{ deviceLibraryIdentifier: "watch", pushToken: "bb22" }],
-			})
-		);
-
-		await expect(provider(send, registrations).update(item)).resolves.toEqual({
-			notified: 1,
-			failed: 0,
-			removed: 1,
-		});
-		expect(apnsOptions).toEqual([
-			{
-				cert: credentials.signerCert,
-				key: credentials.signerKey,
-				topic: PASS_TYPE_IDENTIFIER,
-			},
-		]);
-		expect(send).toHaveBeenCalledWith([
-			{ deviceLibraryIdentifier: "phone", pushToken: "aa11" },
-			{ deviceLibraryIdentifier: "watch", pushToken: "bb22" },
-		]);
-		expect(registrations.rows()).toEqual([
-			{
-				deviceLibraryIdentifier: "phone",
-				pushToken: "aa11",
-				serialNumber: SERIAL,
-			},
-			{
-				deviceLibraryIdentifier: "phone",
-				pushToken: "aa11",
-				serialNumber: "member-456",
-			},
-		]);
-	});
-
-	it("rejects with the push failure", async () => {
-		const failure = new WalletError("APPLE_PUSH_FAILED");
-		const send = vi.fn(() => Promise.reject(failure));
-		await expect(provider(send).update(item)).rejects.toBe(failure);
-	});
-
-	it("notifies no one without a web service", async () => {
-		const send = vi.fn();
-		const plain = new AppleProvider(credentials, {
-			resolve: () => item,
-			apns: () => ({ send, close: () => Promise.resolve() }),
-		});
-		await expect(plain.update(item)).resolves.toBeNull();
-		expect(send).not.toHaveBeenCalled();
 	});
 });

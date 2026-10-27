@@ -7,9 +7,10 @@ pre-commit:
     - merge
     - rebase
   jobs:
-    - name: biome
+    # `pnpm fix` is `pnpm check` (what CI runs) plus safe fixes.
+    - name: lint
       glob: "*.{js,ts,cjs,mjs,d.cts,d.mts,jsx,tsx,json,jsonc,css}"
-      run: pnpm biome check --write --no-errors-on-unmatched --files-ignore-unknown=true {staged_files}
+      run: pnpm fix {staged_files}
       stage_fixed: true
 
 commit-msg:

@@ -1,7 +1,7 @@
 // X.509 v3 certificates for tests, self-signed or CA-issued. Encoding reuses the library's
 // DER writer; Node's X509Certificate and TLS parse and verify the result
 // independently.
-import { generateKeyPairSync, sign } from "node:crypto";
+import { generateKeyPairSync, randomBytes, randomInt, sign } from "node:crypto";
 import { isIPv4 } from "node:net";
 import {
 	context0,
@@ -15,6 +15,8 @@ import {
 } from "../../src/apple/der";
 
 export interface SelfSignedOptions {
+	/** Marks the certificate a CA (basicConstraints cA), as Apple's WWDR is. */
+	ca?: boolean;
 	commonName: string;
 	/** RSA modulus size; defaults to 2048. */
 	modulusLength?: number;
@@ -65,6 +67,13 @@ function subjectAltNameIp(ip: string): Uint8Array {
 	);
 }
 
+// basicConstraints, critical, cA TRUE.
+const CA_CONSTRAINTS = sequence(
+	oid("2.5.29.19"),
+	tlv(0x01, Uint8Array.of(0xff)),
+	tlv(OCTET_STRING, sequence(tlv(0x01, Uint8Array.of(0xff))))
+);
+
 export function createSelfSigned(options: SelfSignedOptions): SelfSigned {
 	return createCertificate(options);
 }
@@ -84,19 +93,28 @@ function createCertificate(
 	const { privateKey, publicKey } = generateKeyPairSync("rsa", {
 		modulusLength: options.modulusLength ?? 2048,
 	});
+	// Random and multi-byte like Apple's, with the high bit set so the DER
+	// INTEGER needs its leading zero byte.
+	const serial = Buffer.concat([
+		Uint8Array.of(0x00, 0x80 + randomInt(0x80)),
+		randomBytes(7),
+	]);
 	const subject = name(options.commonName);
-	const extensions = options.subjectAltNameIp
-		? [tlv(0xa3, sequence(subjectAltNameIp(options.subjectAltNameIp)))]
-		: [];
+	const extensions = [
+		...(options.ca ? [CA_CONSTRAINTS] : []),
+		...(options.subjectAltNameIp
+			? [subjectAltNameIp(options.subjectAltNameIp)]
+			: []),
+	];
 	const tbs = sequence(
 		context0(tlv(INTEGER, Uint8Array.of(2))),
-		tlv(INTEGER, Uint8Array.of(1)),
+		tlv(INTEGER, serial),
 		SHA256_WITH_RSA,
 		issuer ? name(issuer.commonName) : subject,
 		sequence(time(options.notBefore), time(options.notAfter)),
 		subject,
 		publicKey.export({ type: "spki", format: "der" }),
-		...extensions
+		...(extensions.length > 0 ? [tlv(0xa3, sequence(...extensions))] : [])
 	);
 	const signature = sign("sha256", tbs, issuer?.key ?? privateKey);
 	const der = sequence(

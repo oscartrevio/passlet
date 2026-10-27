@@ -1,604 +1,125 @@
 /**
- * Allowed top-level keys from Google's Wallet Objects discovery document:
+ * Checks request bodies against Google's Wallet Objects discovery document,
+ * pruned into google-discovery.json by scripts/update-google-schema.ts:
  * https://walletobjects.googleapis.com/$discovery/rest?version=v1
- * Reference: https://developers.google.com/wallet/reference/rest/v1/<resource>
- * Update from those sources and record the reference with schema changes.
+ * Every key at every depth must be a field Google documents, of the
+ * documented type, with a current (non-deprecated) enum value. Regenerate the
+ * fixture rather than editing it.
  */
+import type { GoogleVertical } from "../../src/google/utils";
+import discovery from "./google-discovery.json" with { type: "json" };
 
-export type GoogleResource =
-	| "loyaltyClass"
-	| "loyaltyObject"
-	| "offerClass"
-	| "offerObject"
-	| "eventTicketClass"
-	| "eventTicketObject"
-	| "flightClass"
-	| "flightObject"
-	| "giftCardClass"
-	| "giftCardObject"
-	| "genericClass"
-	| "genericObject"
-	| "transitClass"
-	| "transitObject";
+export type GoogleResource = `${GoogleVertical}${"Class" | "Object"}`;
 
-const RESOURCE_KEYS: Record<GoogleResource, readonly string[]> = {
-	loyaltyClass: [
-		"accountIdLabel",
-		"accountNameLabel",
-		"allowMultipleUsersPerObject",
-		"appLinkData",
-		"callbackOptions",
-		"classTemplateInfo",
-		"countryCode",
-		"discoverableProgram",
-		"enableSmartTap",
-		"heroImage",
-		"hexBackgroundColor",
-		"homepageUri",
-		"id",
-		"imageModulesData",
-		"infoModuleData",
-		"issuerName",
-		"kind",
-		"linksModuleData",
-		"localizedAccountIdLabel",
-		"localizedAccountNameLabel",
-		"localizedIssuerName",
-		"localizedProgramName",
-		"localizedRewardsTier",
-		"localizedRewardsTierLabel",
-		"localizedSecondaryRewardsTier",
-		"localizedSecondaryRewardsTierLabel",
-		"locations",
-		"merchantLocations",
-		"messages",
-		"multipleDevicesAndHoldersAllowedStatus",
-		"notifyPreference",
-		"programLogo",
-		"programName",
-		"redemptionIssuers",
-		"review",
-		"reviewStatus",
-		"rewardsTier",
-		"rewardsTierLabel",
-		"secondaryRewardsTier",
-		"secondaryRewardsTierLabel",
-		"securityAnimation",
-		"textModulesData",
-		"valueAddedModuleData",
-		"version",
-		"viewUnlockRequirement",
-		"wideProgramLogo",
-		"wordMark",
-	],
-	loyaltyObject: [
-		"accountId",
-		"accountName",
-		"appLinkData",
-		"barcode",
-		"classId",
-		"classReference",
-		"disableExpirationNotification",
-		"groupingInfo",
-		"hasLinkedDevice",
-		"hasUsers",
-		"heroImage",
-		"id",
-		"imageModulesData",
-		"infoModuleData",
-		"kind",
-		"linkedObjectIds",
-		"linkedOfferIds",
-		"linksModuleData",
-		"locations",
-		"loyaltyPoints",
-		"merchantLocations",
-		"messages",
-		"notifyPreference",
-		"passConstraints",
-		"rotatingBarcode",
-		"saveRestrictions",
-		"secondaryLoyaltyPoints",
-		"smartTapRedemptionValue",
-		"state",
-		"textModulesData",
-		"validTimeInterval",
-		"valueAddedModuleData",
-		"version",
-	],
-	offerClass: [
-		"allowMultipleUsersPerObject",
-		"appLinkData",
-		"callbackOptions",
-		"classTemplateInfo",
-		"countryCode",
-		"details",
-		"enableSmartTap",
-		"finePrint",
-		"helpUri",
-		"heroImage",
-		"hexBackgroundColor",
-		"homepageUri",
-		"id",
-		"imageModulesData",
-		"infoModuleData",
-		"issuerName",
-		"kind",
-		"linksModuleData",
-		"localizedDetails",
-		"localizedFinePrint",
-		"localizedIssuerName",
-		"localizedProvider",
-		"localizedShortTitle",
-		"localizedTitle",
-		"locations",
-		"merchantLocations",
-		"messages",
-		"multipleDevicesAndHoldersAllowedStatus",
-		"notifyPreference",
-		"provider",
-		"redemptionChannel",
-		"redemptionIssuers",
-		"review",
-		"reviewStatus",
-		"securityAnimation",
-		"shortTitle",
-		"textModulesData",
-		"title",
-		"titleImage",
-		"valueAddedModuleData",
-		"version",
-		"viewUnlockRequirement",
-		"wideTitleImage",
-		"wordMark",
-	],
-	offerObject: [
-		"appLinkData",
-		"barcode",
-		"classId",
-		"classReference",
-		"disableExpirationNotification",
-		"groupingInfo",
-		"hasLinkedDevice",
-		"hasUsers",
-		"heroImage",
-		"id",
-		"imageModulesData",
-		"infoModuleData",
-		"kind",
-		"linkedObjectIds",
-		"linksModuleData",
-		"locations",
-		"merchantLocations",
-		"messages",
-		"notifyPreference",
-		"passConstraints",
-		"rotatingBarcode",
-		"saveRestrictions",
-		"smartTapRedemptionValue",
-		"state",
-		"textModulesData",
-		"validTimeInterval",
-		"valueAddedModuleData",
-		"version",
-	],
-	eventTicketClass: [
-		"allowMultipleUsersPerObject",
-		"appLinkData",
-		"callbackOptions",
-		"classTemplateInfo",
-		"confirmationCodeLabel",
-		"countryCode",
-		"customConfirmationCodeLabel",
-		"customGateLabel",
-		"customRowLabel",
-		"customSeatLabel",
-		"customSectionLabel",
-		"dateTime",
-		"enableSmartTap",
-		"eventId",
-		"eventName",
-		"finePrint",
-		"gateLabel",
-		"heroImage",
-		"hexBackgroundColor",
-		"homepageUri",
-		"id",
-		"imageModulesData",
-		"infoModuleData",
-		"issuerName",
-		"kind",
-		"linksModuleData",
-		"localizedIssuerName",
-		"locations",
-		"logo",
-		"merchantLocations",
-		"messages",
-		"multipleDevicesAndHoldersAllowedStatus",
-		"notifyPreference",
-		"redemptionIssuers",
-		"review",
-		"reviewStatus",
-		"rowLabel",
-		"seatLabel",
-		"sectionLabel",
-		"securityAnimation",
-		"textModulesData",
-		"valueAddedModuleData",
-		"venue",
-		"version",
-		"viewUnlockRequirement",
-		"wideLogo",
-		"wordMark",
-	],
-	eventTicketObject: [
-		"appLinkData",
-		"barcode",
-		"classId",
-		"classReference",
-		"disableExpirationNotification",
-		"faceValue",
-		"groupingInfo",
-		"hasLinkedDevice",
-		"hasUsers",
-		"heroImage",
-		"hexBackgroundColor",
-		"id",
-		"imageModulesData",
-		"infoModuleData",
-		"kind",
-		"linkedObjectIds",
-		"linkedOfferIds",
-		"linksModuleData",
-		"locations",
-		"merchantLocations",
-		"messages",
-		"notifyPreference",
-		"passConstraints",
-		"reservationInfo",
-		"rotatingBarcode",
-		"saveRestrictions",
-		"seatInfo",
-		"smartTapRedemptionValue",
-		"state",
-		"textModulesData",
-		"ticketHolderName",
-		"ticketNumber",
-		"ticketType",
-		"validTimeInterval",
-		"valueAddedModuleData",
-		"version",
-	],
-	flightClass: [
-		"allowMultipleUsersPerObject",
-		"appLinkData",
-		"boardingAndSeatingPolicy",
-		"callbackOptions",
-		"classTemplateInfo",
-		"countryCode",
-		"destination",
-		"enableSmartTap",
-		"flightHeader",
-		"flightStatus",
-		"heroImage",
-		"hexBackgroundColor",
-		"homepageUri",
-		"id",
-		"imageModulesData",
-		"infoModuleData",
-		"issuerName",
-		"kind",
-		"languageOverride",
-		"linksModuleData",
-		"localBoardingDateTime",
-		"localEstimatedOrActualArrivalDateTime",
-		"localEstimatedOrActualDepartureDateTime",
-		"localGateClosingDateTime",
-		"localScheduledArrivalDateTime",
-		"localScheduledDepartureDateTime",
-		"localizedIssuerName",
-		"locations",
-		"merchantLocations",
-		"messages",
-		"multipleDevicesAndHoldersAllowedStatus",
-		"notifyPreference",
-		"origin",
-		"redemptionIssuers",
-		"review",
-		"reviewStatus",
-		"securityAnimation",
-		"textModulesData",
-		"valueAddedModuleData",
-		"version",
-		"viewUnlockRequirement",
-		"wordMark",
-	],
-	flightObject: [
-		"appLinkData",
-		"barcode",
-		"boardingAndSeatingInfo",
-		"classId",
-		"classReference",
-		"disableExpirationNotification",
-		"groupingInfo",
-		"hasLinkedDevice",
-		"hasUsers",
-		"heroImage",
-		"hexBackgroundColor",
-		"id",
-		"imageModulesData",
-		"infoModuleData",
-		"kind",
-		"linkedObjectIds",
-		"linksModuleData",
-		"locations",
-		"merchantLocations",
-		"messages",
-		"notifyPreference",
-		"passConstraints",
-		"passengerName",
-		"reservationInfo",
-		"rotatingBarcode",
-		"saveRestrictions",
-		"securityProgramLogo",
-		"smartTapRedemptionValue",
-		"state",
-		"textModulesData",
-		"validTimeInterval",
-		"valueAddedModuleData",
-		"version",
-	],
-	giftCardClass: [
-		"allowBarcodeRedemption",
-		"allowMultipleUsersPerObject",
-		"appLinkData",
-		"callbackOptions",
-		"cardNumberLabel",
-		"classTemplateInfo",
-		"countryCode",
-		"enableSmartTap",
-		"eventNumberLabel",
-		"heroImage",
-		"hexBackgroundColor",
-		"homepageUri",
-		"id",
-		"imageModulesData",
-		"infoModuleData",
-		"issuerName",
-		"kind",
-		"linksModuleData",
-		"localizedCardNumberLabel",
-		"localizedEventNumberLabel",
-		"localizedIssuerName",
-		"localizedMerchantName",
-		"localizedPinLabel",
-		"locations",
-		"merchantLocations",
-		"merchantName",
-		"messages",
-		"multipleDevicesAndHoldersAllowedStatus",
-		"notifyPreference",
-		"pinLabel",
-		"programLogo",
-		"redemptionIssuers",
-		"review",
-		"reviewStatus",
-		"securityAnimation",
-		"textModulesData",
-		"valueAddedModuleData",
-		"version",
-		"viewUnlockRequirement",
-		"wideProgramLogo",
-		"wordMark",
-	],
-	giftCardObject: [
-		"appLinkData",
-		"balance",
-		"balanceUpdateTime",
-		"barcode",
-		"cardNumber",
-		"classId",
-		"classReference",
-		"disableExpirationNotification",
-		"eventNumber",
-		"groupingInfo",
-		"hasLinkedDevice",
-		"hasUsers",
-		"heroImage",
-		"id",
-		"imageModulesData",
-		"infoModuleData",
-		"kind",
-		"linkedObjectIds",
-		"linksModuleData",
-		"locations",
-		"merchantLocations",
-		"messages",
-		"notifyPreference",
-		"passConstraints",
-		"pin",
-		"rotatingBarcode",
-		"saveRestrictions",
-		"smartTapRedemptionValue",
-		"state",
-		"textModulesData",
-		"validTimeInterval",
-		"valueAddedModuleData",
-		"version",
-	],
-	genericClass: [
-		"appLinkData",
-		"callbackOptions",
-		"classTemplateInfo",
-		"enableSmartTap",
-		"id",
-		"imageModulesData",
-		"linksModuleData",
-		"merchantLocations",
-		"messages",
-		"multipleDevicesAndHoldersAllowedStatus",
-		"redemptionIssuers",
-		"securityAnimation",
-		"textModulesData",
-		"valueAddedModuleData",
-		"viewUnlockRequirement",
-	],
-	genericObject: [
-		"appLinkData",
-		"barcode",
-		"cardTitle",
-		"classId",
-		"genericType",
-		"groupingInfo",
-		"hasUsers",
-		"header",
-		"heroImage",
-		"hexBackgroundColor",
-		"id",
-		"imageModulesData",
-		"linkedObjectIds",
-		"linksModuleData",
-		"logo",
-		"merchantLocations",
-		"messages",
-		"notifications",
-		"passConstraints",
-		"rotatingBarcode",
-		"saveRestrictions",
-		"smartTapRedemptionValue",
-		"state",
-		"subheader",
-		"textModulesData",
-		"validTimeInterval",
-		"valueAddedModuleData",
-		"wideLogo",
-	],
-	transitClass: [
-		"activationOptions",
-		"allowMultipleUsersPerObject",
-		"appLinkData",
-		"callbackOptions",
-		"classTemplateInfo",
-		"countryCode",
-		"customCarriageLabel",
-		"customCoachLabel",
-		"customConcessionCategoryLabel",
-		"customConfirmationCodeLabel",
-		"customDiscountMessageLabel",
-		"customFareClassLabel",
-		"customFareNameLabel",
-		"customOtherRestrictionsLabel",
-		"customPlatformLabel",
-		"customPurchaseFaceValueLabel",
-		"customPurchasePriceLabel",
-		"customPurchaseReceiptNumberLabel",
-		"customRouteRestrictionsDetailsLabel",
-		"customRouteRestrictionsLabel",
-		"customSeatLabel",
-		"customTicketNumberLabel",
-		"customTimeRestrictionsLabel",
-		"customTransitTerminusNameLabel",
-		"customZoneLabel",
-		"enableSingleLegItinerary",
-		"enableSmartTap",
-		"heroImage",
-		"hexBackgroundColor",
-		"homepageUri",
-		"id",
-		"imageModulesData",
-		"infoModuleData",
-		"issuerName",
-		"languageOverride",
-		"linksModuleData",
-		"localizedIssuerName",
-		"locations",
-		"logo",
-		"merchantLocations",
-		"messages",
-		"multipleDevicesAndHoldersAllowedStatus",
-		"notifyPreference",
-		"redemptionIssuers",
-		"review",
-		"reviewStatus",
-		"securityAnimation",
-		"textModulesData",
-		"transitOperatorName",
-		"transitType",
-		"valueAddedModuleData",
-		"version",
-		"viewUnlockRequirement",
-		"watermark",
-		"wideLogo",
-		"wordMark",
-	],
-	transitObject: [
-		"activationStatus",
-		"appLinkData",
-		"barcode",
-		"classId",
-		"classReference",
-		"concessionCategory",
-		"customConcessionCategory",
-		"customTicketStatus",
-		"deviceContext",
-		"disableExpirationNotification",
-		"groupingInfo",
-		"hasLinkedDevice",
-		"hasUsers",
-		"heroImage",
-		"hexBackgroundColor",
-		"id",
-		"imageModulesData",
-		"infoModuleData",
-		"linkedObjectIds",
-		"linksModuleData",
-		"locations",
-		"merchantLocations",
-		"messages",
-		"notifyPreference",
-		"passConstraints",
-		"passengerNames",
-		"passengerType",
-		"purchaseDetails",
-		"rotatingBarcode",
-		"saveRestrictions",
-		"smartTapRedemptionValue",
-		"state",
-		"textModulesData",
-		"ticketLeg",
-		"ticketLegs",
-		"ticketNumber",
-		"ticketRestrictions",
-		"ticketStatus",
-		"tripId",
-		"tripType",
-		"validTimeInterval",
-		"valueAddedModuleData",
-		"version",
-	],
-};
+interface Property {
+	$ref?: string;
+	deprecated?: boolean;
+	enum?: string[];
+	items?: Property;
+	type?: string;
+}
+
+const schemas: Record<string, Record<string, Property> | undefined> =
+	discovery.schemas;
 
 const DOC_BASE = "https://developers.google.com/wallet/reference/rest/v1";
 
-function docUrl(resource: GoogleResource): string {
-	return `${DOC_BASE}/${resource.toLowerCase()}`;
+function propertyViolations(
+	property: Property,
+	value: unknown,
+	path: string
+): string[] {
+	// JSON.stringify drops undefined, and a PATCH clears a field with null.
+	if (value === undefined || value === null) {
+		return [];
+	}
+	if (property.deprecated) {
+		return [`${path} is deprecated`];
+	}
+	if (property.$ref) {
+		return schemaViolations(property.$ref, value, path);
+	}
+	if (property.type === "array") {
+		if (!Array.isArray(value)) {
+			return [`${path} must be an array`];
+		}
+		const items = property.items;
+		return items
+			? value.flatMap((item, index) =>
+					propertyViolations(items, item, `${path}[${index}]`)
+				)
+			: [];
+	}
+	const expected = property.type === "integer" ? "number" : property.type;
+	if (typeof value !== expected) {
+		return [`${path} must be a ${property.type}, got ${JSON.stringify(value)}`];
+	}
+	if (property.enum && !property.enum.includes(String(value))) {
+		return [`${path} has no current enum value ${JSON.stringify(value)}`];
+	}
+	return [];
 }
 
+function schemaViolations(
+	schema: string,
+	value: unknown,
+	path: string
+): string[] {
+	const properties = schemas[schema];
+	if (!properties) {
+		throw new Error(`google-discovery.json has no schema ${schema}`);
+	}
+	if (typeof value !== "object" || value === null || Array.isArray(value)) {
+		return [`${path} must be a ${schema} object`];
+	}
+	return Object.entries(value).flatMap(([key, field]) => {
+		const property = properties[key];
+		if (property) {
+			return propertyViolations(property, field, `${path}.${key}`);
+		}
+		return field === undefined
+			? []
+			: [`${path}.${key} is not a ${schema} field`];
+	});
+}
+
+// `loyaltyClass` → `LoyaltyClass`; the AddMessage body has its own schema.
+function assertSchema(resource: string, body: object): void {
+	const schema =
+		resource === "addMessage"
+			? "AddMessageRequest"
+			: `${resource.charAt(0).toUpperCase()}${resource.slice(1)}`;
+	const violations = schemaViolations(schema, body, resource);
+	if (violations.length > 0) {
+		throw new Error(
+			`${violations.join("\n")}\nSee ${DOC_BASE}/${resource.toLowerCase()} (discovery revision ${discovery.revision})`
+		);
+	}
+}
+
+/** Throws unless `body` is a valid write of `resource`, nested fields included. */
 export function assertGoogleSchema(
 	resource: GoogleResource,
-	body: Record<string, unknown>
+	body: object
 ): void {
-	const allowed = RESOURCE_KEYS[resource];
-	// JSON.stringify omits undefined placeholders before requests reach Google.
-	const unknown = Object.keys(body)
-		.filter((key) => body[key] !== undefined && !allowed.includes(key))
-		.sort();
-	if (unknown.length > 0) {
-		throw new Error(
-			`${resource} carries unsupported key(s): ${unknown
-				.map((key) => `"${key}"`)
-				.join(", ")}.\nSee ${docUrl(resource)}`
-		);
+	assertSchema(resource, body);
+}
+
+/**
+ * Throws unless a Wallet request body is one Google accepts for its path:
+ * `/loyaltyClass`, `/loyaltyObject/{id}`, `/loyaltyObject/{id}/addMessage`.
+ */
+export function assertWalletRequest(
+	method: string,
+	path: string,
+	body: object | undefined
+): void {
+	if ((method === "GET") !== (body === undefined)) {
+		throw new Error(`${method} ${path}: only GET is sent without a body`);
+	}
+	const [, resource = "", , action] = path.split("/");
+	if (body) {
+		assertSchema(action ?? resource, body);
 	}
 }
 
@@ -610,9 +131,7 @@ export function assertRequiredKeys(
 	const missing = required.filter((key) => body[key] === undefined);
 	if (missing.length > 0) {
 		throw new Error(
-			`${resource} is missing required key(s): ${missing
-				.map((key) => `"${key}"`)
-				.join(", ")}.\nSee ${docUrl(resource)}`
+			`${resource} is missing required key(s): ${missing.join(", ")}.\nSee ${DOC_BASE}/${resource.toLowerCase()}`
 		);
 	}
 }

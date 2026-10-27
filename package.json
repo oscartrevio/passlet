@@ -1,5 +1,5 @@
 {
-  "name": "passlet",
+  "name": "passlet-workspace",
   "private": true,
   "workspaces": [
     "apps/*",

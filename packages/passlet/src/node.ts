@@ -2,11 +2,11 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
-import type { TLSSocket } from "node:tls";
 
 /**
- * Adapts a Fetch handler such as `wallet.handler` to `node:http`, Express, and
- * anything else that takes `(req, res)`.
+ * Adapts `wallet.handler` to `node:http`, Express, and anything else that
+ * takes `(req, res)`. Response headers are copied one value per name, which is
+ * all `wallet.handler` sends; it never sets cookies.
  *
  * Under Express `app.use("/api/wallet", ...)`, `req.url` arrives without the
  * mount prefix; passlet routes by the path's suffix, so either form works.
@@ -32,7 +32,8 @@ async function respond(
 	req: IncomingMessage,
 	res: ServerResponse
 ): Promise<void> {
-	const protocol = (req.socket as TLSSocket).encrypted ? "https" : "http";
+	// Only a TLS socket has `encrypted`.
+	const protocol = "encrypted" in req.socket ? "https" : "http";
 	const url = new URL(
 		req.url ?? "/",
 		`${protocol}://${req.headers.host ?? "localhost"}`
@@ -46,6 +47,8 @@ async function respond(
 		);
 	}
 	const hasBody = req.method !== "GET" && req.method !== "HEAD";
+	// The casts bridge node:stream/web's stream types and the DOM's, which
+	// describe the same streams.
 	const response = await handler(
 		new Request(url, {
 			body: hasBody
@@ -59,14 +62,7 @@ async function respond(
 	);
 	res.statusCode = response.status;
 	for (const [name, value] of response.headers) {
-		// Headers joins Set-Cookie values with ", ", which breaks cookies.
-		if (name !== "set-cookie") {
-			res.setHeader(name, value);
-		}
-	}
-	const cookies = response.headers.getSetCookie();
-	if (cookies.length > 0) {
-		res.setHeader("set-cookie", cookies);
+		res.setHeader(name, value);
 	}
 	if (!response.body) {
 		res.end();

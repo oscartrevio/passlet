@@ -4,8 +4,15 @@ type FieldOptions = Omit<FieldDef, "slot" | "key" | "label">;
 
 type FieldArg = string | FieldOptions;
 
-function resolveOptions(arg: FieldArg | undefined): FieldOptions | undefined {
-	return typeof arg === "string" ? { value: arg } : arg;
+type FieldBuilder = (key: string, label: string, arg?: FieldArg) => FieldDef;
+
+function slot(slot: FieldDef["slot"]): FieldBuilder {
+	return (key, label, arg) => ({
+		slot,
+		key,
+		label,
+		...(typeof arg === "string" ? { value: arg } : arg),
+	});
 }
 
 /**
@@ -28,12 +35,7 @@ export const field = {
 	 *
 	 * Apple → `headerFields`. Google → `textModulesData`.
 	 */
-	header: (key: string, label: string, arg?: FieldArg): FieldDef => ({
-		slot: "header",
-		key,
-		label,
-		...resolveOptions(arg),
-	}),
+	header: slot("header"),
 	/**
 	 * Large, prominent area below the logo.
 	 *
@@ -41,81 +43,53 @@ export const field = {
 	 * On boarding passes, Apple renders a transit icon between the two primary fields,
 	 * so place departure on the left and arrival on the right.
 	 */
-	primary: (key: string, label: string, arg?: FieldArg): FieldDef => ({
-		slot: "primary",
-		key,
-		label,
-		...resolveOptions(arg),
-	}),
+	primary: slot("primary"),
 	/**
 	 * Row below the primary area.
 	 *
 	 * Apple → `secondaryFields`. Google → `textModulesData`.
 	 */
-	secondary: (key: string, label: string, arg?: FieldArg): FieldDef => ({
-		slot: "secondary",
-		key,
-		label,
-		...resolveOptions(arg),
-	}),
+	secondary: slot("secondary"),
 	/**
 	 * Row below secondary. Supports two rows — pass `{ row: 0 }` or `{ row: 1 }` to assign.
 	 *
 	 * Apple → `auxiliaryFields`. Google → `textModulesData`.
 	 */
-	auxiliary: (key: string, label: string, arg?: FieldArg): FieldDef => ({
-		slot: "auxiliary",
-		key,
-		label,
-		...resolveOptions(arg),
-	}),
+	auxiliary: slot("auxiliary"),
 	/**
 	 * Back of the pass — visible only when the user flips it over.
 	 * Good for terms, redemption instructions, or contact info.
 	 *
 	 * Apple → `backFields`. Google → `textModulesData`.
 	 */
-	back: (key: string, label: string, arg?: FieldArg): FieldDef => ({
-		slot: "back",
-		key,
-		label,
-		...resolveOptions(arg),
-	}),
+	back: slot("back"),
 };
 
-/**
- * `Content-Type` Apple Wallet requires when serving a `.pkpass` file.
- *
- * iOS silently refuses to open a pass served under any other type (a plain
- * `application/octet-stream` download is the most common failure), so use this
- * constant rather than retyping the string.
- *
- * @example
- * res.setHeader("Content-Type", APPLE_PASS_CONTENT_TYPE);
- * res.end(Buffer.from(apple)); // Buffer.from — `apple` is a Uint8Array
- */
-export const APPLE_PASS_CONTENT_TYPE = "application/vnd.apple.pkpass";
+/** Recipient values by field key, as `content.values` carries them. */
+type FieldValues = Readonly<Record<string, string | null>>;
 
 /**
- * `Content-Type` for a `.pkpasses` bundle of several passes, as returned by
- * `wallet.createBundle()`.
- *
- * @example
- * res.setHeader("Content-Type", APPLE_PASSES_CONTENT_TYPE);
- * res.end(Buffer.from(apple));
+ * The text a pass shows for `field`: the recipient's value when
+ * `content.values` has the key (`null` hides the field), else the template's
+ * static `value`. Both wallets render from this one rule, and Apple's
+ * pass.strings keys must match the pass.json text byte for byte.
  */
-export const APPLE_PASSES_CONTENT_TYPE = "application/vnd.apple.pkpasses";
+export function fieldValue(
+	field: FieldDef,
+	values: FieldValues
+): string | undefined {
+	const value = Object.hasOwn(values, field.key)
+		? values[field.key]
+		: field.value;
+	return value ?? undefined;
+}
 
-/**
- * Builds the "Add to Google Wallet" save link for a signed JWT — the `google`
- * value returned by {@link PassTemplate.create}.
- *
- * @example
- * const { google } = await card.create({ serialNumber: "user-123" });
- * if (google) {
- *   res.redirect(googleSaveUrl(google));
- * }
- */
-export function googleSaveUrl(jwt: string): string {
-	return `https://pay.google.com/gp/v/save/${jwt}`;
+/** {@link fieldValue} of the template field keyed `key`, if there is one. */
+export function fieldValueByKey(
+	fields: readonly FieldDef[],
+	values: FieldValues,
+	key: string
+): string | undefined {
+	const field = fields.find((f) => f.key === key);
+	return field && fieldValue(field, values);
 }

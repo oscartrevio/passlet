@@ -1,0 +1,5 @@
+---
+"passlet": patch
+---
+
+Google writes make fewer and faster requests. A `Wallet` remembers which classes exist (Google cannot delete a class), so after the first pass from a template `create()` is a single request instead of two, and concurrent first issues check and create the class once. `wallet.update()` patches the pass first and only looks at the class when Google has no pass yet: one request instead of two. `createBundle()` writes every pass in parallel, each right after its class, instead of one request after another, so a bundle waits on at most three round trips (class check, class insert, passes), and one once the `Wallet` knows its classes; invalid content in any item still fails before anything is written, and when one write fails, `createBundle()` rejects only after the others have finished, so nothing is still landing on Google afterwards. Concurrent requests on a new `Wallet`, or after its access token expires, now share one token exchange instead of each signing and sending its own.
