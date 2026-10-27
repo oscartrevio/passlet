@@ -1,8 +1,7 @@
-import { crc32 } from "node:zlib";
-
 export interface ZipEntry {
-	data: Uint8Array;
-	name: string;
+	readonly crc: number;
+	readonly data: Uint8Array;
+	readonly name: string;
 }
 
 const LOCAL_HEADER_SIZE = 30;
@@ -16,6 +15,8 @@ const UTF8_FLAG = 0x08_00;
 const DOS_TIME = 0;
 const DOS_DATE = 0x00_21;
 
+const encoder = new TextEncoder();
+
 /**
  * Writes an uncompressed (stored) zip archive.
  *
@@ -23,12 +24,14 @@ const DOS_DATE = 0x00_21;
  * files, so compression gains little. No zip64 support — a pass is far below
  * the 4 GiB / 65535-entry limits of the classic format.
  */
-export function createZip(entries: ZipEntry[]): Uint8Array<ArrayBuffer> {
-	const encoder = new TextEncoder();
+export function createZip(
+	entries: readonly ZipEntry[]
+): Uint8Array<ArrayBuffer> {
 	const records = entries.map((entry) => ({
 		name: encoder.encode(entry.name),
 		data: entry.data,
-		crc: crc32(entry.data),
+		crc: entry.crc,
+		offset: 0,
 	}));
 
 	const localSize = records.reduce(
@@ -44,9 +47,8 @@ export function createZip(entries: ZipEntry[]): Uint8Array<ArrayBuffer> {
 	);
 
 	let offset = 0;
-	const localOffsets: number[] = [];
 	for (const r of records) {
-		localOffsets.push(offset);
+		r.offset = offset;
 		out.writeUInt32LE(0x04_03_4b_50, offset);
 		out.writeUInt16LE(10, offset + 4); // version needed: 1.0 (stored)
 		out.writeUInt16LE(UTF8_FLAG, offset + 6);
@@ -66,7 +68,7 @@ export function createZip(entries: ZipEntry[]): Uint8Array<ArrayBuffer> {
 	}
 
 	const centralOffset = offset;
-	for (const [i, r] of records.entries()) {
+	for (const r of records) {
 		out.writeUInt32LE(0x02_01_4b_50, offset);
 		out.writeUInt16LE(20, offset + 4); // version made by
 		out.writeUInt16LE(10, offset + 6); // version needed
@@ -79,7 +81,7 @@ export function createZip(entries: ZipEntry[]): Uint8Array<ArrayBuffer> {
 		out.writeUInt32LE(r.data.length, offset + 24);
 		out.writeUInt16LE(r.name.length, offset + 28);
 		// Extra, comment, disk number, internal and external attributes stay 0.
-		out.writeUInt32LE(localOffsets[i] as number, offset + 42);
+		out.writeUInt32LE(r.offset, offset + 42);
 		offset += CENTRAL_HEADER_SIZE;
 		out.set(r.name, offset);
 		offset += r.name.length;

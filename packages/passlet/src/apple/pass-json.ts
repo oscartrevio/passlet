@@ -1,31 +1,111 @@
+import type { AppleCredentials } from "../config";
+import { fieldValue, fieldValueByKey } from "../field";
+import type {
+	AppleBoardingPassOptions,
+	AppleEventTicketOptions,
+	RelevantDate,
+} from "../schema/apple";
 import type { ParsedContent } from "../schema/content";
 import {
 	type FieldDef,
 	type ParsedBarcode,
-	type RelevantDate,
 	TIMEZONE_RE,
 } from "../schema/parts";
-import type { AppleCredentials } from "../schema/settings";
 import type { ParsedTemplate, TemplateType } from "../schema/template";
 import {
+	APPLE_BARCODE_FORMAT,
+	APPLE_DATA_DETECTOR_TYPE,
+	APPLE_DATE_STYLE,
+	APPLE_NUMBER_STYLE,
+	APPLE_TEXT_ALIGNMENT,
 	hexToRgb,
-	isLegacyBarcodeFormat,
-	toAppleBarcodeFormat,
-	toAppleDataDetectorTypes,
-	toAppleDateStyle,
+	LEGACY_BARCODE_FORMATS,
 	toAppleMessageEncoding,
-	toAppleNumberStyle,
-	toAppleTextAlignment,
 } from "./utils";
 
-const PASS_TYPE_KEY: Record<TemplateType, string> = {
+// The top-level keys of Apple's Pass dictionary.
+// https://developer.apple.com/documentation/walletpasses/pass
+type PassKey =
+	| "accessibilityURL"
+	| "addOnURL"
+	| "appLaunchURL"
+	| "associatedStoreIdentifiers"
+	| "authenticationToken"
+	| "auxiliaryStoreIdentifiers"
+	| "backgroundColor"
+	| "bagPolicyURL"
+	| "barcode"
+	| "barcodes"
+	| "beacons"
+	| "boardingPass"
+	| "changeSeatURL"
+	| "contactVenueEmail"
+	| "contactVenuePhoneNumber"
+	| "contactVenueWebsite"
+	| "coupon"
+	| "description"
+	| "directionsInformationURL"
+	| "entertainmentURL"
+	| "eventLogoText"
+	| "eventTicket"
+	| "expirationDate"
+	| "footerBackgroundColor"
+	| "foregroundColor"
+	| "formatVersion"
+	| "generic"
+	| "groupingIdentifier"
+	| "labelColor"
+	| "locations"
+	| "logoText"
+	| "managementURL"
+	| "maxDistance"
+	| "merchandiseURL"
+	| "nfc"
+	| "orderFoodURL"
+	| "organizationName"
+	| "parkingInformationURL"
+	| "passTypeIdentifier"
+	| "preferredStyleSchemes"
+	| "purchaseAdditionalBaggageURL"
+	| "purchaseLoungeAccessURL"
+	| "purchaseParkingURL"
+	| "purchaseWifiURL"
+	| "registerServiceAnimalURL"
+	| "relevantDate"
+	| "relevantDates"
+	| "reportLostBagURL"
+	| "requestWheelchairURL"
+	| "sellURL"
+	| "semantics"
+	| "serialNumber"
+	| "sharingProhibited"
+	| "storeCard"
+	| "suppressHeaderDarkening"
+	| "suppressStripShine"
+	| "teamIdentifier"
+	| "trackBagsURL"
+	| "transferURL"
+	| "transitInformationURL"
+	| "transitProviderEmail"
+	| "transitProviderPhoneNumber"
+	| "transitProviderWebsiteURL"
+	| "upcomingPassInformation"
+	| "upgradeURL"
+	| "useAutomaticColors"
+	| "userInfo"
+	| "voided"
+	| "webServiceURL";
+
+export type PassJson = { [K in PassKey]?: unknown };
+
+const PASS_TYPE_KEY = {
 	loyalty: "storeCard",
 	coupon: "coupon",
 	eventTicket: "eventTicket",
 	boardingPass: "boardingPass",
 	giftCard: "storeCard",
 	generic: "generic",
-};
+} as const satisfies Record<TemplateType, PassKey>;
 
 const TRANSIT_TYPE: Record<
 	NonNullable<Extract<ParsedTemplate, { type: "boardingPass" }>["transitType"]>,
@@ -78,17 +158,17 @@ function buildField(f: FieldDef, value: string): AppleField {
 		key: f.key,
 		label: f.label,
 		value,
-		changeMessage: f.changeMessage || undefined,
-		dateStyle: f.dateStyle ? toAppleDateStyle(f.dateStyle) : undefined,
-		timeStyle: f.timeStyle ? toAppleDateStyle(f.timeStyle) : undefined,
-		numberStyle: f.numberStyle ? toAppleNumberStyle(f.numberStyle) : undefined,
+		changeMessage: f.changeMessage,
+		dateStyle: f.dateStyle && APPLE_DATE_STYLE[f.dateStyle],
+		timeStyle: f.timeStyle && APPLE_DATE_STYLE[f.timeStyle],
+		numberStyle: f.numberStyle && APPLE_NUMBER_STYLE[f.numberStyle],
 		currencyCode: f.currencyCode || undefined,
 		// attributedValue overrides value on iOS and is ignored on watchOS.
 		attributedValue: f.attributedValue,
 		// Only back fields support detectors; [] explicitly disables them.
 		dataDetectorTypes:
 			f.dataDetectorTypes !== undefined && f.slot === "back"
-				? toAppleDataDetectorTypes(f.dataDetectorTypes)
+				? f.dataDetectorTypes.map((type) => APPLE_DATA_DETECTOR_TYPE[type])
 				: undefined,
 		ignoresTimeZone: f.ignoresTimeZone,
 		isRelative: f.isRelative,
@@ -96,7 +176,7 @@ function buildField(f: FieldDef, value: string): AppleField {
 		// Apple ignores textAlignment on primary and back fields.
 		textAlignment:
 			f.textAlignment && f.slot !== "primary" && f.slot !== "back"
-				? toAppleTextAlignment(f.textAlignment)
+				? APPLE_TEXT_ALIGNMENT[f.textAlignment]
 				: undefined,
 		// Apple only supports `row` on auxiliary fields (event tickets).
 		row: f.slot === "auxiliary" ? f.row : undefined,
@@ -105,7 +185,7 @@ function buildField(f: FieldDef, value: string): AppleField {
 
 function buildSlots(
 	fields: FieldDef[],
-	values: Record<string, string | null>
+	values: Readonly<Record<string, string | null>>
 ): AppleSlots {
 	const slots: AppleSlots = {
 		headerFields: [],
@@ -116,12 +196,10 @@ function buildSlots(
 	};
 
 	for (const f of fields) {
-		const value = f.key in values ? values[f.key] : f.value;
-		if (value === null || value === undefined) {
-			continue;
+		const value = fieldValue(f, values);
+		if (value !== undefined) {
+			slots[SLOT_KEY[f.slot]].push(buildField(f, value));
 		}
-
-		slots[SLOT_KEY[f.slot]].push(buildField(f, value));
 	}
 
 	return slots;
@@ -130,80 +208,15 @@ function buildSlots(
 type EventTicketConfig = Extract<ParsedTemplate, { type: "eventTicket" }>;
 type BoardingPassConfig = Extract<ParsedTemplate, { type: "boardingPass" }>;
 
-function buildEventTicketAppleFields(
-	template: EventTicketConfig
-): Record<string, unknown> {
-	const a = template.apple;
-	return {
-		eventLogoText: a?.eventLogoText,
-		footerBackgroundColor: a?.footerBackgroundColor
-			? hexToRgb(a.footerBackgroundColor)
-			: undefined,
-		suppressHeaderDarkening: a?.suppressHeaderDarkening,
-		useAutomaticColors: a?.useAutomaticColors,
-		preferredStyleSchemes: a?.preferredStyleSchemes,
-		auxiliaryStoreIdentifiers: a?.auxiliaryStoreIdentifiers,
-		accessibilityURL: a?.accessibilityURL,
-		addOnURL: a?.addOnURL,
-		bagPolicyURL: a?.bagPolicyURL,
-		contactVenueEmail: a?.contactVenueEmail,
-		contactVenuePhoneNumber: a?.contactVenuePhoneNumber,
-		contactVenueWebsite: a?.contactVenueWebsite,
-		directionsInformationURL: a?.directionsInformationURL,
-		merchandiseURL: a?.merchandiseURL,
-		orderFoodURL: a?.orderFoodURL,
-		parkingInformationURL: a?.parkingInformationURL,
-		purchaseParkingURL: a?.purchaseParkingURL,
-		sellURL: a?.sellURL,
-		transferURL: a?.transferURL,
-		transitInformationURL: a?.transitInformationURL,
-	};
-}
-
-function buildBoardingPassAppleFields(
-	template: BoardingPassConfig
-): Record<string, unknown> {
-	const a = template.apple;
-	return {
-		changeSeatURL: a?.changeSeatURL,
-		entertainmentURL: a?.entertainmentURL,
-		managementURL: a?.managementURL,
-		purchaseAdditionalBaggageURL: a?.purchaseAdditionalBaggageURL,
-		purchaseLoungeAccessURL: a?.purchaseLoungeAccessURL,
-		purchaseWifiURL: a?.purchaseWifiURL,
-		registerServiceAnimalURL: a?.registerServiceAnimalURL,
-		reportLostBagURL: a?.reportLostBagURL,
-		requestWheelchairURL: a?.requestWheelchairURL,
-		trackBagsURL: a?.trackBagsURL,
-		transitProviderEmail: a?.transitProviderEmail,
-		transitProviderPhoneNumber: a?.transitProviderPhoneNumber,
-		transitProviderWebsiteURL: a?.transitProviderWebsiteURL,
-		upgradeURL: a?.upgradeURL,
-	};
-}
-
-function fieldValue(
-	fields: FieldDef[],
-	values: Record<string, string | null>,
-	key: string
-): string | undefined {
-	const f = fields.find((field) => field.key === key);
-	if (!f) {
-		return;
-	}
-	const v = f.key in values ? values[f.key] : f.value;
-	return v == null ? undefined : v;
-}
-
 // Omit seats with no populated seat/row/section fields.
 function buildSeats(
 	fields: FieldDef[],
-	values: Record<string, string | null>
+	values: Readonly<Record<string, string | null>>
 ): Record<string, string>[] | undefined {
 	const seat: Record<string, string> = {};
-	const number = fieldValue(fields, values, "seat");
-	const row = fieldValue(fields, values, "row");
-	const section = fieldValue(fields, values, "section");
+	const number = fieldValueByKey(fields, values, "seat");
+	const row = fieldValueByKey(fields, values, "row");
+	const section = fieldValueByKey(fields, values, "section");
 	if (number) {
 		seat.seatNumber = number;
 	}
@@ -230,7 +243,7 @@ function zoned(value: string | undefined): string | undefined {
 // Top-level semantics enable Wallet flight tracking and event relevance.
 function buildBoardingPassSemantics(
 	template: BoardingPassConfig,
-	values: Record<string, string | null>
+	values: Readonly<Record<string, string | null>>
 ): Record<string, unknown> | undefined {
 	const { carrier, flightNumber, origin, destination } = template;
 	const semantics: Record<string, unknown> = {};
@@ -261,11 +274,11 @@ function buildBoardingPassSemantics(
 	if (arrival) {
 		semantics.originalArrivalDate = arrival;
 	}
-	const gate = fieldValue(template.fields, values, "gate");
-	const terminal = fieldValue(template.fields, values, "terminal");
+	const gate = fieldValueByKey(template.fields, values, "gate");
+	const terminal = fieldValueByKey(template.fields, values, "terminal");
 	const boardingGroup =
-		fieldValue(template.fields, values, "boardingZone") ??
-		fieldValue(template.fields, values, "boardingGroup");
+		fieldValueByKey(template.fields, values, "boardingZone") ??
+		fieldValueByKey(template.fields, values, "boardingGroup");
 	if (gate) {
 		semantics.departureGate = gate;
 	}
@@ -284,7 +297,7 @@ function buildBoardingPassSemantics(
 
 function buildEventTicketSemantics(
 	template: EventTicketConfig,
-	values: Record<string, string | null>
+	values: Readonly<Record<string, string | null>>
 ): Record<string, unknown> {
 	const semantics: Record<string, unknown> = { eventName: template.name };
 	const startsAt = zoned(template.startsAt);
@@ -298,7 +311,7 @@ function buildEventTicketSemantics(
 	// A per-pass `venue` field wins over the template's venue.
 	// https://developer.apple.com/documentation/walletpasses/semantictags (venueName)
 	const venue =
-		fieldValue(template.fields, values, "venue") ?? template.venue?.name;
+		fieldValueByKey(template.fields, values, "venue") ?? template.venue?.name;
 	if (venue) {
 		semantics.venueName = venue;
 	}
@@ -324,7 +337,7 @@ function resolveLogoText(template: ParsedTemplate): string | undefined {
 // Explicit semantic tags override derived values for every pass type.
 function buildSemantics(
 	template: ParsedTemplate,
-	values: Record<string, string | null>
+	values: Readonly<Record<string, string | null>>
 ): Record<string, unknown> | undefined {
 	let derived: Record<string, unknown> | undefined;
 	if (template.type === "boardingPass") {
@@ -394,60 +407,9 @@ function resolveBarcodes(content: ParsedContent): ParsedBarcode[] | undefined {
 function toAppleBarcode(barcode: ParsedBarcode): Record<string, unknown> {
 	return {
 		message: barcode.value,
-		format: toAppleBarcodeFormat(barcode.format),
+		format: APPLE_BARCODE_FORMAT[barcode.format],
 		messageEncoding: toAppleMessageEncoding(barcode.format),
 		altText: barcode.altText,
-	};
-}
-
-function buildAppleCommonFields(
-	template: ParsedTemplate,
-	content: ParsedContent
-): Record<string, unknown> {
-	const a = template.apple;
-	const barcodes = resolveBarcodes(content);
-	const relevantDates = deriveRelevantDates(template);
-	// The deprecated singular key accepts only QR, PDF417 and Aztec.
-	const legacy = barcodes?.find((b) => isLegacyBarcodeFormat(b.format));
-	return {
-		backgroundColor: template.color ? hexToRgb(template.color) : undefined,
-		foregroundColor: a?.foregroundColor
-			? hexToRgb(a.foregroundColor)
-			: undefined,
-		labelColor: a?.labelColor ? hexToRgb(a.labelColor) : undefined,
-		expirationDate: content.expiresAt,
-		voided: content.apple?.voided,
-		barcodes: barcodes?.map(toAppleBarcode),
-		barcode: legacy ? toAppleBarcode(legacy) : undefined,
-		locations: template.locations?.map(
-			({ latitude, longitude, altitude, relevantText }) => ({
-				latitude,
-				longitude,
-				altitude,
-				relevantText,
-			})
-		),
-		beacons: a?.beacons,
-		relevantDates,
-		relevantDate: legacyRelevantDate(relevantDates),
-		// Wallet groups only boarding passes and event tickets.
-		groupingIdentifier:
-			template.type === "eventTicket" || template.type === "boardingPass"
-				? content.group
-				: undefined,
-		suppressStripShine: a?.suppressStripShine,
-		sharingProhibited: a?.sharingProhibited,
-		maxDistance: a?.maxDistance,
-		nfc: a?.nfc
-			? {
-					message: a.nfc.message,
-					encryptionPublicKey: a.nfc.encryptionPublicKey,
-					requiresAuthentication: a.nfc.requiresAuthentication,
-				}
-			: undefined,
-		appLaunchURL: a?.appLaunchURL,
-		associatedStoreIdentifiers: a?.associatedStoreIdentifiers,
-		userInfo: a?.userInfo,
 	};
 }
 
@@ -460,16 +422,47 @@ export interface AppleUpdateTarget {
 export function buildPassJson(
 	template: ParsedTemplate,
 	content: ParsedContent,
-	credentials: AppleCredentials,
+	credentials: Pick<AppleCredentials, "passTypeIdentifier" | "teamId">,
 	update?: AppleUpdateTarget
-): Record<string, unknown> {
+): PassJson {
 	const values = content.values ?? {};
-	const slots: Record<string, unknown> = buildSlots(template.fields, values);
+	const slots: AppleSlots & { transitType?: string } = buildSlots(
+		template.fields,
+		values
+	);
 	if (template.type === "boardingPass" && template.transitType) {
 		slots.transitType = TRANSIT_TYPE[template.transitType];
 	}
-	const a = template.apple;
-	const semantics = buildSemantics(template, values);
+	// Every pass type's options at once; the template schema already keeps
+	// each type's keys to its own type.
+	const apple: AppleEventTicketOptions & AppleBoardingPassOptions =
+		template.apple ?? {};
+	const {
+		// Archive files, not pass.json keys.
+		icon,
+		logo,
+		strip,
+		background,
+		thumbnail,
+		footer,
+		// Hex in the template, rgb() in pass.json.
+		foregroundColor,
+		labelColor,
+		footerBackgroundColor,
+		// Derived from the rest of the template below.
+		description,
+		logoText,
+		relevantDates: explicitRelevantDates,
+		semantics,
+		...rest
+	} = apple;
+	// Every other option already has its pass.json name and shape, so it is
+	// copied as is; an option that isn't a pass.json key fails to compile here.
+	const verbatim: Pick<PassJson, keyof typeof rest> = rest;
+	const barcodes = resolveBarcodes(content);
+	// The deprecated singular key accepts only QR, PDF417 and Aztec.
+	const legacy = barcodes?.find((b) => LEGACY_BARCODE_FORMATS.has(b.format));
+	const relevantDates = deriveRelevantDates(template);
 
 	return {
 		formatVersion: 1,
@@ -477,18 +470,32 @@ export function buildPassJson(
 		serialNumber: content.serialNumber,
 		teamIdentifier: credentials.teamId,
 		organizationName: template.name,
-		description: a?.description ?? template.name,
+		description: description ?? template.name,
 		logoText: resolveLogoText(template),
-		...buildAppleCommonFields(template, content),
+		...verbatim,
+		backgroundColor: template.color ? hexToRgb(template.color) : undefined,
+		foregroundColor: foregroundColor ? hexToRgb(foregroundColor) : undefined,
+		labelColor: labelColor ? hexToRgb(labelColor) : undefined,
+		footerBackgroundColor: footerBackgroundColor
+			? hexToRgb(footerBackgroundColor)
+			: undefined,
+		expirationDate: content.expiresAt,
+		voided: content.apple?.voided,
+		barcodes: barcodes?.map(toAppleBarcode),
+		barcode: legacy ? toAppleBarcode(legacy) : undefined,
+		locations: template.locations,
+		relevantDates,
+		relevantDate: legacyRelevantDate(relevantDates),
+		// Wallet groups only boarding passes and event tickets.
+		groupingIdentifier:
+			template.type === "eventTicket" || template.type === "boardingPass"
+				? content.group
+				: undefined,
+		semantics: buildSemantics(template, values),
 		...(update && {
 			webServiceURL: update.url,
 			authenticationToken: update.authenticationToken,
 		}),
-		...(template.type === "eventTicket" &&
-			buildEventTicketAppleFields(template)),
-		...(template.type === "boardingPass" &&
-			buildBoardingPassAppleFields(template)),
-		...(semantics && { semantics }),
 		[PASS_TYPE_KEY[template.type]]: slots,
 	};
 }

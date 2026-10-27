@@ -1,5 +1,5 @@
-import type { PassTemplate } from "../template";
-import type { PassContent } from "./content";
+import type { PassContent } from "./schema/content";
+import type { PassTemplate } from "./template";
 
 /**
  * Delegates the private-key operation of Apple pass signing to a key you never
@@ -84,6 +84,7 @@ interface AppleCredentialsBase {
  */
 export type AppleCredentials =
 	| (AppleCredentialsBase & {
+			/** Not allowed with `signerKey`. */
 			signer?: never;
 			/** PEM-encoded private key paired with `signerCert`. */
 			signerKey: string;
@@ -91,6 +92,7 @@ export type AppleCredentials =
 	| (AppleCredentialsBase & {
 			/** Externally-held signing key (KMS/HSM) used instead of `signerKey`. */
 			signer: AppleExternalSigner;
+			/** Not allowed with `signer`. */
 			signerKey?: never;
 	  });
 
@@ -122,41 +124,6 @@ export interface WalletConfig {
 	load?: LoadPass;
 }
 
-/** Result of {@link PassTemplate.create}. */
-export interface IssuedPass {
-	/**
-	 * Signed `.pkpass` archive ready to serve, or `null` if Apple credentials were omitted.
-	 *
-	 * Serve it under the `APPLE_PASS_CONTENT_TYPE` content type — iOS refuses passes
-	 * sent under any other type. On Node HTTP servers wrap it with `Buffer.from(apple)`.
-	 */
-	apple: Uint8Array<ArrayBuffer> | null;
-	/**
-	 * Signed JWT for a Google Wallet save link, or `null` if Google credentials were omitted.
-	 *
-	 * Pass it to the exported `googleSaveUrl(jwt)` helper to get the
-	 * `https://pay.google.com/gp/v/save/<jwt>` URL to link or redirect to.
-	 */
-	google: string | null;
-}
-
-/** Result of `wallet.createBundle()`. */
-export interface IssuedBundle {
-	/**
-	 * A `.pkpasses` bundle holding one signed `.pkpass` per item, or `null` if
-	 * Apple credentials were omitted. Always a bundle, even for one item.
-	 *
-	 * Serve it under the `APPLE_PASSES_CONTENT_TYPE` content type. On Node HTTP
-	 * servers wrap it with `Buffer.from(apple)`.
-	 */
-	apple: Uint8Array<ArrayBuffer> | null;
-	/**
-	 * One signed JWT whose save link adds every item to Google Wallet, or `null`
-	 * if Google credentials were omitted. Pass it to `googleSaveUrl(jwt)`.
-	 */
-	google: string | null;
-}
-
 /**
  * Your app's current content for one issued pass. passlet re-renders the pass
  * from this whenever it changes, so your database stays the single source of
@@ -185,6 +152,7 @@ export interface PassRegistration {
 	deviceLibraryIdentifier: string;
 	/** APNs token for this device. */
 	pushToken: string;
+	/** The registered pass. */
 	serialNumber: string;
 }
 
@@ -219,7 +187,14 @@ export interface PassRegistrations {
 	updatablePasses?(
 		deviceLibraryIdentifier: string,
 		passesUpdatedSince: Date | undefined
-	): Promise<{ serialNumber: string; updatedAt: Date }[]>;
+	): Promise<
+		{
+			/** A pass the device is registered for. */
+			serialNumber: string;
+			/** When its content last changed, as `load` reports it. */
+			updatedAt: Date;
+		}[]
+	>;
 }
 
 /**
@@ -240,7 +215,12 @@ export interface AppleWebService {
 	 * Required with an external `signer`, because APNs needs the private key
 	 * itself for its TLS connection.
 	 */
-	push?: { cert: string; key: string };
+	push?: {
+		/** PEM-encoded Pass Type ID certificate. */
+		cert: string;
+		/** PEM-encoded private key of `cert`. */
+		key: string;
+	};
 	/** Storage for device registrations. */
 	registrations: PassRegistrations;
 	/**
@@ -259,12 +239,4 @@ export interface AppleWebService {
 	 * passes exist. Apple requires HTTPS outside development.
 	 */
 	url: string;
-}
-
-/** Result of `wallet.update()`. */
-export interface UpdateResult {
-	/** Apple devices notified, or `null` without `apple.webService`. */
-	apple: { failed: number; notified: number; removed: number } | null;
-	/** What happened on Google, or `null` without Google credentials. */
-	google: "updated" | "created" | null;
 }

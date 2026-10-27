@@ -1,5 +1,5 @@
 import type { AppleProvider } from "./apple/index";
-import { WalletError } from "./errors";
+import { WalletError, withResults } from "./errors";
 import type { GoogleProvider } from "./google/index";
 import type { ParsedContent } from "./schema/content";
 import type { ParsedTemplate } from "./schema/template";
@@ -12,9 +12,7 @@ export interface PassItem {
 
 /** What every wallet platform does with templates and passes. */
 export interface Provider<Issued, Updated> {
-	/** Reject content this platform cannot issue, e.g. Google's serial characters. */
-	checkContent(content: ParsedContent): void;
-	/** Reject a template this platform cannot render. Runs at construction. */
+	/** Reject a template this platform cannot render. */
 	checkTemplate(template: ParsedTemplate): void;
 	/** Issue one pass: Apple signs a `.pkpass`, Google signs a save JWT. */
 	issue(item: PassItem): Promise<Issued>;
@@ -35,9 +33,12 @@ export interface Providers {
 /**
  * Run one operation on every configured platform at once. Each runs to
  * completion even if another fails, then the first failure (Apple's, then
- * Google's) is thrown. When both platforms are configured and that failure is
- * a {@link WalletError}, it carries `results`: how each platform settled, so
- * the caller knows whether the other already applied its change.
+ * Google's) is thrown. With both platforms configured it carries `results`:
+ * how each platform settled, so the caller knows whether the other already
+ * applied its change.
+ *
+ * Providers throw only `WalletError`s, wrapping user callbacks where they
+ * call them; anything else is a passlet bug, rethrown as is.
  */
 export async function runProviders<Apple, Google>(
 	providers: Providers,
@@ -57,20 +58,8 @@ export async function runProviders<Apple, Google>(
 	const [failure] = [appleResult, googleResult].flatMap((result) =>
 		result.status === "rejected" ? [result.reason] : []
 	);
-	if (
-		!(providers.apple && providers.google && failure instanceof WalletError)
-	) {
-		throw failure;
+	if (providers.apple && providers.google && failure instanceof WalletError) {
+		throw withResults(failure, { apple: appleResult, google: googleResult });
 	}
-	// Concurrent calls can share one rejection (e.g. a template's image
-	// download), so each gets its own copy carrying its own results.
-	const error = new WalletError(failure.code, failure.message, {
-		...("cause" in failure && { cause: failure.cause }),
-		issues: failure.issues,
-		results: { apple: appleResult, google: googleResult },
-		retryAfter: failure.retryAfter,
-		status: failure.status,
-	});
-	error.stack = failure.stack;
-	throw error;
+	throw failure;
 }

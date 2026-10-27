@@ -1,151 +1,49 @@
 import { once } from "node:events";
 import type * as Http2 from "node:http2";
-import {
-	createSecureServer,
-	type Http2SecureServer,
-	type IncomingHttpHeaders,
-	type SecureClientSessionOptions,
-	type ServerHttp2Session,
+import type {
+	SecureClientSessionOptions,
+	ServerHttp2Session,
 } from "node:http2";
+import { createSecureServer } from "node:http2";
 import type { AddressInfo } from "node:net";
-import type { TLSSocket } from "node:tls";
 import { inspect } from "node:util";
-import {
-	afterEach,
-	beforeAll,
-	beforeEach,
-	describe,
-	expect,
-	it,
-	vi,
-} from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApnsClient } from "../../../src/apple/apns";
 import { WalletError } from "../../../src/errors";
-import { createSelfSigned, type SelfSigned } from "../../support/x509";
+import { type ApnsStandIn, selfSigned, startApns } from "../../support/apns";
 
-const trust = vi.hoisted(() => ({ ca: "" }));
+const apnsRoute = vi.hoisted(() => ({ ca: "", ciphers: "", origin: "" }));
 
-// Real APNs presents a publicly trusted certificate; the local stand-in's
-// self-signed one has to be trusted explicitly.
+// Every connection goes to the local stand-in, whose self-signed certificate
+// is trusted explicitly; real APNs presents a publicly trusted one.
 vi.mock("node:http2", async (importOriginal) => {
 	const http2 = await importOriginal<typeof Http2>();
 	return {
 		...http2,
-		connect: (authority: string, options: SecureClientSessionOptions) =>
-			http2.connect(authority, { ...options, ca: trust.ca }),
+		connect: (_authority: string, options: SecureClientSessionOptions) =>
+			http2.connect(apnsRoute.origin, { ...options, ...apnsRoute }),
 	};
 });
 
 const TOPIC = "pass.com.example.loyalty";
 
-function selfSigned(commonName: string): SelfSigned {
-	return createSelfSigned({
-		commonName,
-		notBefore: new Date(Date.now() - 60_000),
-		notAfter: new Date(Date.now() + 24 * 60 * 60 * 1000),
-		subjectAltNameIp: "127.0.0.1",
-	});
-}
-
-interface ReceivedPush {
-	body: string;
-	clientCertificate: string;
-	headers: IncomingHttpHeaders;
-}
-
-/**
- * APNs reply per device token: status plus the error `reason`, if any, or
- * `"drop"` to tear down the connection without answering.
- */
-type Reply = [status: number, reason?: string] | "drop" | "goaway";
-
 const pushIdentity = selfSigned(TOPIC);
-const serverIdentity = selfSigned("apns.test");
-const replies = new Map<string, Reply>();
-let received: ReceivedPush[] = [];
-let sessions: ServerHttp2Session[] = [];
-let server: Http2SecureServer;
-let origin: string;
+let apns: ApnsStandIn;
 let client: ApnsClient;
-
-beforeAll(() => {
-	trust.ca = serverIdentity.cert;
-});
 
 // A server and a client per test, so each test counts only its own
 // connections.
 beforeEach(async () => {
-	replies.clear();
-	received = [];
-	sessions = [];
-	server = createSecureServer({
-		...serverIdentity,
-		// Like APNs, refuse any client that doesn't present the push certificate.
-		ca: pushIdentity.cert,
-		requestCert: true,
-		rejectUnauthorized: true,
-		// Apple: "don't assume a specific number of streams". A limit of one
-		// makes every multi-token test queue behind it.
-		settings: { maxConcurrentStreams: 1 },
-	});
-	server.on("session", (session) => {
-		sessions.push(session);
-	});
-	server.on("stream", (stream, headers) => {
-		let body = "";
-		stream.setEncoding("utf8");
-		stream.on("data", (chunk: string) => {
-			body += chunk;
-		});
-		stream.on("end", () => {
-			const socket = stream.session?.socket as TLSSocket;
-			received.push({
-				body,
-				clientCertificate: String(socket.getPeerCertificate().subject.CN),
-				headers,
-			});
-			const token = String(headers[":path"]).replace("/3/device/", "");
-			const reply = replies.get(token) ?? [200];
-			if (reply === "drop") {
-				stream.session?.destroy();
-				return;
-			}
-			if (reply === "goaway") {
-				// Answer, then end the connection gracefully the way APNs does:
-				// streams already open finish, new ones are refused.
-				stream.respond({ ":status": 200 }, { endStream: true });
-				stream.session?.close();
-				return;
-			}
-			const [status, reason] = reply;
-			if (reason === undefined) {
-				stream.respond({ ":status": status }, { endStream: true });
-				return;
-			}
-			stream.respond({ ":status": status, "content-type": "application/json" });
-			stream.end(
-				JSON.stringify(
-					status === 410 ? { reason, timestamp: Date.now() } : { reason }
-				)
-			);
-		});
-	});
-	server.listen(0, "127.0.0.1");
-	await once(server, "listening");
-	origin = `https://127.0.0.1:${(server.address() as AddressInfo).port}`;
-	client = apns({ ...pushIdentity, origin });
+	apns = await startApns(apnsRoute, pushIdentity.cert);
+	client = apnsClient(pushIdentity);
 });
 
 afterEach(async () => {
-	for (const session of sessions) {
-		session.destroy();
-	}
-	server.close();
-	await once(server, "close");
+	await apns.close();
 });
 
-function apns(options: { cert: string; key: string; origin: string }) {
-	return new ApnsClient({ ...options, topic: TOPIC });
+function apnsClient(identity: { cert: string; key: string }) {
+	return new ApnsClient({ ...identity, topic: TOPIC });
 }
 
 function send(
@@ -160,7 +58,7 @@ describe("ApnsClient", () => {
 			send([{ deviceLibraryIdentifier: "d1", pushToken: "a1b2" }])
 		).resolves.toEqual({ notified: 1, failed: 0, unregistered: [] });
 
-		expect(received).toEqual([
+		expect(apns.received).toEqual([
 			{
 				body: "{}",
 				clientCertificate: TOPIC,
@@ -171,20 +69,20 @@ describe("ApnsClient", () => {
 				}),
 			},
 		]);
-		expect(received[0]?.headers).not.toHaveProperty("apns-push-type");
-		expect(received[0]?.headers).not.toHaveProperty("authorization");
+		expect(apns.received[0]?.headers).not.toHaveProperty("apns-push-type");
+		expect(apns.received[0]?.headers).not.toHaveProperty("authorization");
 	});
 
 	it("classifies every documented response", async () => {
-		replies.set("02", [410, "Unregistered"]);
-		replies.set("03", [410, "ExpiredToken"]);
-		replies.set("04", [400, "BadDeviceToken"]);
-		replies.set("05", [400, "DeviceTokenNotForTopic"]);
-		replies.set("06", [429, "TooManyRequests"]);
-		replies.set("07", [413, "PayloadTooLarge"]);
-		replies.set("08", [500, "InternalServerError"]);
-		replies.set("09", [503, "ServiceUnavailable"]);
-		replies.set("0a", [400]);
+		apns.replies.set("02", [410, "Unregistered"]);
+		apns.replies.set("03", [410, "ExpiredToken"]);
+		apns.replies.set("04", [400, "BadDeviceToken"]);
+		apns.replies.set("05", [400, "DeviceTokenNotForTopic"]);
+		apns.replies.set("06", [429, "TooManyRequests"]);
+		apns.replies.set("07", [413, "PayloadTooLarge"]);
+		apns.replies.set("08", [500, "InternalServerError"]);
+		apns.replies.set("09", [503, "ServiceUnavailable"]);
+		apns.replies.set("0a", [400]);
 
 		const targets = [
 			"01",
@@ -210,13 +108,13 @@ describe("ApnsClient", () => {
 			{ deviceLibraryIdentifier: "device-03", pushToken: "03" },
 			{ deviceLibraryIdentifier: "device-04", pushToken: "04" },
 		]);
-		expect(received).toHaveLength(10);
+		expect(apns.received).toHaveLength(10);
 		// All pushes share one connection.
-		expect(sessions).toHaveLength(1);
+		expect(apns.sessions).toHaveLength(1);
 	});
 
 	it("pushes each token once, even when several devices share it", async () => {
-		replies.set("dead", [410, "Unregistered"]);
+		apns.replies.set("dead", [410, "Unregistered"]);
 		const result = await send([
 			{ deviceLibraryIdentifier: "d1", pushToken: "beef" },
 			{ deviceLibraryIdentifier: "d2", pushToken: "beef" },
@@ -232,7 +130,7 @@ describe("ApnsClient", () => {
 				{ deviceLibraryIdentifier: "d4", pushToken: "dead" },
 			],
 		});
-		expect(received.map((push) => push.headers[":path"]).sort()).toEqual([
+		expect(apns.received.map((push) => push.headers[":path"]).sort()).toEqual([
 			"/3/device/beef",
 			"/3/device/dead",
 		]);
@@ -244,7 +142,7 @@ describe("ApnsClient", () => {
 			failed: 0,
 			unregistered: [],
 		});
-		expect(sessions).toHaveLength(0);
+		expect(apns.sessions).toHaveLength(0);
 	});
 
 	it("never sends a token that isn't hex, and reports it as unregistered", async () => {
@@ -257,11 +155,11 @@ describe("ApnsClient", () => {
 			failed: 0,
 			unregistered: [target],
 		});
-		expect(sessions).toHaveLength(0);
+		expect(apns.sessions).toHaveLength(0);
 	});
 
 	it("throws APPLE_PUSH_FAILED on 403 without exposing key material", async () => {
-		replies.set("bad", [403, "BadCertificate"]);
+		apns.replies.set("bad", [403, "BadCertificate"]);
 		const error = await send([
 			{ deviceLibraryIdentifier: "d1", pushToken: "a1" },
 			{ deviceLibraryIdentifier: "d2", pushToken: "bad" },
@@ -281,7 +179,7 @@ describe("ApnsClient", () => {
 
 	it("throws APPLE_PUSH_FAILED when APNs refuses the client certificate", async () => {
 		const stranger = selfSigned(TOPIC);
-		const error = await apns({ ...stranger, origin })
+		const error = await apnsClient(stranger)
 			.send([{ deviceLibraryIdentifier: "d1", pushToken: "a1" }])
 			.catch((e: unknown) => e);
 
@@ -290,21 +188,20 @@ describe("ApnsClient", () => {
 		expect(inspect(error, { depth: null })).not.toContain(
 			stranger.key.split("\n")[1]
 		);
-		expect(received).toHaveLength(0);
+		expect(apns.received).toHaveLength(0);
 	});
 
 	it("throws APPLE_PUSH_FAILED when APNs is unreachable", async () => {
-		const closed = createSecureServer(serverIdentity);
+		const closed = createSecureServer();
 		closed.listen(0, "127.0.0.1");
 		await once(closed, "listening");
 		const { port } = closed.address() as AddressInfo;
 		closed.close();
 		await once(closed, "close");
+		apnsRoute.origin = `https://127.0.0.1:${port}`;
 
 		await expect(
-			apns({ ...pushIdentity, origin: `https://127.0.0.1:${port}` }).send([
-				{ deviceLibraryIdentifier: "d1", pushToken: "a1" },
-			])
+			send([{ deviceLibraryIdentifier: "d1", pushToken: "a1" }])
 		).rejects.toMatchObject({ code: "APPLE_PUSH_FAILED" });
 	});
 
@@ -316,28 +213,28 @@ describe("ApnsClient", () => {
 			send([{ deviceLibraryIdentifier: "d2", pushToken: "b2" }])
 		).resolves.toEqual({ notified: 1, failed: 0, unregistered: [] });
 
-		expect(received.map((push) => push.headers[":path"])).toEqual([
+		expect(apns.received.map((push) => push.headers[":path"])).toEqual([
 			"/3/device/a1",
 			"/3/device/b2",
 		]);
-		expect(sessions).toHaveLength(1);
+		expect(apns.sessions).toHaveLength(1);
 	});
 
 	it("opens a new connection once APNs closes the old one", async () => {
 		await send([{ deviceLibraryIdentifier: "d1", pushToken: "a1" }]);
 		// Graceful close: GOAWAY, as APNs ends connections.
-		sessions[0]?.close();
-		await once(sessions[0] as ServerHttp2Session, "close");
+		apns.sessions[0]?.close();
+		await once(apns.sessions[0] as ServerHttp2Session, "close");
 
 		await expect(
 			send([{ deviceLibraryIdentifier: "d2", pushToken: "b2" }])
 		).resolves.toEqual({ notified: 1, failed: 0, unregistered: [] });
-		expect(sessions).toHaveLength(2);
+		expect(apns.sessions).toHaveLength(2);
 	});
 
 	it("keeps every answer when the connection drops mid-send, retrying the rest once", async () => {
-		replies.set("dead", [410, "Unregistered"]);
-		replies.set("ee", "drop");
+		apns.replies.set("dead", [410, "Unregistered"]);
+		apns.replies.set("ee", "drop");
 		const result = await send([
 			{ deviceLibraryIdentifier: "d1", pushToken: "01" },
 			{ deviceLibraryIdentifier: "d2", pushToken: "dead" },
@@ -351,13 +248,13 @@ describe("ApnsClient", () => {
 		});
 		// Retried once, on a second connection.
 		expect(
-			received.filter((push) => push.headers[":path"] === "/3/device/ee")
+			apns.received.filter((push) => push.headers[":path"] === "/3/device/ee")
 		).toHaveLength(2);
-		expect(sessions).toHaveLength(2);
+		expect(apns.sessions).toHaveLength(2);
 	});
 
 	it("retries on a new connection the pushes APNs refused after its GOAWAY", async () => {
-		replies.set("aa", "goaway");
+		apns.replies.set("aa", "goaway");
 		const result = await send([
 			{ deviceLibraryIdentifier: "d1", pushToken: "aa" },
 			{ deviceLibraryIdentifier: "d2", pushToken: "bb" },
@@ -365,13 +262,13 @@ describe("ApnsClient", () => {
 		]);
 
 		expect(result).toEqual({ notified: 3, failed: 0, unregistered: [] });
-		expect(sessions).toHaveLength(2);
+		expect(apns.sessions).toHaveLength(2);
 	});
 
 	it("shares one new connection between sends that start together after a close", async () => {
-		// A 403 makes passlet close the connection; it stays cached until the
-		// close completes, so the next sends find it closing.
-		replies.set("bad", [403, "BadCertificate"]);
+		// A 403 retires the connection at once; sends that start before the new
+		// one is ready share its opening.
+		apns.replies.set("bad", [403, "BadCertificate"]);
 		await send([{ deviceLibraryIdentifier: "d1", pushToken: "bad" }]).catch(
 			() => undefined
 		);
@@ -383,6 +280,6 @@ describe("ApnsClient", () => {
 		]);
 
 		expect(results.map((r) => r.notified)).toEqual([1, 1, 1]);
-		expect(sessions).toHaveLength(2);
+		expect(apns.sessions).toHaveLength(2);
 	});
 });

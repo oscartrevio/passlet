@@ -1,15 +1,26 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { AppleProvider } from "../../src/apple/index";
 import type {
 	AppleCredentials,
 	AppleWebService,
 	PassRegistrations,
+	PassTemplate,
 } from "../../src/index";
 import { Wallet } from "../../src/wallet";
 import {
 	appleCredentials,
+	appleWebService,
+	ICON,
+	memoryRegistrations,
 	PASS_TYPE_IDENTIFIER,
 	TEAM_ID,
 } from "../support/apple";
+import {
+	existingClasses,
+	googleCredentials,
+	LOGO_URL,
+	stubGoogleFetch,
+} from "../support/google";
 
 const SECRET = "s".repeat(32);
 
@@ -130,5 +141,108 @@ describe("wallet.update", () => {
 		await expect(
 			new Wallet({ load }).update("serial-001")
 		).rejects.toMatchObject({ code: "PASS_NOT_FOUND", status: 404 });
+	});
+
+	// Google may already have applied its write; `results` is how the caller
+	// tells, so a failing storage must not lose it.
+	it("carries both outcomes when the registrations storage fails", async () => {
+		stubGoogleFetch(existingClasses);
+		const failure = new Error("registrations unavailable");
+		const registrations = memoryRegistrations();
+		registrations.devices = () => Promise.reject(failure);
+		let template: PassTemplate | undefined;
+		const wallet = new Wallet({
+			apple: {
+				...appleCredentials(),
+				webService: appleWebService({ registrations }),
+			},
+			google: googleCredentials(),
+			load: () =>
+				template ? { template, content: {}, updatedAt: new Date() } : null,
+		});
+		template = wallet.loyalty({
+			id: "rewards",
+			name: "Rewards",
+			apple: { icon: ICON },
+			google: { logo: LOGO_URL },
+		});
+
+		await expect(wallet.update("serial-001")).rejects.toMatchObject({
+			code: "APPLE_REGISTRATIONS_FAILED",
+			cause: failure,
+			results: {
+				apple: { status: "rejected" },
+				google: { status: "fulfilled", value: "updated" },
+			},
+		});
+	});
+});
+
+describe("templates built by another Wallet", () => {
+	// Built without credentials, so no Apple requirement was checked.
+	const unchecked = () =>
+		new Wallet({}).boardingPass({
+			id: "flight",
+			name: "Flight",
+			apple: { icon: ICON },
+		});
+
+	it("are checked against this Wallet's providers when load returns one", async () => {
+		const wallet = new Wallet({
+			apple: appleCredentials(),
+			load: () => ({
+				template: unchecked(),
+				content: {},
+				updatedAt: new Date(),
+			}),
+		});
+		await expect(wallet.update("serial-001")).rejects.toMatchObject({
+			code: "APPLE_BOARDING_MISSING_TRANSIT_TYPE",
+		});
+	});
+
+	it("are checked against this Wallet's providers in a bundle", async () => {
+		const wallet = new Wallet({ apple: appleCredentials() });
+		await expect(
+			wallet.createBundle([
+				{ template: unchecked(), content: { serialNumber: "serial-001" } },
+			])
+		).rejects.toMatchObject({ code: "APPLE_BOARDING_MISSING_TRANSIT_TYPE" });
+	});
+
+	it("are accepted once they pass", async () => {
+		const foreign = new Wallet({}).generic({ id: "member", name: "Member" });
+		await expect(
+			new Wallet({}).createBundle([
+				{ template: foreign, content: { serialNumber: "serial-001" } },
+			])
+		).resolves.toEqual({ apple: null, google: null });
+	});
+});
+
+describe("template checks", () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("run once per Wallet however often the template is used", async () => {
+		const check = vi.spyOn(AppleProvider.prototype, "checkTemplate");
+		let template: PassTemplate | undefined;
+		const wallet = new Wallet({
+			apple: appleCredentials(),
+			load: () =>
+				template ? { template, content: {}, updatedAt: new Date() } : null,
+		});
+		template = wallet.generic({
+			id: "member",
+			name: "Member",
+			apple: { icon: ICON },
+		});
+		await template.create({ serialNumber: "serial-001" });
+		await wallet.createBundle([
+			{ template, content: { serialNumber: "serial-002" } },
+		]);
+		await wallet.update("serial-001");
+		expect(check).toHaveBeenCalledTimes(1);
 	});
 });

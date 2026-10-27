@@ -1,15 +1,14 @@
-import { createHash, verify } from "node:crypto";
+import { createHash, verify, X509Certificate } from "node:crypto";
 import JSZip from "jszip";
-import { inject } from "vitest";
-import { AppleProvider } from "../../src/apple/index";
-import type { ParsedContent } from "../../src/schema/content";
+import { expect, inject, vi } from "vitest";
+import { appleAuthTokens } from "../../src/apple/auth-token";
 import type {
 	AppleCredentials,
+	AppleWebService,
 	PassRegistration,
 	PassRegistrations,
-} from "../../src/schema/settings";
-import type { ParsedTemplate } from "../../src/schema/template";
-import { child, children, decodeOid, parse } from "./der-reader";
+} from "../../src/config";
+import { child, children, decodeOid, type Node, parse } from "./der-reader";
 
 export const PASS_TYPE_IDENTIFIER = "pass.com.test.example";
 export const TEAM_ID = "ABCD1234EF";
@@ -48,42 +47,59 @@ export function appleCredentials(): AppleCredentials & { signerKey: string } {
 	};
 }
 
-/** Sign one `.pkpass` through the Apple provider, without a web service. */
-export function issueApplePass(
-	template: ParsedTemplate,
-	content: ParsedContent,
-	credentials: AppleCredentials
-): Promise<Uint8Array> {
-	const provider = new AppleProvider(credentials, {
-		resolve: () => {
-			throw new Error("no web service to render for");
-		},
-	});
-	return provider.issue({ template, content });
+export const WEB_SERVICE_URL = "https://example.com/api/wallet";
+export const WEB_SERVICE_SECRET = "s".repeat(32);
+
+/** `apple.webService` at {@link WEB_SERVICE_URL}, with memory registrations. */
+export function appleWebService(
+	overrides: Partial<AppleWebService> = {}
+): AppleWebService {
+	return {
+		url: WEB_SERVICE_URL,
+		secret: WEB_SERVICE_SECRET,
+		registrations: memoryRegistrations(),
+		...overrides,
+	};
+}
+
+/** The `authorization` header a device holding pass `serialNumber` sends. */
+export function applePassAuthorization(
+	serialNumber: string,
+	secret = WEB_SERVICE_SECRET
+): { authorization: string } {
+	const token = appleAuthTokens(secret, PASS_TYPE_IDENTIFIER).issue(
+		serialNumber
+	);
+	return { authorization: `ApplePass ${token}` };
 }
 
 export type MemoryRegistrations = PassRegistrations & {
 	rows: () => PassRegistration[];
 };
 
-/** Registrations kept in memory, with `rows()` to inspect them. */
+/**
+ * Registrations kept in memory, with `rows()` to inspect them. Every storage
+ * method is a `vi.fn`, so tests can check what reached storage.
+ */
 export function memoryRegistrations(
 	initial: PassRegistration[] = []
 ): MemoryRegistrations {
+	const key = (deviceLibraryIdentifier: string, serialNumber: string) =>
+		`${deviceLibraryIdentifier}\0${serialNumber}`;
 	const rows = new Map(
 		initial.map((row) => [
-			`${row.deviceLibraryIdentifier}\0${row.serialNumber}`,
+			key(row.deviceLibraryIdentifier, row.serialNumber),
 			row,
 		])
 	);
 	return {
-		add: (row) => {
-			const key = `${row.deviceLibraryIdentifier}\0${row.serialNumber}`;
-			const created = !rows.has(key);
-			rows.set(key, row);
+		add: vi.fn((row: PassRegistration) => {
+			const id = key(row.deviceLibraryIdentifier, row.serialNumber);
+			const created = !rows.has(id);
+			rows.set(id, row);
 			return Promise.resolve(created);
-		},
-		devices: (serialNumber) =>
+		}),
+		devices: vi.fn((serialNumber: string) =>
 			Promise.resolve(
 				[...rows.values()]
 					.filter((row) => row.serialNumber === serialNumber)
@@ -91,20 +107,22 @@ export function memoryRegistrations(
 						deviceLibraryIdentifier,
 						pushToken,
 					}))
-			),
-		remove: (deviceLibraryIdentifier, serialNumber) => {
-			rows.delete(`${deviceLibraryIdentifier}\0${serialNumber}`);
+			)
+		),
+		remove: vi.fn((deviceLibraryIdentifier: string, serialNumber: string) => {
+			rows.delete(key(deviceLibraryIdentifier, serialNumber));
 			return Promise.resolve();
-		},
+		}),
 		rows: () => [...rows.values()],
-		serialNumbers: (deviceLibraryIdentifier) =>
+		serialNumbers: vi.fn((deviceLibraryIdentifier: string) =>
 			Promise.resolve(
 				[...rows.values()]
 					.filter(
 						(row) => row.deviceLibraryIdentifier === deviceLibraryIdentifier
 					)
 					.map((row) => row.serialNumber)
-			),
+			)
+		),
 	};
 }
 
@@ -162,11 +180,23 @@ export async function readPkpass(bytes: Uint8Array): Promise<Pkpass> {
 
 export interface ParsedSignature {
 	certificateCount: number;
+	/** DER of each certificate SignedData carries, in order. */
+	certificates: Uint8Array[];
+	/** The value of the contentType signed attribute. */
+	contentTypeOid: string | undefined;
 	/** True when SignedData carries no encapsulated content (detached). */
 	detached: boolean;
 	digestAlgorithmOid: string;
 	/** Digest bytes from the message-digest signed attribute, hex. */
 	messageDigestHex: string | undefined;
+	/** OIDs of the signed attributes, in the order they are encoded. */
+	signedAttributeOids: string[];
+	/** Whether the signed attributes are in DER SET OF order (X.690 §11.6). */
+	signedAttributesSorted: boolean;
+	/** The issuer Name DER that SignerInfo names its signer by. */
+	signerIssuer: Uint8Array;
+	/** The serial number SignerInfo names its signer by. */
+	signerSerial: bigint;
 	/** Whether the signature verifies against `signerCertPem` over the signed attributes. */
 	verifies(signerCertPem: string): boolean;
 }
@@ -178,7 +208,15 @@ const DIGEST_NAMES: Record<string, string> = {
 	"2.16.840.1.101.3.4.2.3": "sha512",
 };
 const SIGNED_DATA_OID = "1.2.840.113549.1.7.2";
+const CONTENT_TYPE_OID = "1.2.840.113549.1.9.3";
 const MESSAGE_DIGEST_OID = "1.2.840.113549.1.9.4";
+
+function integer(node: Node): bigint {
+	if (node.tag !== 0x02) {
+		throw new Error(`expected INTEGER, got tag 0x${node.tag.toString(16)}`);
+	}
+	return BigInt(`0x${Buffer.from(node.content).toString("hex")}`);
+}
 
 /** Parses a detached PKCS#7 signature as produced for `.pkpass` files. */
 export function parseSignature(der: Uint8Array): ParsedSignature {
@@ -202,8 +240,9 @@ export function parseSignature(der: Uint8Array): ParsedSignature {
 	}
 	// SignerInfo: version, issuerAndSerialNumber, digestAlgorithm,
 	// [0] signedAttributes, signatureAlgorithm, signature.
-	const [, , digestAlgorithm, attributes, , signature] = children(signerInfo);
-	if (!(digestAlgorithm && attributes?.tag === 0xa0 && signature)) {
+	const [, signerId, digestAlgorithm, attributes, , signature] =
+		children(signerInfo);
+	if (!(signerId && digestAlgorithm && attributes?.tag === 0xa0 && signature)) {
 		throw new Error("SignerInfo has no signed attributes");
 	}
 	const digestOid = decodeOid(child(digestAlgorithm, 0));
@@ -214,19 +253,35 @@ export function parseSignature(der: Uint8Array): ParsedSignature {
 	const signedAttributes = Uint8Array.from(attributes.raw);
 	signedAttributes[0] = 0x31;
 
-	let messageDigestHex: string | undefined;
-	for (const attribute of children(attributes)) {
-		if (decodeOid(child(attribute, 0)) === MESSAGE_DIGEST_OID) {
-			const digest = child(child(attribute, 1), 0);
-			messageDigestHex = Buffer.from(digest.content).toString("hex");
-		}
-	}
+	const attributeNodes = children(attributes);
+	const attributeValue = (oid: string): Node | undefined => {
+		const attribute = attributeNodes.find(
+			(node) => decodeOid(child(node, 0)) === oid
+		);
+		return attribute && child(child(attribute, 1), 0);
+	};
+	const messageDigest = attributeValue(MESSAGE_DIGEST_OID);
+	const contentType = attributeValue(CONTENT_TYPE_OID);
+	const encodedAttributes = attributeNodes.map((node) => node.raw);
 
 	return {
+		certificates: certificates
+			? children(certificates).map((node) => node.raw)
+			: [],
 		certificateCount: certificates ? children(certificates).length : 0,
+		contentTypeOid: contentType && decodeOid(contentType),
 		detached: children(encapsulated).length === 1,
 		digestAlgorithmOid: digestOid,
-		messageDigestHex,
+		messageDigestHex:
+			messageDigest && Buffer.from(messageDigest.content).toString("hex"),
+		signedAttributeOids: attributeNodes.map((node) =>
+			decodeOid(child(node, 0))
+		),
+		signedAttributesSorted: Buffer.concat(encodedAttributes).equals(
+			Buffer.concat(encodedAttributes.toSorted(Buffer.compare))
+		),
+		signerIssuer: child(signerId, 0).raw,
+		signerSerial: integer(child(signerId, 1)),
 		verifies(signerCertPem) {
 			if (!digestName) {
 				return false;
@@ -243,4 +298,48 @@ export function parseSignature(der: Uint8Array): ParsedSignature {
 			}
 		},
 	};
+}
+
+/** The parts of a certificate's TBSCertificate a signer is identified by. */
+function certificateNames(pem: string): {
+	issuer: Uint8Array;
+	subject: Uint8Array;
+} {
+	// TBSCertificate: [0] version, serialNumber, signature, issuer, validity,
+	// subject, ...
+	const [, , , issuer, , subject] = children(
+		child(parse(new X509Certificate(pem).raw), 0)
+	);
+	if (!(issuer && subject)) {
+		throw new Error("certificate has no issuer or subject");
+	}
+	return { issuer: issuer.raw, subject: subject.raw };
+}
+
+/**
+ * Asserts what Wallet checks before trusting a `.pkpass`: the signature
+ * verifies against `signerCert`, names it as its signer by issuer and serial,
+ * and carries it with the `wwdr` that issued it. The certificates are read by
+ * Node's X509Certificate, independently of passlet's DER code.
+ * https://developer.apple.com/documentation/walletpasses/building-a-pass
+ */
+export function expectSignedBy(
+	signed: ParsedSignature,
+	{ signerCert, wwdr }: { signerCert: string; wwdr: string }
+): void {
+	const signer = new X509Certificate(signerCert);
+	const intermediate = new X509Certificate(wwdr);
+	expect(signed.verifies(signerCert)).toBe(true);
+	expect(signed.signerSerial).toBe(BigInt(`0x${signer.serialNumber}`));
+	const issuer = Buffer.from(signed.signerIssuer);
+	expect(issuer.equals(Buffer.from(certificateNames(signerCert).issuer))).toBe(
+		true
+	);
+	expect(issuer.equals(Buffer.from(certificateNames(wwdr).subject))).toBe(true);
+	expect(
+		signed.certificates.map((der) => new X509Certificate(der).fingerprint256)
+	).toEqual([signer.fingerprint256, intermediate.fingerprint256]);
+	// id-data: the signature covers plain bytes, the manifest.
+	expect(signed.contentTypeOid).toBe("1.2.840.113549.1.7.1");
+	expect(signed.signedAttributesSorted).toBe(true);
 }

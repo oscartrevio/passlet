@@ -55,7 +55,7 @@ const pass = await rewards.create({ serialNumber: "member-123", values: { points
 // pass.apple → .pkpass bytes · pass.google → JWT for googleSaveUrl()
 ```
 
-Runs on the server, Node.js 20.15+. Leave out either wallet to use just one. Getting credentials: [Credentials](https://github.com/oscartrevio/passlet/wiki/Credentials).
+Runs on the server, Node.js 20.19+ or 22.12+, with no dependencies. Leave out either wallet to use just one. Getting credentials: [Credentials](https://github.com/oscartrevio/passlet/wiki/Credentials).
 
 ## Pass types
 
@@ -92,7 +92,7 @@ Runs on the server, Node.js 20.15+. Leave out either wallet to use just one. Get
 - [Deploying](https://github.com/oscartrevio/passlet/wiki/Deploying) and [External signers](https://github.com/oscartrevio/passlet/wiki/External-Signers)
 - [Errors](https://github.com/oscartrevio/passlet/wiki/Errors) and [FAQ](https://github.com/oscartrevio/passlet/wiki/FAQ)
 - [Examples](examples/README.md): Express, Hono and Next.js servers
-- [Upgrading from v2](https://github.com/oscartrevio/passlet/releases/tag/passlet%403.0.0)
+- Upgrading: [to v4](https://github.com/oscartrevio/passlet/releases/tag/passlet%404.0.0) · [to v3](https://github.com/oscartrevio/passlet/releases/tag/passlet%403.0.0)
 - For agents: [llms.txt](https://passlet.oscartrev.io/llms.txt) and the [skill](https://passlet.oscartrev.io/skill.md)
 
 ## Contributing

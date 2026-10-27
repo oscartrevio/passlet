@@ -1,3 +1,16 @@
+/** One entry of {@link WALLET_ERROR_CODES}. */
+export interface WalletErrorDefinition {
+	/** What to change. */
+	fix: string;
+	/** Default `message` of the error. */
+	message: string;
+	/** Default HTTP status, used when no upstream status is known. */
+	status: number;
+	/** What went wrong. */
+	why: string;
+}
+
+/** Every error code passlet throws, with its default status and guidance. */
 export const WALLET_ERROR_CODES = {
 	PASS_CONFIG_INVALID: {
 		status: 400,
@@ -14,8 +27,8 @@ export const WALLET_ERROR_CODES = {
 	PASS_BUNDLE_INVALID: {
 		status: 400,
 		message: "Invalid pass bundle.",
-		why: "createBundle needs 1 to 10 passes with distinct serial numbers, all from this wallet's templates, and Apple caps a bundle at 150 MB.",
-		fix: "Split the batch, give every pass its own serialNumber, build each template from the same Wallet, or shrink the images.",
+		why: "createBundle needs 1 to 10 passes with distinct serial numbers, and Apple caps a bundle at 150 MB.",
+		fix: "Split the batch, give every pass its own serialNumber, or shrink the images.",
 	},
 	APPLE_INVALID_SIGNER_CERT: {
 		status: 500,
@@ -26,8 +39,8 @@ export const WALLET_ERROR_CODES = {
 	APPLE_INVALID_SIGNER_KEY: {
 		status: 500,
 		message: "Invalid Apple signing key.",
-		why: "signerKey is missing, is not an unencrypted RSA PEM private key, or does not match signerCert.",
-		fix: "Export the private key matching signerCert as unencrypted PEM.",
+		why: "signerKey is missing, is not an unencrypted RSA PEM private key, or does not match signerCert; or signer.digestAlgorithm is neither sha256 nor sha1.",
+		fix: "Export the private key matching signerCert as unencrypted PEM, or set signer.digestAlgorithm to sha256.",
 	},
 	APPLE_INVALID_WWDR: {
 		status: 500,
@@ -64,6 +77,12 @@ export const WALLET_ERROR_CODES = {
 		message: "Apple push notification failed.",
 		why: "APNs rejected the connection or certificate, so registered devices were not told about the update.",
 		fix: "Check that the push certificate is a valid Pass Type ID certificate for passTypeIdentifier and that the server can reach api.push.apple.com:443.",
+	},
+	APPLE_REGISTRATIONS_FAILED: {
+		status: 500,
+		message: "Apple device registrations could not be read or removed.",
+		why: "apple.webService.registrations threw or rejected while wallet.update() read a pass's devices or removed the ones APNs reported as gone.",
+		fix: "Check your registrations storage; cause holds its error. Retry the update once it is reachable.",
 	},
 	UPDATES_NOT_CONFIGURED: {
 		status: 500,
@@ -152,8 +171,8 @@ export const WALLET_ERROR_CODES = {
 	GOOGLE_NOT_CONFIGURED: {
 		status: 500,
 		message: "Google Wallet is not configured.",
-		why: "A Google-only operation (publish or sendMessage) was requested without Google credentials.",
-		fix: "Configure google credentials on Wallet before calling publish() or sendMessage().",
+		why: "A Google-only operation (publish, expire or sendMessage) was requested without Google credentials.",
+		fix: "Configure google credentials on Wallet before calling publish(), expire() or sendMessage().",
 	},
 	GOOGLE_MISSING_LOGO: {
 		status: 400,
@@ -185,22 +204,28 @@ export const WALLET_ERROR_CODES = {
 		why: "The image URL returned a non-success HTTP status.",
 		fix: "Check that the URL is accessible and has not expired; inspect status for the response code.",
 	},
-} as const;
+} satisfies Record<string, WalletErrorDefinition>;
 
 export type WalletErrorCode = keyof typeof WALLET_ERROR_CODES;
 
+/** One failed validation rule. */
 export interface WalletValidationIssue {
+	/** What is wrong, in English, without the path. */
 	message: string;
+	/** Where: object keys and list indexes from the root of the input. */
 	path: readonly (string | number)[];
 }
 
 /** How each platform's side of one call settled, as `Promise.allSettled` reports it. */
 export interface PlatformResults {
+	/** Apple's outcome: its result, or the error it threw. */
 	apple: PromiseSettledResult<unknown>;
+	/** Google's outcome: its result, or the error it threw. */
 	google: PromiseSettledResult<unknown>;
 }
 
 export interface WalletErrorOptions extends ErrorOptions {
+	/** Every failed validation rule, for the `*_CONFIG_INVALID` codes. */
 	issues?: readonly WalletValidationIssue[];
 	/**
 	 * How Apple and Google each settled, when both are configured and this
@@ -238,4 +263,23 @@ export class WalletError extends Error {
 		this.issues = options?.issues ?? [];
 		this.results = options?.results;
 	}
+}
+
+/**
+ * A copy of `error` carrying `results`. Concurrent calls can share one
+ * rejection (e.g. a template's image download), so each gets its own copy.
+ */
+export function withResults(
+	error: WalletError,
+	results: PlatformResults
+): WalletError {
+	const copy = new WalletError(error.code, error.message, {
+		...("cause" in error && { cause: error.cause }),
+		issues: error.issues,
+		results,
+		retryAfter: error.retryAfter,
+		status: error.status,
+	});
+	copy.stack = error.stack;
+	return copy;
 }

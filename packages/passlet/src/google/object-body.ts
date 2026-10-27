@@ -1,131 +1,25 @@
 import { WalletError } from "../errors";
+import { fieldValue, fieldValueByKey } from "../field";
 import type { ParsedContent } from "../schema/content";
+import type { GoogleTransitOptions } from "../schema/google";
 import type { FieldDef } from "../schema/parts";
-import type { GoogleTransitOptions, ParsedTemplate } from "../schema/template";
+import type { ParsedTemplate } from "../schema/template";
 import {
 	buildAppLinkData,
 	buildModuleData,
+	GOOGLE_BARCODE_TYPE,
 	imageUri,
 	localized,
-	toGoogleBarcodeType,
-	transitOptions,
 	translationsFor,
 } from "./utils";
 
-function resolveFieldValue(
-	field: FieldDef,
-	values: Record<string, string | null>
-): string | undefined {
-	const value = field.key in values ? values[field.key] : field.value;
-	return value ?? undefined;
-}
+/** The value a template field shows for this recipient, recorded as rendered. */
+type Take = (key: string) => string | undefined;
 
-function resolveValueByKey(
-	fields: FieldDef[],
-	values: Record<string, string | null>,
-	key: string
-): string | undefined {
-	const match = fields.find((field) => field.key === key);
-	if (!match) {
-		return;
-	}
-	return resolveFieldValue(match, values);
-}
-
-function buildTextModules(
-	fields: FieldDef[],
-	values: Record<string, string | null>,
-	excludeSlots: FieldDef["slot"][],
-	excludeKeys: string[] = []
-): Array<{ header: string; body: string; id: string }> {
-	const modules: Array<{ header: string; body: string; id: string }> = [];
-	for (const f of fields) {
-		if (excludeSlots.includes(f.slot)) {
-			continue;
-		}
-		if (excludeKeys.includes(f.key)) {
-			continue;
-		}
-		const value = resolveFieldValue(f, values);
-		if (value === undefined) {
-			continue;
-		}
-		// label is optional on Apple; Google's textModulesData needs a header, so
-		// fall back to the field key.
-		modules.push({ header: f.label ?? f.key, body: value, id: f.key });
-	}
-	return modules;
-}
-
-function buildLoyaltyObjectFields(
-	fields: FieldDef[],
-	values: Record<string, string | null>
-): Record<string, unknown> {
-	const points = resolveValueByKey(fields, values, "points");
-	const member = resolveValueByKey(fields, values, "member");
-	const memberId = resolveValueByKey(fields, values, "memberId");
-	return {
-		loyaltyPoints: points == null ? undefined : { balance: { string: points } },
-		accountName: member,
-		accountId: memberId,
-	};
-}
-
-// Flight: the `seat` field becomes boardingAndSeatingInfo.seatNumber, which
-// Google renders in the card's SEAT slot and is the field a notifyOnUpdate
-// PATCH announces to holders.
-// https://developers.google.com/wallet/tickets/boarding-passes/resources/template
-// https://developers.google.com/wallet/tickets/boarding-passes/use-cases/trigger-push-notifications
-function buildFlightObjectFields(
-	serialNumber: string,
-	fields: FieldDef[],
-	values: Record<string, string | null>
-): Record<string, unknown> {
-	const passengerName = values.passengerName;
-	// Google rejects an empty flightObject.passengerName.
-	if (!passengerName) {
-		throw new WalletError("GOOGLE_FLIGHT_MISSING_PASSENGER_NAME");
-	}
-	const seatNumber = resolveValueByKey(fields, values, "seat");
-	return {
-		passengerName,
-		reservationInfo: { confirmationCode: serialNumber },
-		boardingAndSeatingInfo:
-			seatNumber === undefined ? undefined : { seatNumber },
-	};
-}
-
-// Transit: transitObject requires tripType. Origin/destination and times are
-// carried by ticketLeg rather than the class, unlike the flight vertical.
-function buildTransitObjectFields(
-	template: Extract<ParsedTemplate, { type: "boardingPass" }>,
-	transit: GoogleTransitOptions,
-	content: ParsedContent,
-	values: Record<string, string | null>
-): Record<string, unknown> {
-	const originName = transit.originName ?? template.origin;
-	const destinationName = transit.destinationName ?? template.destination;
-	// TicketLeg times are documented as ISO 8601 "with or without an offset" —
-	// unlike flightClass local times, so they are forwarded verbatim.
-	const ticketLeg: Record<string, unknown> = {
-		originName: originName ? localized(originName) : undefined,
-		destinationName: destinationName ? localized(destinationName) : undefined,
-		departureDateTime: template.departure,
-		arrivalDateTime: template.arrival,
-	};
-	const hasLeg = Object.values(ticketLeg).some((v) => v !== undefined);
-	const tripType = content.google?.tripType ?? transit.tripType ?? "oneWay";
-	const passengerNames = values.passengerName ?? undefined;
-	return {
-		tripType: tripType === "roundTrip" ? "ROUND_TRIP" : "ONE_WAY",
-		ticketNumber: transit.ticketNumber,
-		passengerNames,
-		// The REST API rejects passengerNames without it ("passenger_type must
-		// be set if passenger_names is set"); passlet issues one pass per person.
-		passengerType: passengerNames ? "SINGLE_PASSENGER" : undefined,
-		ticketLeg: hasLeg ? ticketLeg : undefined,
-	};
-}
+type TemplateOf<T extends ParsedTemplate["type"]> = Extract<
+	ParsedTemplate,
+	{ type: T }
+>;
 
 // Money.micros is an int64 string: "$1 USD would be represented as 1000000
 // micros". Parsed as decimal digits, never through a float, so the amount is
@@ -151,108 +45,186 @@ function balanceMicros(raw: string): string {
 	return String(BigInt(whole) * 1_000_000n + BigInt(fraction.padEnd(6, "0")));
 }
 
-function buildGiftCardObjectFields(
-	template: Extract<ParsedTemplate, { type: "giftCard" }>,
-	fields: FieldDef[],
-	values: Record<string, string | null>,
-	serialNumber: string
-): Record<string, unknown> {
-	const balanceField = fields.find((field) => field.key === "balance");
-	const raw = balanceField && resolveFieldValue(balanceField, values);
-	// Google requires cardNumber; use the serial number when no field supplies it.
-	const cardNumber =
-		resolveValueByKey(fields, values, "cardNumber") ?? serialNumber;
+const EVENT_SEAT_KEYS = ["seat", "row", "section", "gate"] as const;
+
+// Flight: the `seat` field becomes boardingAndSeatingInfo.seatNumber, which
+// Google renders in the card's SEAT slot and is the field a notifyOnUpdate
+// PATCH announces to holders.
+// https://developers.google.com/wallet/tickets/boarding-passes/resources/template
+// https://developers.google.com/wallet/tickets/boarding-passes/use-cases/trigger-push-notifications
+function flightObjectFields(
+	serialNumber: string,
+	passengerName: string | undefined,
+	take: Take
+) {
+	// Google rejects an empty flightObject.passengerName.
+	if (!passengerName) {
+		throw new WalletError("GOOGLE_FLIGHT_MISSING_PASSENGER_NAME");
+	}
+	const seatNumber = take("seat");
 	return {
-		cardNumber,
-		balance:
-			raw == null
-				? undefined
-				: {
-						micros: balanceMicros(raw),
-						// The balance field's Apple currencyCode names the same currency.
-						currencyCode:
-							template.currency ?? balanceField?.currencyCode ?? "USD",
-					},
+		passengerName,
+		reservationInfo: { confirmationCode: serialNumber },
+		boardingAndSeatingInfo:
+			seatNumber === undefined ? undefined : { seatNumber },
 	};
 }
 
-// Event: structured seatInfo from well-known seat/row/section/gate field keys.
-// Google renders these in dedicated ticket slots rather than as text modules.
-// Every slot is stated, so an update clears one that no longer has a value.
-function buildEventTicketObjectFields(
-	fields: FieldDef[],
-	values: Record<string, string | null>
-): Record<string, unknown> {
-	const seatInfo: Record<string, unknown> = {};
-	for (const key of EVENT_SEAT_KEYS) {
-		const value = resolveValueByKey(fields, values, key);
-		seatInfo[key] = value === undefined ? undefined : localized(value);
-	}
+// Transit: transitObject requires tripType. Origin/destination and times are
+// carried by ticketLeg rather than the class, unlike the flight vertical.
+function transitObjectFields(
+	template: TemplateOf<"boardingPass">,
+	transit: GoogleTransitOptions,
+	content: ParsedContent,
+	passengerNames: string | undefined
+) {
+	const originName = transit.originName ?? template.origin;
+	const destinationName = transit.destinationName ?? template.destination;
+	// TicketLeg times are documented as ISO 8601 "with or without an offset" —
+	// unlike flightClass local times, so they are forwarded verbatim.
+	const ticketLeg = {
+		originName: originName ? localized(originName) : undefined,
+		destinationName: destinationName ? localized(destinationName) : undefined,
+		departureDateTime: template.departure,
+		arrivalDateTime: template.arrival,
+	};
+	const tripType = content.google?.tripType ?? transit.tripType ?? "oneWay";
 	return {
-		seatInfo: Object.values(seatInfo).some((v) => v !== undefined)
-			? seatInfo
+		tripType: tripType === "roundTrip" ? "ROUND_TRIP" : "ONE_WAY",
+		ticketNumber: transit.ticketNumber,
+		passengerNames,
+		// The REST API rejects passengerNames without it ("passenger_type must
+		// be set if passenger_names is set"); passlet issues one pass per person.
+		passengerType: passengerNames ? "SINGLE_PASSENGER" : undefined,
+		ticketLeg: Object.values(ticketLeg).some((v) => v !== undefined)
+			? ticketLeg
 			: undefined,
 	};
 }
 
-const EVENT_SEAT_KEYS = ["seat", "row", "section", "gate"];
+// genericObject carries the branding other verticals put on the class, and
+// is the only object with header/subheader: the primary field's value and
+// label. Google requires a header, so the pass name stands in without one.
+// https://developers.google.com/wallet/reference/rest/v1/genericobject
+function genericObjectFields(template: TemplateOf<"generic">, take: Take) {
+	const { google, locales } = template;
+	const cardTitle = localized(template.name, translationsFor("name", locales));
+	const primary = template.fields.find((f) => f.slot === "primary");
+	const value = primary && take(primary.key);
+	return {
+		cardTitle,
+		hexBackgroundColor: template.color,
+		logo: imageUri(google?.logo),
+		wideLogo: imageUri(google?.wideLogo),
+		heroImage: imageUri(google?.hero),
+		appLinkData: buildAppLinkData(google?.appLinkData),
+		...(primary && value !== undefined
+			? {
+					header: localized(
+						value,
+						translationsFor(`${primary.key}_value`, locales)
+					),
+					subheader: localized(
+						primary.label ?? primary.key,
+						translationsFor(primary.key, locales)
+					),
+				}
+			: { header: cardTitle, subheader: undefined }),
+	};
+}
 
-// Well-known field keys that map to structured object fields and so must be
-// excluded from the generic textModulesData for that pass type.
-function structuredFieldKeys(template: ParsedTemplate): string[] {
+/**
+ * The fields only this template's object type has. Template fields they show
+ * are read through `take`, so text modules leave them out instead of showing
+ * the same value twice.
+ */
+function verticalObjectFields(
+	template: ParsedTemplate,
+	content: ParsedContent,
+	take: Take
+) {
 	switch (template.type) {
-		case "loyalty":
-			return ["member", "memberId", "points"];
-		case "eventTicket":
-			return EVENT_SEAT_KEYS;
-		case "boardingPass":
-			return transitOptions(template) ? [] : ["seat"];
+		case "loyalty": {
+			const points = take("points");
+			return {
+				loyaltyPoints:
+					points === undefined ? undefined : { balance: { string: points } },
+				accountName: take("member"),
+				accountId: take("memberId"),
+			};
+		}
+		case "eventTicket": {
+			// seat/row/section/gate render in dedicated ticket slots. Every slot is
+			// stated, so an update clears one that no longer has a value.
+			const seatInfo = Object.fromEntries(
+				EVENT_SEAT_KEYS.map((key) => {
+					const value = take(key);
+					return [key, value === undefined ? undefined : localized(value)];
+				})
+			);
+			return {
+				seatInfo: Object.values(seatInfo).some((v) => v !== undefined)
+					? seatInfo
+					: undefined,
+			};
+		}
+		case "boardingPass": {
+			// Senders may pass `values.passengerName` without a template field, so
+			// the raw value stands in when the template has none.
+			const passengerName =
+				take("passengerName") ?? content.values?.passengerName ?? undefined;
+			const transit = template.google?.transit;
+			return transit
+				? transitObjectFields(template, transit, content, passengerName)
+				: flightObjectFields(content.serialNumber, passengerName, take);
+		}
+		case "giftCard": {
+			const balance = take("balance");
+			return {
+				// Google requires cardNumber; the serial number stands in.
+				cardNumber: take("cardNumber") ?? content.serialNumber,
+				balance:
+					balance === undefined
+						? undefined
+						: {
+								micros: balanceMicros(balance),
+								// The balance field's Apple currencyCode names the same currency.
+								currencyCode:
+									template.currency ??
+									template.fields.find((f) => f.key === "balance")
+										?.currencyCode ??
+									"USD",
+							},
+			};
+		}
+		case "coupon":
+			// offerObject has no structured display fields.
+			return {};
+		case "generic":
+			return genericObjectFields(template, take);
 		default:
-			return [];
+			return template satisfies never;
 	}
 }
 
-// Only genericObject has header/subheader. Other verticals lead with the
-// primary field in textModulesData (up to ten entries), replacing infoModuleData.
-// https://developers.google.com/wallet/reference/rest/v1/genericobject
-function buildDisplayFields(
-	template: ParsedTemplate,
-	values: Record<string, string | null>
-): Record<string, unknown> {
-	const { fields, locales } = template;
-	const generic = template.type === "generic";
-	const primaryField = fields.find((f) => f.slot === "primary");
-	const textModules = buildTextModules(
-		generic || !primaryField
-			? fields
-			: [primaryField, ...fields.filter((f) => f !== primaryField)],
-		values,
-		generic ? ["primary"] : [],
-		structuredFieldKeys(template)
-	);
-	const body: Record<string, unknown> = {
-		textModulesData: textModules.length > 0 ? textModules : undefined,
-	};
-	if (!generic) {
-		return body;
-	}
-	const primaryValue = primaryField
-		? resolveFieldValue(primaryField, values)
-		: undefined;
-	if (!primaryField || primaryValue === undefined) {
-		return { ...body, header: undefined, subheader: undefined };
-	}
-	body.subheader = localized(
-		primaryField.label ?? primaryField.key,
-		"en-US",
-		translationsFor(primaryField.key, locales)
-	);
-	body.header = localized(
-		primaryValue,
-		"en-US",
-		translationsFor(`${primaryField.key}_value`, locales)
-	);
-	return body;
+// Every field a vertical did not render becomes a text module, the primary
+// field first; label is optional on Apple, so the key stands in as header.
+function buildTextModules(
+	fields: readonly FieldDef[],
+	values: Readonly<Record<string, string | null>>,
+	rendered: ReadonlySet<string>
+) {
+	const primary = fields.find((f) => f.slot === "primary");
+	const ordered = primary
+		? [primary, ...fields.filter((f) => f !== primary)]
+		: fields;
+	const modules = ordered.flatMap((f) => {
+		const body = rendered.has(f.key) ? undefined : fieldValue(f, values);
+		return body === undefined
+			? []
+			: [{ header: f.label ?? f.key, body, id: f.key }];
+	});
+	return modules.length > 0 ? modules : undefined;
 }
 
 /**
@@ -269,33 +241,23 @@ export function buildObjectBody(
 	objectId: string
 ): Record<string, unknown> {
 	const values = content.values ?? {};
-	const fields = template.fields;
-	const transit = transitOptions(template);
-	const googleBarcode = content.barcodes?.[0] ?? content.barcode;
+	const rendered = new Set<string>();
+	const verticalFields = verticalObjectFields(template, content, (key) => {
+		rendered.add(key);
+		return fieldValueByKey(template.fields, values, key);
+	});
+	// A Google object holds a single barcode, so it takes the first one.
+	const barcode = content.barcodes?.[0] ?? content.barcode;
 	const rotatingBarcode = content.google?.rotatingBarcode;
-
-	const display = buildDisplayFields(template, values);
-	const genericTitle =
-		template.type === "generic"
-			? localized(
-					template.name,
-					"en-US",
-					translationsFor("name", template.locales)
-				)
-			: undefined;
 
 	return {
 		id: objectId,
 		classId,
-		// A Google object holds a single barcode — when several are supplied it
-		// takes the first entry.
-		barcode: googleBarcode
-			? {
-					type: toGoogleBarcodeType(googleBarcode.format),
-					value: googleBarcode.value,
-					alternateText: googleBarcode.altText,
-				}
-			: undefined,
+		barcode: barcode && {
+			type: GOOGLE_BARCODE_TYPE[barcode.format],
+			value: barcode.value,
+			alternateText: barcode.altText,
+		},
 		validTimeInterval:
 			content.validFrom || content.expiresAt
 				? {
@@ -314,42 +276,9 @@ export function buildObjectBody(
 		messages: content.google?.messages,
 		groupingInfo: content.group ? { groupingId: content.group } : undefined,
 		// Per-recipient links, images, and value-added modules. Google merges
-		// these with the class-level modules of the same name. buildModuleData
-		// omits empty modules, so each is stated here first.
-		linksModuleData: undefined,
-		imageModulesData: undefined,
-		valueAddedModuleData: undefined,
+		// these with the class-level modules of the same name.
 		...buildModuleData(content.google),
-		...(template.type === "loyalty" &&
-			buildLoyaltyObjectFields(fields, values)),
-		...(template.type === "eventTicket" &&
-			buildEventTicketObjectFields(fields, values)),
-		...(template.type === "boardingPass" &&
-			(transit
-				? buildTransitObjectFields(template, transit, content, values)
-				: buildFlightObjectFields(content.serialNumber, fields, values))),
-		...(template.type === "giftCard" &&
-			buildGiftCardObjectFields(
-				template,
-				fields,
-				values,
-				content.serialNumber
-			)),
-		...(template.type === "generic" && {
-			cardTitle: genericTitle,
-			hexBackgroundColor: template.color,
-			logo: imageUri(template.google?.logo),
-			wideLogo: imageUri(template.google?.wideLogo),
-			heroImage: imageUri(template.google?.hero),
-			appLinkData: template.google?.appLinkData
-				? buildAppLinkData(template.google.appLinkData)
-				: undefined,
-		}),
-		...display,
-		// genericObject requires a header even when no primary value is available.
-		...(template.type === "generic" &&
-			display.header == null && {
-				header: genericTitle,
-			}),
+		...verticalFields,
+		textModulesData: buildTextModules(template.fields, values, rendered),
 	};
 }

@@ -1,16 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { patchBody } from "../../../src/google/client";
 import { buildObjectBody } from "../../../src/google/object-body";
-import {
-	type ParsedContent,
-	passContentSchema,
-} from "../../../src/schema/content";
-import type {
-	GoogleTransitOptions,
-	ParsedTemplate,
-} from "../../../src/schema/template";
+import { patchBody } from "../../../src/google/utils";
+import { type ParsedContent, parseContent } from "../../../src/schema/content";
+import type { GoogleTransitOptions } from "../../../src/schema/google";
+import type { ParsedTemplate } from "../../../src/schema/template";
 import { FIXTURES, type FixtureName } from "../../support/fixtures";
-import { ISSUER_ID, LOGO_URL } from "../../support/google";
+import { applyGooglePatch, ISSUER_ID, LOGO_URL } from "../../support/google";
 import {
 	assertGoogleSchema,
 	assertRequiredKeys,
@@ -92,14 +87,13 @@ const GOLDEN: Record<FixtureName, Golden> = {
 			id: `${ISSUER_ID}.flight-001`,
 			classId: `${ISSUER_ID}.fx-flight`,
 			barcode: { type: "AZTEC", value: "BP-1" },
+			// The passenger name, and the seat in the card's SEAT slot, render in
+			// their own slots, so neither is repeated as a text module.
 			passengerName: "Jane Doe",
 			reservationInfo: { confirmationCode: "flight-001" },
-			// Google renders the seat in the card's SEAT slot, so it is not
-			// repeated as a text module.
 			boardingAndSeatingInfo: { seatNumber: "14A" },
 			textModulesData: [
 				{ header: "Gate", body: "B22", id: "gate" },
-				{ header: "Passenger", body: "Jane Doe", id: "passengerName" },
 				{ header: "Terminal", body: "4", id: "terminal" },
 			],
 		},
@@ -112,7 +106,8 @@ const GOLDEN: Record<FixtureName, Golden> = {
 			classId: `${ISSUER_ID}.fx-transit`,
 			tripType: "ROUND_TRIP",
 			ticketNumber: "TK-9001",
-			// transitObject pluralises the passenger field.
+			// transitObject pluralises the passenger field, and renders it, so it
+			// is not repeated as a text module.
 			passengerNames: "Jane Doe",
 			// Google's REST API requires it alongside passengerNames.
 			passengerType: "SINGLE_PASSENGER",
@@ -123,10 +118,7 @@ const GOLDEN: Record<FixtureName, Golden> = {
 				departureDateTime: "2026-07-15T08:00:00+01:00",
 				arrivalDateTime: "2026-07-15T09:45:00+01:00",
 			},
-			textModulesData: [
-				{ header: "Platform", body: "4", id: "platform" },
-				{ header: "Passenger", body: "Jane Doe", id: "passengerName" },
-			],
+			textModulesData: [{ header: "Platform", body: "4", id: "platform" }],
 		},
 	},
 	coupon: {
@@ -150,11 +142,11 @@ const GOLDEN: Record<FixtureName, Golden> = {
 		body: {
 			id: `${ISSUER_ID}.gift-001`,
 			classId: `${ISSUER_ID}.fx-gift`,
-			// cardNumber is required; it defaults to the serial number.
+			// cardNumber is required; it defaults to the serial number. The
+			// balance renders as Money, so it is not repeated as a text module.
 			cardNumber: "gift-001",
 			balance: { micros: "50000000", currencyCode: "USD" },
 			textModulesData: [
-				{ header: "Balance", body: "50.00", id: "balance" },
 				{ header: "Issued", body: "2026-01-15T00:00:00Z", id: "issued" },
 				{ header: "PIN", body: "1234", id: "pin" },
 			],
@@ -240,12 +232,68 @@ describe("buildObjectBody", () => {
 		});
 	});
 
+	// https://developers.google.com/wallet/reference/rest/v1/BarcodeType
+	it.each([
+		["QR", "QR_CODE"],
+		["PDF417", "PDF_417"],
+		["Aztec", "AZTEC"],
+		["Code128", "CODE_128"],
+		["Code39", "CODE_39"],
+		["Codabar", "CODABAR"],
+		["EAN13", "EAN_13"],
+		["ITF", "ITF_14"],
+	] as const)("sends a %s barcode as Google's %s", (format, type) => {
+		const body = build(FIXTURES.loyalty.pass, {
+			serialNumber: "loyalty-002",
+			barcode: { value: "12345678", format },
+		});
+		assertGoogleSchema("loyaltyObject", body);
+		expect(body.barcode).toEqual({ type, value: "12345678" });
+	});
+
 	it("throws GOOGLE_FLIGHT_MISSING_PASSENGER_NAME when no passengerName value is supplied", () => {
 		expect(() =>
 			build(FIXTURES.boardingPass.pass, { serialNumber: "flight-002" })
 		).toThrow(
 			expect.objectContaining({ code: "GOOGLE_FLIGHT_MISSING_PASSENGER_NAME" })
 		);
+	});
+
+	it.each([
+		{ name: "boardingPass", key: "passengerName" },
+		{ name: "transit", key: "passengerNames" },
+	] as const)("$name: takes the passenger name from the template field's value when the recipient has none", ({
+		name,
+		key,
+	}) => {
+		const { pass, create } = FIXTURES[name];
+		const body = build(
+			{
+				...pass,
+				fields: pass.fields.map((field) =>
+					field.key === "passengerName"
+						? { ...field, value: "Default Passenger" }
+						: field
+				),
+			},
+			{ ...create, values: {} }
+		);
+		expect(body[key]).toBe("Default Passenger");
+		expect(JSON.stringify(body.textModulesData)).not.toContain(
+			"Default Passenger"
+		);
+	});
+
+	it("takes values.passengerName when the template has no passengerName field", () => {
+		const { pass, create } = FIXTURES.boardingPass;
+		const body = build(
+			{
+				...pass,
+				fields: pass.fields.filter((field) => field.key !== "passengerName"),
+			},
+			create
+		);
+		expect(body.passengerName).toBe("Jane Doe");
 	});
 
 	describe("transit", () => {
@@ -434,34 +482,11 @@ describe("buildObjectBody", () => {
 	});
 });
 
-// Google's PATCH as observed against the live API: nested objects merge, null
-// clears, and lists and scalars replace.
-function applyPatch(stored: object, patch: object): Record<string, unknown> {
-	const result: Record<string, unknown> = { ...stored };
-	for (const [key, value] of Object.entries(patch)) {
-		const current = result[key];
-		if (value === null) {
-			result[key] = undefined;
-		} else if (typeof value === "object" && !Array.isArray(value)) {
-			const base =
-				typeof current === "object" &&
-				current !== null &&
-				!Array.isArray(current)
-					? current
-					: {};
-			result[key] = applyPatch(base, value);
-		} else {
-			result[key] = value;
-		}
-	}
-	return result;
-}
-
 describe("updating an object", () => {
 	// Everything passlet can put on an object, so a later write that leaves it
 	// out shows whether the field is cleared or left stale.
 	function rich(create: ParsedContent): ParsedContent {
-		return passContentSchema.parse({
+		return parseContent({
 			...create,
 			barcode: { format: "QR", value: "R-1", altText: "Show at the door" },
 			validFrom: "2026-01-01T00:00:00Z",
@@ -484,7 +509,7 @@ describe("updating an object", () => {
 
 	// Every other value nulled and every optional part dropped or trimmed.
 	function sparse(pass: ParsedTemplate, create: ParsedContent): ParsedContent {
-		return passContentSchema.parse({
+		return parseContent({
 			serialNumber: create.serialNumber,
 			barcode: { format: "QR", value: "R-2" },
 			validFrom: "2026-02-01T00:00:00Z",
@@ -527,7 +552,7 @@ describe("updating an object", () => {
 			{ label: "an empty", next: empty(pass, create) },
 		])("leaves exactly $label content after a patch", ({ next }) => {
 			const body = build(pass, next);
-			expect(applyPatch(stored, patchBody(body))).toEqual(body);
+			expect(applyGooglePatch(stored, patchBody(body))).toEqual(body);
 		});
 	});
 

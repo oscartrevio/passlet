@@ -1,7 +1,10 @@
+import { fieldValue } from "../field";
 import type { ParsedTemplate } from "../schema/template";
+import { encoder, type PassFile, passFile } from "./package";
 
-// pass.strings uses NeXTSTEP/plist escaping, not JSON escaping.
-export function escapeStringsValue(value: string): string {
+// pass.strings uses NeXTSTEP/plist escaping, not JSON escaping. Backslashes go
+// first: escaping quotes first would double the added backslash.
+function escapeStringsValue(value: string): string {
 	return value
 		.replace(/\\/g, "\\\\")
 		.replace(/"/g, '\\"')
@@ -16,7 +19,7 @@ const VALUE_SUFFIX = "_value";
 
 function stringsLiteral(
 	template: ParsedTemplate,
-	values: Record<string, string | null>,
+	values: Readonly<Record<string, string | null>>,
 	key: string
 ): string | undefined {
 	if (key === "name") {
@@ -28,30 +31,38 @@ function stringsLiteral(
 	if (!field) {
 		return key;
 	}
-	if (!isValue) {
-		// An unlabelled field has no literal in pass.json to key an entry on.
-		return field.label;
-	}
-	return (field.key in values ? values[field.key] : field.value) ?? undefined;
+	// An unlabelled field has no literal in pass.json to key an entry on.
+	return isValue ? fieldValue(field, values) : field.label;
 }
 
-export function buildStringsLines(
+/**
+ * One `<language>.lproj/pass.strings` per template locale, keyed by the
+ * literal strings pass.json shows for these values.
+ * https://developer.apple.com/documentation/walletpasses/creating-the-source-for-a-pass
+ */
+export function buildLocalizations(
 	template: ParsedTemplate,
-	values: Record<string, string | null>,
-	translations: Record<string, string>
-): string[] {
-	// Two field keys can share a label — keep the first translation for a given
-	// literal so the file has no duplicate entries.
-	const entries = new Map<string, string>();
-	for (const [key, translation] of Object.entries(translations)) {
-		const literal = stringsLiteral(template, values, key);
-		if (literal === undefined || entries.has(literal)) {
-			continue;
+	values: Readonly<Record<string, string | null>>
+): PassFile[] {
+	return Object.entries(template.locales ?? {}).map(
+		([language, translations]) => {
+			// Two field keys can share a label — keep the first translation for a
+			// given literal so the file has no duplicate entries.
+			const entries = new Map<string, string>();
+			for (const [key, translation] of Object.entries(translations)) {
+				const literal = stringsLiteral(template, values, key);
+				if (literal === undefined || entries.has(literal)) {
+					continue;
+				}
+				entries.set(
+					literal,
+					`"${escapeStringsValue(literal)}" = "${escapeStringsValue(translation)}";`
+				);
+			}
+			return passFile(
+				`${language}.lproj/pass.strings`,
+				encoder.encode([...entries.values()].join("\n"))
+			);
 		}
-		entries.set(
-			literal,
-			`"${escapeStringsValue(literal)}" = "${escapeStringsValue(translation)}";`
-		);
-	}
-	return [...entries.values()];
+	);
 }

@@ -1,24 +1,26 @@
 import { AppleProvider } from "./apple/index";
+import type { LoadPass, WalletConfig } from "./config";
 import { WalletError } from "./errors";
 import { GoogleProvider } from "./google/index";
+import { notFound } from "./http";
+import type { IssuedBundle, UpdateResult } from "./output";
 import { type PassItem, type Providers, runProviders } from "./providers";
-import type { PassContent } from "./schema/content";
-import type {
-	IssuedBundle,
-	LoadedPass,
-	UpdateResult,
-	WalletConfig,
-} from "./schema/settings";
-import type {
-	BoardingPassTemplateConfig,
-	CouponTemplateConfig,
-	EventTicketTemplateConfig,
-	GenericTemplateConfig,
-	GiftCardTemplateConfig,
-	LoyaltyTemplateConfig,
-	TemplateConfig,
+import { type PassContent, parseContent } from "./schema/content";
+import {
+	type BoardingPassTemplateConfig,
+	type CouponTemplateConfig,
+	type EventTicketTemplateConfig,
+	type GenericTemplateConfig,
+	type GiftCardTemplateConfig,
+	type LoyaltyTemplateConfig,
+	parseTemplate,
+	type TemplateConfig,
 } from "./schema/template";
-import { PassTemplate, parseContent } from "./template";
+import {
+	createTemplate,
+	type PassTemplate,
+	type TemplateHost,
+} from "./template";
 
 // "You can have up to 10 passes or 150 MB for a bundle of passes."
 // https://developer.apple.com/documentation/walletpasses/distributing-and-updating-a-pass
@@ -52,9 +54,11 @@ export class Wallet {
 	 * export const DELETE = wallet.handler;
 	 */
 	readonly handler: (request: Request) => Promise<Response>;
-	private readonly config: WalletConfig;
-	private readonly providers: Providers;
-	private readonly templates = new WeakSet<PassTemplate>();
+	readonly #load: LoadPass | undefined;
+	readonly #providers: Providers;
+	readonly #host: TemplateHost;
+	// Templates already checked against this Wallet's providers.
+	readonly #checked = new WeakSet<PassTemplate>();
 
 	/**
 	 * @throws {WalletError} `APPLE_INVALID_SIGNER_CERT`, `APPLE_INVALID_WWDR`
@@ -64,22 +68,25 @@ export class Wallet {
 	 * `GOOGLE_INVALID_PRIVATE_KEY` if `google.privateKey` is not an RSA PEM
 	 * private key.
 	 */
-	constructor(config: WalletConfig) {
-		this.config = config;
-		const { apple, google, load } = config;
+	constructor({ apple, google, load }: WalletConfig) {
+		this.#load = load;
 		const appleProvider = apple
 			? new AppleProvider(apple, {
 					load,
-					resolve: (loaded, serialNumber) => this.item(loaded, serialNumber),
+					// The serial being served wins over any serialNumber left in loaded content.
+					resolve: (loaded, serialNumber) =>
+						this.#item(loaded.template, { ...loaded.content, serialNumber }),
 				})
 			: null;
-		this.providers = {
+		this.#providers = {
 			apple: appleProvider,
 			google: google ? new GoogleProvider(google) : null,
 		};
-		this.handler =
-			appleProvider?.handler ??
-			(() => Promise.resolve(new Response(null, { status: 404 })));
+		this.#host = {
+			providers: this.#providers,
+			item: (template, content) => this.#item(template, content),
+		};
+		this.handler = appleProvider?.handler ?? notFound;
 	}
 
 	/**
@@ -94,24 +101,29 @@ export class Wallet {
 	 *
 	 * @throws {WalletError} `UPDATES_NOT_CONFIGURED` without `load`,
 	 * `PASS_NOT_FOUND` when `load` returns `null`, `CREATE_CONFIG_INVALID` when
-	 * the loaded content is invalid, or the provider's error, which carries
-	 * `results` when both wallets are configured.
+	 * the loaded content is invalid, the template's codes when it was built by
+	 * a Wallet with other credentials and this one cannot issue it,
+	 * `APPLE_REGISTRATIONS_FAILED` when `apple.webService.registrations`
+	 * fails, or the provider's error. With both wallets configured, a
+	 * provider's error carries `results`.
 	 */
 	async update(
 		serialNumber: string,
 		options: { notify?: boolean } = {}
 	): Promise<UpdateResult> {
-		const { load } = this.config;
-		if (!load) {
+		if (!this.#load) {
 			throw new WalletError("UPDATES_NOT_CONFIGURED");
 		}
-		const loaded = await load(serialNumber);
+		const loaded = await this.#load(serialNumber);
 		if (!loaded) {
 			throw new WalletError("PASS_NOT_FOUND");
 		}
-		const item = this.item(loaded, serialNumber);
+		const item = this.#item(loaded.template, {
+			...loaded.content,
+			serialNumber,
+		});
 		return await runProviders(
-			this.providers,
+			this.#providers,
 			(apple) => apple.update(item),
 			(google) => google.update(item, options)
 		);
@@ -126,14 +138,15 @@ export class Wallet {
 	 *   for one item); serve it as `APPLE_PASSES_CONTENT_TYPE`.
 	 * - `google` — one signed JWT whose save link adds every item.
 	 *
-	 * Items may mix templates. Set the same `content.group` on items that belong
-	 * together to show them as one group in both wallets.
+	 * Items may mix templates, including templates built by another Wallet,
+	 * which are checked against this one's credentials first. Set the same
+	 * `content.group` on items that belong together to show them as one group
+	 * in both wallets.
 	 *
 	 * @throws {WalletError} `PASS_BUNDLE_INVALID` without 1 to 10 items, when two
-	 * items share a serialNumber, when a template comes from another Wallet, or
-	 * when the Apple bundle passes 150 MB; `CREATE_CONFIG_INVALID` if any
-	 * content fails validation. A provider's error carries `results` when both
-	 * wallets are configured.
+	 * items share a serialNumber, or when the Apple bundle passes 150 MB;
+	 * `CREATE_CONFIG_INVALID` if any content fails validation. A provider's
+	 * error carries `results` when both wallets are configured.
 	 */
 	async createBundle(
 		items: readonly { template: PassTemplate; content: PassContent }[]
@@ -145,26 +158,20 @@ export class Wallet {
 			);
 		}
 		const serials = new Set<string>();
-		const passes = items.map(({ template, content }, index): PassItem => {
-			if (!this.templates.has(template)) {
-				throw new WalletError(
-					"PASS_BUNDLE_INVALID",
-					`items[${index}].template was not created by this Wallet`
-				);
-			}
-			const parsed = parseContent(this.providers, content);
+		const passes = items.map(({ template, content }, index) => {
+			const item = this.#item(template, content);
 			// Wallet identifies a pass by its serial number; a repeat overwrites.
-			if (serials.has(parsed.serialNumber)) {
+			if (serials.has(item.content.serialNumber)) {
 				throw new WalletError(
 					"PASS_BUNDLE_INVALID",
 					`items[${index}].content.serialNumber repeats an earlier item`
 				);
 			}
-			serials.add(parsed.serialNumber);
-			return { template: template.config, content: parsed };
+			serials.add(item.content.serialNumber);
+			return item;
 		});
 		return await runProviders(
-			this.providers,
+			this.#providers,
 			(apple) => apple.issueBundle(passes),
 			(google) => google.issueBundle(passes)
 		);
@@ -172,12 +179,12 @@ export class Wallet {
 
 	/** Create a loyalty / rewards card template. */
 	loyalty(config: Omit<LoyaltyTemplateConfig, "type">): PassTemplate {
-		return this.template({ ...config, type: "loyalty" });
+		return this.#template({ ...config, type: "loyalty" });
 	}
 
 	/** Create an event ticket template. */
 	eventTicket(config: Omit<EventTicketTemplateConfig, "type">): PassTemplate {
-		return this.template({ ...config, type: "eventTicket" });
+		return this.#template({ ...config, type: "eventTicket" });
 	}
 
 	/**
@@ -187,39 +194,51 @@ export class Wallet {
 	 * so use `field.primary()` for the departure and arrival locations.
 	 */
 	boardingPass(config: Omit<BoardingPassTemplateConfig, "type">): PassTemplate {
-		return this.template({ ...config, type: "boardingPass" });
+		return this.#template({ ...config, type: "boardingPass" });
 	}
 
 	/** Create a coupon / offer template. */
 	coupon(config: Omit<CouponTemplateConfig, "type">): PassTemplate {
-		return this.template({ ...config, type: "coupon" });
+		return this.#template({ ...config, type: "coupon" });
 	}
 
 	/** Create a gift card template. */
 	giftCard(config: Omit<GiftCardTemplateConfig, "type">): PassTemplate {
-		return this.template({ ...config, type: "giftCard" });
+		return this.#template({ ...config, type: "giftCard" });
 	}
 
 	/** Create a generic template for anything that doesn't fit the other types. */
 	generic(config: Omit<GenericTemplateConfig, "type">): PassTemplate {
-		return this.template({ ...config, type: "generic" });
+		return this.#template({ ...config, type: "generic" });
 	}
 
-	// Remembered so createBundle can reject templates built by another Wallet.
-	private template(config: TemplateConfig): PassTemplate {
-		const template = new PassTemplate(config, this.providers);
-		this.templates.add(template);
+	// Checked at construction, so a template these credentials cannot issue
+	// fails where it is written rather than on its first pass.
+	#template(config: TemplateConfig): PassTemplate {
+		const template = createTemplate(parseTemplate(config), this.#host);
+		this.#check(template);
 		return template;
 	}
 
-	// The serial being served wins over any serialNumber left in loaded content.
-	private item(loaded: LoadedPass, serialNumber: string): PassItem {
-		return {
-			template: loaded.template.config,
-			content: parseContent(this.providers, {
-				...loaded.content,
-				serialNumber,
-			}),
-		};
+	#check(template: PassTemplate): void {
+		if (this.#checked.has(template)) {
+			return;
+		}
+		this.#providers.apple?.checkTemplate(template.config);
+		this.#providers.google?.checkTemplate(template.config);
+		this.#checked.add(template);
+	}
+
+	/**
+	 * The one way passes are built: `create`, `createBundle`, `update` and the
+	 * Apple web service all render what this returns. A template reaching it
+	 * through `createBundle` or `load` may come from another Wallet, so it is
+	 * checked against this Wallet's providers first.
+	 */
+	#item(template: PassTemplate, content: PassContent): PassItem {
+		this.#check(template);
+		const parsed = parseContent(content);
+		this.#providers.google?.checkContent(parsed);
+		return { template: template.config, content: parsed };
 	}
 }

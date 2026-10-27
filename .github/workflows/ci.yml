@@ -6,6 +6,14 @@ on:
       - main
   pull_request:
 
+permissions:
+  contents: read
+
+# Keeps lefthook's commit-msg hook from running commitlint on the changesets
+# bot's "Version Packages" commit, which would fail the release.
+env:
+  LEFTHOOK: "0"
+
 jobs:
   check:
     name: Lint and type check
@@ -23,7 +31,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Lint
-        run: pnpm biome check --no-errors-on-unmatched --files-ignore-unknown=true
+        run: pnpm check
 
       - name: Type check
         run: pnpm check-types
@@ -34,8 +42,9 @@ jobs:
     strategy:
       # One failing Node version shouldn't hide results from the others.
       fail-fast: false
+      # The two floors from `engines`, then current releases.
       matrix:
-        node: [20, 22, 24, 26]
+        node: ["20.19", "22.12", 24, 26]
     steps:
       - uses: actions/checkout@v7
 
@@ -46,10 +55,19 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+      # passlet, its workspace dependencies and the root; skips the site.
+      - run: pnpm install --frozen-lockfile --filter passlet...
 
       - name: Test
         run: pnpm -F passlet test
+
+      # ESM-only build: CommonJS apps load it with require(esm), unflagged
+      # from the `engines` floors on. Fails on a top-level await or a missed floor.
+      - name: require() the build
+        working-directory: packages/passlet
+        run: |
+          pnpm build
+          node -e "if (typeof require('./dist/index.js').Wallet !== 'function') process.exit(1)"
 
   package:
     name: Package
@@ -64,10 +82,13 @@ jobs:
           node-version: 24
           cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --filter passlet...
 
       - name: Build
         run: pnpm -F passlet build
+
+      - name: Check bundle size
+        run: pnpm -F passlet check-size
 
       # attw's --pack only runs npm pack, so check the tarball pnpm publishes:
       # https://github.com/arethetypeswrong/arethetypeswrong.github.io/tree/main/packages/cli#pack
@@ -78,11 +99,20 @@ jobs:
       - name: Lint package
         run: pnpm dlx publint --strict "$RUNNER_TEMP/passlet.tgz"
 
+      # ESM only: CommonJS consumers load it through require(esm), which attw's
+      # node16-cjs check doesn't model.
       - name: Check published types
-        run: pnpm dlx @arethetypeswrong/cli "$RUNNER_TEMP/passlet.tgz"
+        run: pnpm dlx @arethetypeswrong/cli --profile esm-only "$RUNNER_TEMP/passlet.tgz"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: passlet-tgz
+          path: ${{ runner.temp }}/passlet.tgz
+          if-no-files-found: error
 
   examples:
     name: Example (${{ matrix.example }})
+    needs: package
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -91,21 +121,17 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v6
-
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-          cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
-
-      - name: Pack this commit's passlet
-        working-directory: packages/passlet
-        run: pnpm build && pnpm pack --out "$RUNNER_TEMP/passlet.tgz"
+      - uses: actions/download-artifact@v8
+        with:
+          name: passlet-tgz
+          path: ${{ runner.temp }}
 
       # The examples depend on passlet from npm; type-check them against this
-      # commit instead, without touching their package.json.
+      # commit's tarball instead, without touching their package.json.
       - name: Install
         working-directory: examples/${{ matrix.example }}
         run: npm install --no-save --no-package-lock --no-audit --no-fund "$RUNNER_TEMP/passlet.tgz"
@@ -113,3 +139,37 @@ jobs:
       - name: Type check
         working-directory: examples/${{ matrix.example }}
         run: npx tsc --noEmit
+
+  release:
+    name: Release
+    needs: [check, test, package, examples]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency: ${{ github.workflow }}-release-${{ github.ref }}
+    # npm trusted publishing matches the workflow filename, so the package's
+    # trusted publisher on npmjs.com must name `ci.yml`:
+    # https://docs.npmjs.com/trusted-publishers/
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      # Node 24 ships npm 11, which npm trusted publishing (OIDC) needs.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - run: pnpm install --frozen-lockfile --filter passlet...
+
+      - name: Create Release PR or Publish
+        uses: changesets/action@v2
+        with:
+          version-script: pnpm changeset version
+          publish-script: pnpm release

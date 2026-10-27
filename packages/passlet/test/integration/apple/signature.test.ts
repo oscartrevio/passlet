@@ -1,31 +1,32 @@
 import { createHash, createSign } from "node:crypto";
 import { beforeAll, describe, expect, it, vi } from "vitest";
-import {
-	parseSigningIdentity,
-	type SignManifestOptions,
-	signManifest,
-} from "../../../src/apple/signature";
+import { parseSigningIdentity } from "../../../src/apple/signature";
 import type {
 	AppleCredentials,
 	AppleExternalSigner,
-} from "../../../src/schema/settings";
+} from "../../../src/config";
+import { Wallet } from "../../../src/wallet";
 import {
 	appleCredentials,
-	issueApplePass,
-	PASS_TYPE_IDENTIFIER,
+	expectSignedBy,
 	parseSignature,
 	readPkpass,
-	TEAM_ID,
 } from "../../support/apple";
 import { generateTestCerts } from "../../support/certs";
-import { child, children, decodeOid, parse } from "../../support/der-reader";
-import { FIXTURES } from "../../support/fixtures";
+import { FIXTURES, walletTemplate } from "../../support/fixtures";
 
 const MANIFEST = new TextEncoder().encode('{"pass.json":"abc123"}');
 
 // id-sha1 / id-sha256 as they appear in SignerInfo.digestAlgorithm.
 const SHA1_OID = "1.3.14.3.2.26";
 const SHA256_OID = "2.16.840.1.101.3.4.2.1";
+// The signed attributes in DER SET OF order: their encodings are 24 bytes
+// (contentType), 28 (a UTCTime signingTime) and 35 or 47 (messageDigest).
+const SIGNED_ATTRIBUTES = [
+	"1.2.840.113549.1.9.3", // contentType
+	"1.2.840.113549.1.9.5", // signingTime
+	"1.2.840.113549.1.9.4", // messageDigest
+];
 
 type Digest = NonNullable<AppleExternalSigner["digestAlgorithm"]>;
 
@@ -38,13 +39,10 @@ beforeAll(() => {
 	foreignKey = generateTestCerts().signerKey;
 });
 
-// Credentials parsed as AppleProvider parses them, with the in-memory key or
-// an external signer.
-function options(signer?: AppleExternalSigner): SignManifestOptions {
-	const identity = signer
-		? parseSigningIdentity({ ...certs, signerKey: undefined, signer })
-		: parseSigningIdentity(certs);
-	return { ...identity, manifest: MANIFEST };
+/** Credentials signing through `signer` instead of the in-memory key. */
+function withSigner(signer: AppleExternalSigner): AppleCredentials {
+	const { signerKey: _, ...rest } = certs;
+	return { ...rest, signer };
 }
 
 // Stands in for a KMS: RSASSA-PKCS1-v1_5 over exactly the bytes handed over.
@@ -61,77 +59,67 @@ function kmsSigner(digestAlgorithm?: Digest, key = certs.signerKey) {
 	};
 }
 
-// Each signed attribute is SEQUENCE { OID, SET OF value }.
-function attributeOids(set: Uint8Array): string[] {
-	return children(parse(set)).map((attribute) =>
-		decodeOid(child(attribute, 0))
-	);
-}
-
-describe("signManifest", () => {
-	it("embeds a detached SHA-256 signature made with the PEM key", async () => {
-		const signed = parseSignature(await signManifest(options()));
-
-		expect(signed).toMatchObject({
-			certificateCount: 2,
-			detached: true,
-			digestAlgorithmOid: SHA256_OID,
-			messageDigestHex: createHash("sha256").update(MANIFEST).digest("hex"),
-		});
-		expect(signed.verifies(certs.signerCert)).toBe(true);
-	});
-});
-
-describe("signManifest with an external signer", () => {
-	it.each([
-		{ digestAlgorithm: "sha256", oid: SHA256_OID },
-		{ digestAlgorithm: "sha1", oid: SHA1_OID },
-	] as const)("embeds a detached $digestAlgorithm signature that verifies against the signer cert", async ({
-		digestAlgorithm,
-		oid,
-	}) => {
+describe("signing with the in-memory key", () => {
+	it("embeds a detached SHA-256 signature naming the signer, with its WWDR", async () => {
 		const signed = parseSignature(
-			await signManifest(options(kmsSigner(digestAlgorithm)))
+			await parseSigningIdentity(certs).sign(MANIFEST)
 		);
 
 		expect(signed).toMatchObject({
-			certificateCount: 2,
+			detached: true,
+			digestAlgorithmOid: SHA256_OID,
+			messageDigestHex: createHash("sha256").update(MANIFEST).digest("hex"),
+			signedAttributeOids: SIGNED_ATTRIBUTES,
+		});
+		expectSignedBy(signed, certs);
+	});
+});
+
+describe("signing with an external signer", () => {
+	it.each([
+		{ digestAlgorithm: "sha256", oid: SHA256_OID },
+		{ digestAlgorithm: "sha1", oid: SHA1_OID },
+	] as const)("embeds a detached $digestAlgorithm signature naming the signer, with its WWDR", async ({
+		digestAlgorithm,
+		oid,
+	}) => {
+		const identity = parseSigningIdentity(
+			withSigner(kmsSigner(digestAlgorithm))
+		);
+		const signed = parseSignature(await identity.sign(MANIFEST));
+
+		expect(signed).toMatchObject({
 			detached: true,
 			digestAlgorithmOid: oid,
 			messageDigestHex: createHash(digestAlgorithm)
 				.update(MANIFEST)
 				.digest("hex"),
+			signedAttributeOids: SIGNED_ATTRIBUTES,
 		});
-		expect(signed.verifies(certs.signerCert)).toBe(true);
+		expectSignedBy(signed, certs);
 	});
 
-	it("hands the callback the DER SET of the three signed attributes", async () => {
+	it("hands the callback the signed attributes as the DER SET it signs", async () => {
 		const signer = kmsSigner();
-		await signManifest(options(signer));
+		const signature = await parseSigningIdentity(withSigner(signer)).sign(
+			MANIFEST
+		);
 
 		expect(signer.sign).toHaveBeenCalledTimes(1);
 		const signedAttributes = signer.sign.mock.calls[0]?.[0];
-		if (!signedAttributes) {
-			throw new Error("signer.sign was not called");
-		}
-		expect(signedAttributes[0]).toBe(0x31);
-		expect(attributeOids(signedAttributes).sort()).toEqual(
-			[
-				"1.2.840.113549.1.9.3", // contentType
-				"1.2.840.113549.1.9.4", // messageDigest
-				"1.2.840.113549.1.9.5", // signingTime
-			].sort()
-		);
+		// The embedded [0] IMPLICIT attributes are the same bytes under a SET tag.
+		const embedded = Uint8Array.from(signedAttributes ?? []);
+		embedded[0] = 0xa0;
+		expect(signedAttributes?.[0]).toBe(0x31);
+		expect(Buffer.from(signature).includes(Buffer.from(embedded))).toBe(true);
 	});
 
-	it("rejects an unsupported digest algorithm before calling the signer", async () => {
-		const signer = {
-			...kmsSigner(),
-			digestAlgorithm: "md5" as unknown as Digest,
-		};
+	it("rejects an unsupported digest algorithm when the Wallet is built", () => {
+		const signer = kmsSigner();
+		const unsupported = Object.assign(signer, { digestAlgorithm: "md5" });
 
-		await expect(signManifest(options(signer))).rejects.toThrow(
-			expect.objectContaining({ code: "APPLE_SIGNING_FAILED" })
+		expect(() => new Wallet({ apple: withSigner(unsupported) })).toThrow(
+			expect.objectContaining({ code: "APPLE_INVALID_SIGNER_KEY" })
 		);
 		expect(signer.sign).not.toHaveBeenCalled();
 	});
@@ -159,8 +147,10 @@ describe("signManifest with an external signer", () => {
 	)("rejects with APPLE_SIGNING_FAILED when the callback returns $result", async ({
 		sign,
 	}) => {
+		// Replaces the typed callback with what a JavaScript signer can return.
+		const signer = Object.assign(kmsSigner(), { sign });
 		await expect(
-			signManifest(options({ sign } as AppleExternalSigner))
+			parseSigningIdentity(withSigner(signer)).sign(MANIFEST)
 		).rejects.toThrow(
 			expect.objectContaining({ code: "APPLE_SIGNING_FAILED" })
 		);
@@ -168,37 +158,33 @@ describe("signManifest with an external signer", () => {
 
 	it("wraps an error thrown by the callback as its cause", async () => {
 		const cause = new Error("kms unavailable");
+		const identity = parseSigningIdentity(
+			withSigner({
+				sign() {
+					throw cause;
+				},
+			})
+		);
 
-		await expect(
-			signManifest(
-				options({
-					sign() {
-						throw cause;
-					},
-				})
-			)
-		).rejects.toThrow(
+		await expect(identity.sign(MANIFEST)).rejects.toThrow(
 			expect.objectContaining({ code: "APPLE_SIGNING_FAILED", cause })
 		);
 	});
-});
 
-describe("AppleProvider with credentials.signer", () => {
-	it("signs the archive through the external signer", async () => {
+	it("signs a Wallet's passes, defaulting to SHA-256 as the in-memory key does", async () => {
 		const signer = kmsSigner();
 		const { pass, create } = FIXTURES.generic;
-		const bytes = await issueApplePass(pass, create, {
-			passTypeIdentifier: PASS_TYPE_IDENTIFIER,
-			teamId: TEAM_ID,
-			signer,
-			signerCert: certs.signerCert,
-			wwdr: certs.wwdr,
-		});
-		const signed = parseSignature((await readPkpass(bytes)).signature);
+		const { apple } = await walletTemplate(
+			new Wallet({ apple: withSigner(signer) }),
+			pass
+		).create(create);
+		if (!apple) {
+			throw new Error("no .pkpass issued");
+		}
+		const signed = parseSignature((await readPkpass(apple)).signature);
 
 		expect(signer.sign).toHaveBeenCalledTimes(1);
-		// SHA-256 is the default for external signers, as for the in-memory key.
 		expect(signed.digestAlgorithmOid).toBe(SHA256_OID);
-		expect(signed.verifies(certs.signerCert)).toBe(true);
+		expectSignedBy(signed, certs);
 	});
 });

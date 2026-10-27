@@ -1,9 +1,14 @@
 // Just enough DER to emit a PKCS#7 SignedData and pull the issuer and serial
 // out of an X.509 certificate.
 
+const encoder = new TextEncoder();
+
 export function tlv(tag: number, ...contents: Uint8Array[]): Uint8Array {
-	const body = Buffer.concat(contents);
-	return Buffer.concat([Uint8Array.of(tag), encodeLength(body.length), body]);
+	let length = 0;
+	for (const content of contents) {
+		length += content.length;
+	}
+	return Buffer.concat([Uint8Array.of(tag), encodeLength(length), ...contents]);
 }
 
 function encodeLength(length: number): Uint8Array {
@@ -20,7 +25,9 @@ function encodeLength(length: number): Uint8Array {
 export const sequence = (...contents: Uint8Array[]) => tlv(0x30, ...contents);
 export const set = (...contents: Uint8Array[]) => tlv(0x31, ...contents);
 /** Context-specific constructed [0]: EXPLICIT wrapper or IMPLICIT SET OF. */
-export const context0 = (...contents: Uint8Array[]) => tlv(0xa0, ...contents);
+export const CONTEXT_0 = 0xa0;
+export const context0 = (...contents: Uint8Array[]) =>
+	tlv(CONTEXT_0, ...contents);
 export const OCTET_STRING = 0x04;
 export const NULL = Uint8Array.of(0x05, 0x00);
 
@@ -45,8 +52,8 @@ export function oid(dotted: string): Uint8Array {
 export function time(date: Date): Uint8Array {
 	const digits = date.toISOString().replace(/[-:T]|\.\d+/g, "");
 	return date.getUTCFullYear() < 2050
-		? tlv(0x17, new TextEncoder().encode(digits.slice(2)))
-		: tlv(0x18, new TextEncoder().encode(digits));
+		? tlv(0x17, encoder.encode(digits.slice(2)))
+		: tlv(0x18, encoder.encode(digits));
 }
 
 interface Element {

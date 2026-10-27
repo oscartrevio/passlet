@@ -1,0 +1,3269 @@
+{
+  "source": "https://walletobjects.googleapis.com/$discovery/rest?version=v1",
+  "revision": "20261016",
+  "schemas": {
+    "ActivationOptions": {
+      "activationUrl": {
+        "type": "string"
+      },
+      "allowReactivation": {
+        "type": "boolean"
+      }
+    },
+    "ActivationStatus": {
+      "state": {
+        "type": "string",
+        "enum": ["UNKNOWN_STATE", "NOT_ACTIVATED", "ACTIVATED"]
+      }
+    },
+    "AddMessageRequest": {
+      "message": {
+        "$ref": "Message"
+      }
+    },
+    "AirportInfo": {
+      "airportIataCode": {
+        "type": "string"
+      },
+      "airportNameOverride": {
+        "$ref": "LocalizedString"
+      },
+      "gate": {
+        "type": "string"
+      },
+      "kind": {
+        "type": "string",
+        "deprecated": true
+      },
+      "terminal": {
+        "type": "string"
+      }
+    },
+    "AppLinkData": {
+      "androidAppLinkInfo": {
+        "$ref": "AppLinkDataAppLinkInfo"
+      },
+      "displayText": {
+        "$ref": "LocalizedString"
+      },
+      "iosAppLinkInfo": {
+        "$ref": "AppLinkDataAppLinkInfo",
+        "deprecated": true
+      },
+      "webAppLinkInfo": {
+        "$ref": "AppLinkDataAppLinkInfo"
+      }
+    },
+    "AppLinkDataAppLinkInfo": {
+      "appLogoImage": {
+        "$ref": "Image",
+        "deprecated": true
+      },
+      "appTarget": {
+        "$ref": "AppLinkDataAppLinkInfoAppTarget"
+      },
+      "description": {
+        "$ref": "LocalizedString",
+        "deprecated": true
+      },
+      "title": {
+        "$ref": "LocalizedString",
+        "deprecated": true
+      }
+    },
+    "AppLinkDataAppLinkInfoAppTarget": {
+      "packageName": {
+        "type": "string"
+      },
+      "targetUri": {
+        "$ref": "Uri"
+      }
+    },
+    "Barcode": {
+      "alternateText": {
+        "type": "string"
+      },
+      "kind": {
+        "type": "string",
+        "deprecated": true
+      },
+      "renderEncoding": {
+        "type": "string",
+        "enum": ["RENDER_ENCODING_UNSPECIFIED", "UTF_8"]
+      },
+      "showCodeText": {
+        "$ref": "LocalizedString"
+      },
+      "type": {
+        "type": "string",
+        "enum": [
+          "BARCODE_TYPE_UNSPECIFIED",
+          "AZTEC",
+          "CODE_39",
+          "CODE_128",
+          "CODABAR",
+          "DATA_MATRIX",
+          "EAN_8",
+          "EAN_13",
+          "ITF_14",
+          "PDF_417",
+          "QR_CODE",
+          "UPC_A",
+          "TEXT_ONLY"
+        ]
+      },
+      "value": {
+        "type": "string"
+      }
+    },
+    "BarcodeSectionDetail": {
+      "fieldSelector": {
+        "$ref": "FieldSelector"
+      }
+    },
+    "BoardingAndSeatingInfo": {
+      "boardingDoor": {
+        "type": "string",
+        "enum": ["BOARDING_DOOR_UNSPECIFIED", "FRONT", "BACK"]
+      },
+      "boardingGroup": {
+        "type": "string"
+      },
+      "boardingPosition": {
+        "type": "string"
+      },
+      "boardingPrivilegeImage": {
+        "$ref": "Image"
+      },
+      "kind": {
+        "type": "string",
+        "deprecated": true
+      },
+      "seatAssignment": {
+        "$ref": "LocalizedString"
+      },
+      "seatClass": {
+        "type": "string"
+      },
+      "seatNumber": {
+        "type": "string"
+      },
+      "sequenceNumber": {
+        "type": "string"
+      }
+    },
+    "BoardingAndSeatingPolicy": {
+      "boardingPolicy": {
+        "type": "string",
+        "enum": [
+          "BOARDING_POLICY_UNSPECIFIED",
+          "ZONE_BASED",
+          "GROUP_BASED",
+          "BOARDING_POLICY_OTHER"
+        ]
+      },
+      "kind": {
+        "type": "string",
+        "deprecated": true
+      },
+      "seatClassPolicy": {
+        "type": "string",
+        "enum": [
+          "SEAT_CLASS_POLICY_UNSPECIFIED",
+          "CABIN_BASED",
+          "CLASS_BASED",
+          "TIER_BASED",
+          "SEAT_CLASS_POLICY_OTHER"
+        ]
+      }
+    },
+    "CallbackOptions": {
+      "updateRequestUrl": {
+        "type": "string",
+        "deprecated": true
+      },
+      "url": {
+        "type": "string"
+      }
+    },
+    "CardBarcodeSectionDetails": {
+      "firstBottomDetail": {
+        "$ref": "BarcodeSectionDetail"
+      },
+      "firstTopDetail": {
+        "$ref": "BarcodeSectionDetail"
+      },
+      "secondTopDetail": {
+        "$ref": "BarcodeSectionDetail"
+      }
+    },
+    "CardRowOneItem": {
+      "item": {
+        "$ref": "TemplateItem"
+      }
+    },
+    "CardRowTemplateInfo": {
+      "oneItem": {
+        "$ref": "CardRowOneItem"
+      },
+      "threeItems": {
+        "$ref": "CardRowThreeItems"
+      },
+      "twoItems": {
+        "$ref": "CardRowTwoItems"
+      }
+    },
+    "CardRowThreeItems": {
+      "endItem": {
+        "$ref": "TemplateItem"
+      },
+      "middleItem": {
+        "$ref": "TemplateItem"
+      },
+      "startItem": {
+        "$ref": "TemplateItem"
+      }
+    },
+    "CardRowTwoItems": {
+      "endItem": {
+        "$ref": "TemplateItem"
+      },
+      "startItem": {
+        "$ref": "TemplateItem"
+      }
+    },
+    "CardTemplateOverride": {
+      "cardRowTemplateInfos": {
+        "type": "array",
+        "items": {
+          "$ref": "CardRowTemplateInfo"
+        }
+      }
+    },
+    "ClassTemplateInfo": {
+      "cardBarcodeSectionDetails": {
+        "$ref": "CardBarcodeSectionDetails"
+      },
+      "cardTemplateOverride": {
+        "$ref": "CardTemplateOverride"
+      },
+      "detailsTemplateOverride": {
+        "$ref": "DetailsTemplateOverride"
+      },
+      "listTemplateOverride": {
+        "$ref": "ListTemplateOverride"
+      }
+    },
+    "DateTime": {
+      "date": {
+        "type": "string"
+      }
+    },
+    "DetailsItemInfo": {
+      "item": {
+        "$ref": "TemplateItem"
+      }
+    },
+    "DetailsTemplateOverride": {
+      "detailsItemInfos": {
+        "type": "array",
+        "items": {
+          "$ref": "DetailsItemInfo"
+        }
+      }
+    },
+    "DeviceContext": {
+      "deviceToken": {
+        "type": "string"
+      }
+    },
+    "DiscoverableProgram": {
+      "merchantSigninInfo": {
+        "$ref": "DiscoverableProgramMerchantSigninInfo"
+      },
+      "merchantSignupInfo": {
+        "$ref": "DiscoverableProgramMerchantSignupInfo"
+      },
+      "state": {
+        "type": "string",
+        "enum": ["STATE_UNSPECIFIED", "TRUSTED_TESTERS", "LIVE", "DISABLED"]
+      }
+    },
+    "DiscoverableProgramMerchantSigninInfo": {
+      "signinWebsite": {
+        "$ref": "Uri"
+      }
+    },
+    "DiscoverableProgramMerchantSignupInfo": {
+      "signupSharedDatas": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "SHARED_DATA_TYPE_UNSPECIFIED",
+            "FIRST_NAME",
+            "LAST_NAME",
+            "STREET_ADDRESS",
+            "ADDRESS_LINE_1",
+            "ADDRESS_LINE_2",
+            "ADDRESS_LINE_3",
+            "CITY",
+            "STATE",
+            "ZIPCODE",
+            "COUNTRY",
+            "EMAIL",
+            "PHONE"
+          ]
+        }
+      },
+      "signupWebsite": {
+        "$ref": "Uri"
+      }
+    },
+    "EventDateTime": {
+      "customDoorsOpenLabel": {
+        "$ref": "LocalizedString"
+      },
+      "doorsOpen": {
+        "type": "string"
+      },
+      "doorsOpenLabel": {
+        "type": "string",
+        "enum": ["DOORS_OPEN_LABEL_UNSPECIFIED", "DOORS_OPEN", "GATES_OPEN"]
+      },
+      "end": {
+        "type": "string"
+      },
+      "kind": {
+        "type": "string",
+        "deprecated": true
+      },
+      "start": {
+        "type": "string"
+      }
+    },
+    "EventReservationInfo": {
+      "confirmationCode": {
+        "type": "string"
+      },
+      "kind": {
+        "type": "string",
+        "deprecated": true
+      }
+    },
+    "EventSeat": {
+      "gate": {
+        "$ref": "LocalizedString"
+      },
+      "kind": {
+        "type": "string",
+        "deprecated": true
+      },
+      "row": {
+        "$ref": "LocalizedString"
+      },
+      "seat": {
+        "$ref": "LocalizedString"
+      },
+      "section": {
+        "$ref": "LocalizedString"
+      }
+    },
+    "EventTicketClass": {
+      "allowMultipleUsersPerObject": {
+        "type": "boolean",
+        "deprecated": true
+      },
+      "appLinkData": {
+        "$ref": "AppLinkData"
+      },
+      "callbackOptions": {
+        "$ref": "CallbackOptions"
+      },
+      "classTemplateInfo": {
+        "$ref": "ClassTemplateInfo"
+      },
+      "confirmationCodeLabel": {
+        "type": "string",
+        "enum": [
+          "CONFIRMATION_CODE_LABEL_UNSPECIFIED",
+          "CONFIRMATION_CODE",
+          "CONFIRMATION_NUMBER",
+          "ORDER_NUMBER",
+          "RESERVATION_NUMBER"
+        ]
+      },
+      "countryCode": {
+        "type": "string"
+      },
+      "customConfirmationCodeLabel": {
+        "$ref": "LocalizedString"
+      },
+      "customGateLabel": {
+        "$ref": "LocalizedString"
+      },
+      "customRowLabel": {
+        "$ref": "LocalizedString"
+      },
+      "customSeatLabel": {
+        "$ref": "LocalizedString"
+      },
+      "customSectionLabel": {
+        "$ref": "LocalizedString"
+      },
+      "dateTime": {
+        "$ref": "EventDateTime"
+      },
+      "enableSmartTap": {
+        "type": "boolean"
+      },
+      "eventId": {
+        "type": "string"
+      },
+      "eventName": {
+        "$ref": "LocalizedString"
+      },
+      "finePrint": {
+        "$ref": "LocalizedString"
+      },
+      "gateLabel": {
+        "type": "string",
+        "enum": ["GATE_LABEL_UNSPECIFIED", "GATE", "DOOR", "ENTRANCE"]
+      },
+      "heroImage": {
+        "$ref": "Image"
+      },
+      "hexBackgroundColor": {
+        "type": "string"
+      },
+      "homepageUri": {
+        "$ref": "Uri"
+      },
+      "id": {
+        "type": "string"
+      },
+      "imageModulesData": {
+        "type": "array",
+        "items": {
+          "$ref": "ImageModuleData"
+        }
+      },
+      "infoModuleData": {
+        "$ref": "InfoModuleData",
+        "deprecated": true
+      },
+      "issuerName": {
+        "type": "string"
+      },
+      "kind": {
+        "type": "string",
+        "deprecated": true
+      },
+      "linksModuleData": {
+        "$ref": "LinksModuleData"
+      },
+      "localizedIssuerName": {
+        "$ref": "LocalizedString"
+      },
+      "locations": {
+        "type": "array",
+        "items": {
+          "$ref": "LatLongPoint"
+        },
+        "deprecated": true
+      },
+      "logo": {
+        "$ref": "Image"
+      },
+      "merchantLocations": {
+        "type": "array",
+        "items": {
+          "$ref": "MerchantLocation"
+        }
+      },
+      "messages": {
+        "type": "array",
+        "items": {
+          "$ref": "Message"
+        }
+      },
+      "multipleDevicesAndHoldersAllowedStatus": {
+        "type": "string",
+        "enum": [
+          "STATUS_UNSPECIFIED",
+          "MULTIPLE_HOLDERS",
+          "ONE_USER_ALL_DEVICES",
+          "ONE_USER_ONE_DEVICE"
+        ]
+      },
+      "notifyPreference": {
+        "type": "string",
+        "enum": [
+          "NOTIFICATION_SETTINGS_FOR_UPDATES_UNSPECIFIED",
+          "NOTIFY_ON_UPDATE"
+        ]
+      },
+      "redemptionIssuers": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "review": {
+        "$ref": "Review"
+      },
+      "reviewStatus": {
+        "type": "string",
+        "enum": [
+          "REVIEW_STATUS_UNSPECIFIED",
+          "UNDER_REVIEW",
+          "APPROVED",
+          "REJECTED",
+          "DRAFT"
+        ]
+      },
+      "rowLabel": {
+        "type": "string",
+        "enum": ["ROW_LABEL_UNSPECIFIED", "ROW"]
+      },
+      "seatLabel": {
+        "type": "string",
+        "enum": ["SEAT_LABEL_UNSPECIFIED", "SEAT"]
+      },
+      "sectionLabel": {
+        "type": "string",
+        "enum": ["SECTION_LABEL_UNSPECIFIED", "SECTION", "THEATER"]
+      },
+      "securityAnimation": {
+        "$ref": "SecurityAnimation"
+      },
+      "textModulesData": {
+        "type": "array",
+        "items": {
+          "$ref": "TextModuleData"
+        }
+      },
+      "valueAddedModuleData": {
+        "type": "array",
+        "items": {
+          "$ref": "ValueAddedModuleData"
+        }
+      },
+      "venue": {
+        "$ref": "EventVenue"
+      },
+      "version": {
+        "type": "string",
+        "deprecated": true
+      },
+      "viewUnlockRequirement": {
+        "type": "string",
+        "enum": [
+          "VIEW_UNLOCK_REQUIREMENT_UNSPECIFIED",
+          "UNLOCK_NOT_REQUIRED",
+          "UNLOCK_REQUIRED_TO_VIEW"
+        ]
+      },
+      "wideLogo": {
+        "$ref": "Image"
+      },
+      "wordMark": {
+        "$ref": "Image",
+        "deprecated": true
+      }
+    },
+    "EventTicketObject": {
+      "appLinkData": {
+        "$ref": "AppLinkData"
+      },
+      "barcode": {
+        "$ref": "Barcode"
+      },
+      "classId": {
+        "type": "string"
+      },
+      "classReference": {
+        "$ref": "EventTicketClass"
+      },
+      "disableExpirationNotification": {
+        "type": "boolean"
+      },
+      "faceValue": {
+        "$ref": "Money"
+      },
+      "groupingInfo": {
+        "$ref": "GroupingInfo"
+      },
+      "hasLinkedDevice": {
+        "type": "boolean"
+      },
+      "hasUsers": {
+        "type": "boolean"
+      },
+      "heroImage": {
+        "$ref": "Image"
+      },
+      "hexBackgroundColor": {
+        "type": "string"
+      },
+      "id": {
+        "type": "string"
+      },
+      "imageModulesData": {
+        "type": "array",
+        "items": {
+          "$ref": "ImageModuleData"
+        }
+      },
+      "infoModuleData": {
+        "$ref": "InfoModuleData"
+      },
+      "kind": {
+        "type": "string",
+        "deprecated": true
+      },
+      "linkedObjectIds": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "linkedOfferIds": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "linksModuleData": {
+        "$ref": "LinksModuleData"
+      },
+      "locations": {
+        "type": "array",
+        "items": {
+          "$ref": "LatLongPoint"
+        },
+        "deprecated": true
+      },
+      "merchantLocations": {
+        "type": "array",
+        "items": {
+          "$ref": "MerchantLocation"
+        }
+      },
+      "messages": {
+        "type": "array",
+        "items": {
+          "$ref": "Message"
+        }
+      },
+      "notifyPreference": {
+        "type": "string",
+        "enum": [
+          "NOTIFICATION_SETTINGS_FOR_UPDATES_UNSPECIFIED",
+          "NOTIFY_ON_UPDATE"
+        ]
+      },
+      "passConstraints": {
+        "$ref": "PassConstraints"
+      },
+      "reservationInfo": {
+        "$ref": "EventReservationInfo"
+      },
+      "rotatingBarcode": {
+        "$ref": "RotatingBarcode"
+      },
+      "saveRestrictions": {
+        "$ref": "SaveRestrictions"
+      },
+      "seatInfo": {
+        "$ref": "EventSeat"
+      },
+      "smartTapRedemptionValue": {
+        "type": "string"
+      },
+      "state": {
+        "type": "string",
+        "enum": [
+          "STATE_UNSPECIFIED",
+          "ACTIVE",
+          "COMPLETED",
+          "EXPIRED",
+          "INACTIVE"
+        ]
+      },
+      "textModulesData": {
+        "type": "array",
+        "items": {
+          "$ref": "TextModuleData"
+        }
+      },
+      "ticketHolderName": {
+        "type": "string"
+      },
+      "ticketNumber": {
+        "type": "string"
+      },
+      "ticketType": {
+        "$ref": "LocalizedString"
+      },
+      "validTimeInterval": {
+        "$ref": "TimeInterval"
+      },
+      "valueAddedModuleData": {
+        "type": "array",
+        "items": {
+          "$ref": "ValueAddedModuleData"
+        }
+      },
+      "version": {
+        "type": "string",
+        "deprecated": true
+      }
+    },
+    "EventVenue": {
+      "address": {
+        "$ref": "LocalizedString"
+      },
+      "kind": {
+        "type": "string",
+        "deprecated": true
+      },
+      "name": {
+        "$ref": "LocalizedString"
+      }
+    },
+    "ExpiryNotification": {
+      "enableNotification": {
+        "type": "boolean"
+      }
+    },
+    "FieldReference": {
+      "dateFormat": {
+        "type": "string",
+        "enum": [
+          "DATE_FORMAT_UNSPECIFIED",
+          "DATE_TIME",
+          "DATE_ONLY",
+          "TIME_ONLY",
+          "DATE_TIME_YEAR",
+          "DATE_YEAR",
+          "YEAR_MONTH",
+          "YEAR_MONTH_DAY"
+        ]
+      },
+      "fieldPath": {
+        "type": "string"
+      }
+    },
+    "FieldSelector": {
+      "fields": {
+        "type": "array",
+        "items": {
+          "$ref": "FieldReference"
+        }
+      }
+    },
+    "FirstRowOption": {
+      "fieldOption": {
+        "$ref": "FieldSelector"
+      },
+      "transitOption": {
+        "type": "string",
+        "enum": [
+          "TRANSIT_OPTION_UNSPECIFIED",
+          "ORIGIN_AND_DESTINATION_NAMES",
+          "ORIGIN_AND_DESTINATION_CODES",
+          "ORIGIN_NAME"
+        ]
+      }
+    },
+    "FlightCarrier": {
+      "airlineAllianceLogo": {
+        "$ref": "Image"
+      },
+      "airlineLogo": {
+        "$ref": "Image"
+      },
+      "airlineName": {
+        "$ref": "LocalizedString"
+      },
+      "carrierIataCode": {
+        "type": "string"
+      },
+      "carrierIcaoCode": {
+        "type": "string"
+      },
+      "kind": {
+        "type": "string",
+        "deprecated": true
+      },
+      "wideAirlineLogo": {
+        "$ref": "Image"
+      }
+    },
+    "FlightClass": {
+      "allowMultipleUsersPerObject": {
+        "type": "boolean",
+        "deprecated": true
+      },
+      "appLinkData": {
+        "$ref": "AppLinkData"
+      },
+      "boardingAndSeatingPolicy": {
+        "$ref": "BoardingAndSeatingPolicy"
+      },
+      "callbackOptions": {
+        "$ref": "CallbackOptions"
+      },
+      "classTemplateInfo": {
+        "$ref": "ClassTemplateInfo"
+      },
+      "countryCode": {
+        "type": "string"
+      },
+      "destination": {
+        "$ref": "AirportInfo"
+      },
+      "enableSmartTap": {
+        "type": "boolean"
+      },
+      "flightHeader": {
+        "$ref": "FlightHeader"
+      },
+      "flightStatus": {
+        "type": "string",
+        "enum": [
+          "FLIGHT_STATUS_UNSPECIFIED",
+          "SCHEDULED",
+          "ACTIVE",
+          "LANDED",
+          "CANCELLED",
+          "REDIRECTED",
+          "DIVERTED"
+        ]
+      },
+      "heroImage": {
+        "$ref": "Image"
+      },
+      "hexBackgroundColor": {
+        "type": "string"
+      },
+      "homepageUri": {
+        "$ref": "Uri"
+      },
+      "id": {
+        "type": "string"
+      },
+      "imageModulesData": {
+        "type": "array",
+        "items": {
+          "$ref": "ImageModuleData"
+        }
+      },
+      "infoModuleData": {
+        "$ref": "InfoModuleData",
+        "deprecated": true
+      },
+      "issuerName": {
+        "type": "string"
+      },
+      "kind": {
+        "type": "string",
+        "deprecated": true
+      },
+      "languageOverride": {
+        "type": "string"
+      },
+      "linksModuleData": {
+        "$ref": "LinksModuleData"
+      },
+      "localBoardingDateTime": {
+        "type": "string"
+      },
+      "localEstimatedOrActualArrivalDateTime": {
+        "type": "string"
+      },
+      "localEstimatedOrActualDepartureDateTime": {
+        "type": "string"
+      },
+      "localGateClosingDateTime": {
+        "type": "string"
+      },
+      "localizedIssuerName": {
+        "$ref": "LocalizedString"
+      },
+      "localScheduledArrivalDateTime": {
+        "type": "string"
+      },
+      "localScheduledDepartureDateTime": {
+        "type": "string"
+      },
+      "locations": {
+        "type": "array",
+        "items": {
+          "$ref": "LatLongPoint"
+        },
+        "deprecated": true
+      },
+      "merchantLocations": {
+        "type": "array",
+        "items": {
+          "$ref": "MerchantLocation"
+        }
+      },
+      "messages": {
+        "type": "array",
+        "items": {
+          "$ref": "Message"
+        }
+      },
+      "multipleDevicesAndHoldersAllowedStatus": {
+        "type": "string",
+        "enum": [
+          "STATUS_UNSPECIFIED",
+          "MULTIPLE_HOLDERS",
+          "ONE_USER_ALL_DEVICES",
+          "ONE_USER_ONE_DEVICE"
+        ]
+      },
+      "notifyPreference": {
+        "type": "string",
+        "enum": [
+          "NOTIFICATION_SETTINGS_FOR_UPDATES_UNSPECIFIED",
+          "NOTIFY_ON_UPDATE"
+        ]
+      },
+      "origin": {
+        "$ref": "AirportInfo"
+      },
+      "redemptionIssuers": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "review": {
+        "$ref": "Review"
+      },
+      "reviewStatus": {
+        "type": "string",
+        "enum": [
+          "REVIEW_STATUS_UNSPECIFIED",
+          "UNDER_REVIEW",
+          "APPROVED",
+          "REJECTED",
+          "DRAFT"
+        ]
+      },
+      "securityAnimation": {
+        "$ref": "SecurityAnimation"
+      },
+      "textModulesData": {
+        "type": "array",
+        "items": {
+          "$ref": "TextModuleData"
+        }
+      },
+      "valueAddedModuleData": {
+        "type": "array",
+        "items": {
+          "$ref": "ValueAddedModuleData"
+        }
+      },
+      "version": {
+        "type": "string",
+        "deprecated": true
+      },
+      "viewUnlockRequirement": {
+        "type": "string",
+        "enum": [
+          "VIEW_UNLOCK_REQUIREMENT_UNSPECIFIED",
+          "UNLOCK_NOT_REQUIRED",
+          "UNLOCK_REQUIRED_TO_VIEW"
+        ]
+      },
+      "wordMark": {
+        "$ref": "Image",
+        "deprecated": true
+      }
+    },
+    "FlightHeader": {
+      "carrier": {
+        "$ref": "FlightCarrier"
+      },
+      "flightNumber": {
+        "type": "string"
+      },
+      "flightNumberDisplayOverride": {
+        "type": "string"
+      },
+      "kind": {
+        "type": "string",
+        "deprecated": true
+      },
+      "operatingCarrier": {
+        "$ref": "FlightCarrier"
+      },
+      "operatingFlightNumber": {
+        "type": "string"
+      }
+    },
+    "FlightObject": {
+      "appLinkData": {
+        "$ref": "AppLinkData"
+      },
+      "barcode": {
+        "$ref": "Barcode"
+      },
+      "boardingAndSeatingInfo": {
+        "$ref": "BoardingAndSeatingInfo"
+      },
+      "classId": {
+        "type": "string"
+      },
+      "classReference": {
+        "$ref": "FlightClass"
+      },
+      "disableExpirationNotification": {
+        "type": "boolean"
+      },
+      "groupingInfo": {
+        "$ref": "GroupingInfo"
+      },
+      "hasLinkedDevice": {
+        "type": "boolean"
+      },
+      "hasUsers": {
+        "type": "boolean"
+      },
+      "heroImage": {
+        "$ref": "Image"
+      },
+      "hexBackgroundColor": {
+        "type": "string"
+      },
+      "id": {
+        "type": "string"
+      },
+      "imageModulesData": {
+        "type": "array",
+        "items": {
+          "$ref": "ImageModuleData"
+        }
+      },
+      "infoModuleData": {
+        "$ref": "InfoModuleData"
+      },
+      "kind": {
+        "type": "string",
+        "deprecated": true
+      },
+      "linkedObjectIds": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "linksModuleData": {
+        "$ref": "LinksModuleData"
+      },
+      "locations": {
+        "type": "array",
+        "items": {
+          "$ref": "LatLongPoint"
+        },
+        "deprecated": true
+      },
+      "merchantLocations": {
+        "type": "array",
+        "items": {
+          "$ref": "MerchantLocation"
+        }
+      },
+      "messages": {
+        "type": "array",
+        "items": {
+          "$ref": "Message"
+        }
+      },
+      "notifyPreference": {
+        "type": "string",
+        "enum": [
+          "NOTIFICATION_SETTINGS_FOR_UPDATES_UNSPECIFIED",
+          "NOTIFY_ON_UPDATE"
+        ]
+      },
+      "passConstraints": {
+        "$ref": "PassConstraints"
+      },
+      "passengerName": {
+        "type": "string"
+      },
+      "reservationInfo": {
+        "$ref": "ReservationInfo"
+      },
+      "rotatingBarcode": {
+        "$ref": "RotatingBarcode"
+      },
+      "saveRestrictions": {
+        "$ref": "SaveRestrictions"
+      },
+      "securityProgramLogo": {
+        "$ref": "Image"
+      },
+      "smartTapRedemptionValue": {
+        "type": "string"
+      },
+      "state": {
+        "type": "string",
+        "enum": [
+          "STATE_UNSPECIFIED",
+          "ACTIVE",
+          "COMPLETED",
+          "EXPIRED",
+          "INACTIVE"
+        ]
+      },
+      "textModulesData": {
+        "type": "array",
+        "items": {
+          "$ref": "TextModuleData"
+        }
+      },
+      "validTimeInterval": {
+        "$ref": "TimeInterval"
+      },
+      "valueAddedModuleData": {
+        "type": "array",
+        "items": {
+          "$ref": "ValueAddedModuleData"
+        }
+      },
+      "version": {
+        "type": "string",
+        "deprecated": true
+      }
+    },
+    "FrequentFlyerInfo": {
+      "frequentFlyerNumber": {
+        "type": "string"
+      },
+      "frequentFlyerProgramName": {
+        "$ref": "LocalizedString"
+      },
+      "kind": {
+        "type": "string",
+        "deprecated": true
+      }
+    },
+    "GenericClass": {
+      "appLinkData": {
+        "$ref": "AppLinkData"
+      },
+      "callbackOptions": {
+        "$ref": "CallbackOptions"
+      },
+      "classTemplateInfo": {
+        "$ref": "ClassTemplateInfo"
+      },
+      "enableSmartTap": {
+        "type": "boolean"
+      },
+      "id": {
+        "type": "string"
+      },
+      "imageModulesData": {
+        "type": "array",
+        "items": {
+          "$ref": "ImageModuleData"
+        }
+      },
+      "linksModuleData": {
+        "$ref": "LinksModuleData"
+      },
+      "merchantLocations": {
+        "type": "array",
+        "items": {
+          "$ref": "MerchantLocation"
+        }
+      },
+      "messages": {
+        "type": "array",
+        "items": {
+          "$ref": "Message"
+        }
+      },
+      "multipleDevicesAndHoldersAllowedStatus": {
+        "type": "string",
+        "enum": [
+          "STATUS_UNSPECIFIED",
+          "MULTIPLE_HOLDERS",
+          "ONE_USER_ALL_DEVICES",
+          "ONE_USER_ONE_DEVICE"
+        ]
+      },
+      "redemptionIssuers": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "securityAnimation": {
+        "$ref": "SecurityAnimation"
+      },
+      "textModulesData": {
+        "type": "array",
+        "items": {
+          "$ref": "TextModuleData"
+        }
+      },
+      "valueAddedModuleData": {
+        "type": "array",
+        "items": {
+          "$ref": "ValueAddedModuleData"
+        }
+      },
+      "viewUnlockRequirement": {
+        "type": "string",
+        "enum": [
+          "VIEW_UNLOCK_REQUIREMENT_UNSPECIFIED",
+          "UNLOCK_NOT_REQUIRED",
+          "UNLOCK_REQUIRED_TO_VIEW"
+        ]
+      }
+    },
+    "GenericObject": {
+      "appLinkData": {
+        "$ref": "AppLinkData"
+      },
+      "barcode": {
+        "$ref": "Barcode"
+      },
+      "cardTitle": {
+        "$ref": "LocalizedString"
+      },
+      "classId": {
+        "type": "string"
+      },
+      "genericType": {
+        "type": "string",
+        "enum": [
+          "GENERIC_TYPE_UNSPECIFIED",
+          "GENERIC_SEASON_PASS",
+          "GENERIC_UTILITY_BILLS",
+          "GENERIC_PARKING_PASS",
+          "GENERIC_VOUCHER",
+          "GENERIC_GYM_MEMBERSHIP",
+          "GENERIC_LIBRARY_MEMBERSHIP",
+          "GENERIC_RESERVATIONS",
+          "GENERIC_AUTO_INSURANCE",
+          "GENERIC_HOME_INSURANCE",
+          "GENERIC_ENTRY_TICKET",
+          "GENERIC_RECEIPT",
+          "GENERIC_LOYALTY_CARD",
+          "GENERIC_BUSINESS_CARD",
+          "GENERIC_BARCODE_PASS",
+          "GENERIC_MEMBERSHIP_CARD",
+          "GENERIC_STUDENT_CARD",
+          "GENERIC_TRANSIT_PASS",
+          "GENERIC_VEHICLE_REGISTRATION",
+          "GENERIC_OTHER"
+        ]
+      },
+      "groupingInfo": {
+        "$ref": "GroupingInfo"
+      },
+      "hasUsers": {
+        "type": "boolean"
+      },
+      "header": {
+        "$ref": "LocalizedString"
+      },
+      "heroImage": {
+        "$ref": "Image"
+      },
+      "hexBackgroundColor": {
+        "type": "string"
+      },
+      "id": {
+        "type": "string"
+      },
+      "imageModulesData": {
+        "type": "array",
+        "items": {
+          "$ref": "ImageModuleData"
+        }
+      },
+      "linkedObjectIds": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "linksModuleData": {
+        "$ref": "LinksModuleData"
+      },
+      "logo": {
+        "$ref": "Image"
+      },
+      "merchantLocations": {
+        "type": "array",
+        "items": {
+          "$ref": "MerchantLocation"
+        }
+      },
+      "messages": {
+        "type": "array",
+        "items": {
+          "$ref": "Message"
+        }
+      },
+      "notifications": {
+        "$ref": "Notifications"
+      },
+      "passConstraints": {
+        "$ref": "PassConstraints"
+      },
+      "rotatingBarcode": {
+        "$ref": "RotatingBarcode"
+      },
+      "saveRestrictions": {
+        "$ref": "SaveRestrictions"
+      },
+      "smartTapRedemptionValue": {
+        "type": "string"
+      },
+      "state": {
+        "type": "string",
+        "enum": [
+          "STATE_UNSPECIFIED",
+          "ACTIVE",
+          "COMPLETED",
+          "EXPIRED",
+          "INACTIVE"
+        ]
+      },
+      "subheader": {
+        "$ref": "LocalizedString"
+      },
+      "textModulesData": {
+        "type": "array",
+        "items": {
+          "$ref": "TextModuleData"
+        }
+      },
+      "validTimeInterval": {
+        "$ref": "TimeInterval"
+      },
+      "valueAddedModuleData": {
+        "type": "array",
+        "items": {
+          "$ref": "ValueAddedModuleData"
+        }
+      },
+      "wideLogo": {
+        "$ref": "Image"
+      }
+    },
+    "GiftCardClass": {
+      "allowBarcodeRedemption": {
+        "type": "boolean"
+      },
+      "allowMultipleUsersPerObject": {
+        "type": "boolean",
+        "deprecated": true
+      },
+      "appLinkData": {
+        "$ref": "AppLinkData"
+      },
+      "callbackOptions": {
+        "$ref": "CallbackOptions"
+      },
+      "cardNumberLabel": {
+        "type": "string"
+      },
+      "classTemplateInfo": {
+        "$ref": "ClassTemplateInfo"
+      },
+      "countryCode": {
+        "type": "string"
+      },
+      "enableSmartTap": {
+        "type": "boolean"
+      },
+      "eventNumberLabel": {
+        "type": "string"
+      },
+      "heroImage": {
+        "$ref": "Image"
+      },
+      "hexBackgroundColor": {
+        "type": "string"
+      },
+      "homepageUri": {
+        "$ref": "Uri"
+      },
+      "id": {
+        "type": "string"
+      },
+      "imageModulesData": {
+        "type": "array",
+        "items": {
+          "$ref": "ImageModuleData"
+        }
+      },
+      "infoModuleData": {
+        "$ref": "InfoModuleData",
+        "deprecated": true
+      },
+      "issuerName": {
+        "type": "string"
+      },
+      "kind": {
+        "type": "string",
+        "deprecated": true
+      },
+      "linksModuleData": {
+        "$ref": "LinksModuleData"
+      },
+      "localizedCardNumberLabel": {
+        "$ref": "LocalizedString"
+      },
+      "localizedEventNumberLabel": {
+        "$ref": "LocalizedString"
+      },
+      "localizedIssuerName": {
+        "$ref": "LocalizedString"
+      },
+      "localizedMerchantName": {
+        "$ref": "LocalizedString"
+      },
+      "localizedPinLabel": {
+        "$ref": "LocalizedString"
+      },
+      "locations": {
+        "type": "array",
+        "items": {
+          "$ref": "LatLongPoint"
+        },
+        "deprecated": true
+      },
+      "merchantLocations": {
+        "type": "array",
+        "items": {
+          "$ref": "MerchantLocation"
+        }
+      },
+      "merchantName": {
+        "type": "string"
+      },
+      "messages": {
+        "type": "array",
+        "items": {
+          "$ref": "Message"
+        }
+      },
+      "multipleDevicesAndHoldersAllowedStatus": {
+        "type": "string",
+        "enum": [
+          "STATUS_UNSPECIFIED",
+          "MULTIPLE_HOLDERS",
+          "ONE_USER_ALL_DEVICES",
+          "ONE_USER_ONE_DEVICE"
+        ]
+      },
+      "notifyPreference": {
+        "type": "string",
+        "enum": [
+          "NOTIFICATION_SETTINGS_FOR_UPDATES_UNSPECIFIED",
+          "NOTIFY_ON_UPDATE"
+        ]
+      },
+      "pinLabel": {
+        "type": "string"
+      },
+      "programLogo": {
+        "$ref": "Image"
+      },
+      "redemptionIssuers": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "review": {
+        "$ref": "Review"
+      },
+      "reviewStatus": {
+        "type": "string",
+        "enum": [
+          "REVIEW_STATUS_UNSPECIFIED",
+          "UNDER_REVIEW",
+          "APPROVED",
+          "REJECTED",
+          "DRAFT"
+        ]
+      },
+      "securityAnimation": {
+        "$ref": "SecurityAnimation"
+      },
+      "textModulesData": {
+        "type": "array",
+        "items": {
+          "$ref": "TextModuleData"
+        }
+      },
+      "valueAddedModuleData": {
+        "type": "array",
+        "items": {
+          "$ref": "ValueAddedModuleData"
+        }
+      },
+      "version": {
+        "type": "string",
+        "deprecated": true
+      },
+      "viewUnlockRequirement": {
+        "type": "string",
+        "enum": [
+          "VIEW_UNLOCK_REQUIREMENT_UNSPECIFIED",
+          "UNLOCK_NOT_REQUIRED",
+          "UNLOCK_REQUIRED_TO_VIEW"
+        ]
+      },
+      "wideProgramLogo": {
+        "$ref": "Image"
+      },
+      "wordMark": {
+        "$ref": "Image",
+        "deprecated": true
+      }
+    },
+    "GiftCardObject": {
+      "appLinkData": {
+        "$ref": "AppLinkData"
+      },
+      "balance": {
+        "$ref": "Money"
+      },
+      "balanceUpdateTime": {
+        "$ref": "DateTime"
+      },
+      "barcode": {
+        "$ref": "Barcode"
+      },
+      "cardNumber": {
+        "type": "string"
+      },
+      "classId": {
+        "type": "string"
+      },
+      "classReference": {
+        "$ref": "GiftCardClass"
+      },
+      "disableExpirationNotification": {
+        "type": "boolean"
+      },
+      "eventNumber": {
+        "type": "string"
+      },
+      "groupingInfo": {
+        "$ref": "GroupingInfo"
+      },
+      "hasLinkedDevice": {
+        "type": "boolean"
+      },
+      "hasUsers": {
+        "type": "boolean"
+      },
+      "heroImage": {
+        "$ref": "Image"
+      },
+      "id": {
+        "type": "string"
+      },
+      "imageModulesData": {
+        "type": "array",
+        "items": {
+          "$ref": "ImageModuleData"
+        }
+      },
+      "infoModuleData": {
+        "$ref": "InfoModuleData"
+      },
+      "kind": {
+        "type": "string",
+        "deprecated": true
+      },
+      "linkedObjectIds": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "linksModuleData": {
+        "$ref": "LinksModuleData"
+      },
+      "locations": {
+        "type": "array",
+        "items": {
+          "$ref": "LatLongPoint"
+        },
+        "deprecated": true
+      },
+      "merchantLocations": {
+        "type": "array",
+        "items": {
+          "$ref": "MerchantLocation"
+        }
+      },
+      "messages": {
+        "type": "array",
+        "items": {
+          "$ref": "Message"
+        }
+      },
+      "notifyPreference": {
+        "type": "string",
+        "enum": [
+          "NOTIFICATION_SETTINGS_FOR_UPDATES_UNSPECIFIED",
+          "NOTIFY_ON_UPDATE"
+        ]
+      },
+      "passConstraints": {
+        "$ref": "PassConstraints"
+      },
+      "pin": {
+        "type": "string"
+      },
+      "rotatingBarcode": {
+        "$ref": "RotatingBarcode"
+      },
+      "saveRestrictions": {
+        "$ref": "SaveRestrictions"
+      },
+      "smartTapRedemptionValue": {
+        "type": "string"
+      },
+      "state": {
+        "type": "string",
+        "enum": [
+          "STATE_UNSPECIFIED",
+          "ACTIVE",
+          "COMPLETED",
+          "EXPIRED",
+          "INACTIVE"
+        ]
+      },
+      "textModulesData": {
+        "type": "array",
+        "items": {
+          "$ref": "TextModuleData"
+        }
+      },
+      "validTimeInterval": {
+        "$ref": "TimeInterval"
+      },
+      "valueAddedModuleData": {
+        "type": "array",
+        "items": {
+          "$ref": "ValueAddedModuleData"
+        }
+      },
+      "version": {
+        "type": "string",
+        "deprecated": true
+      }
+    },
+    "GroupingInfo": {
+      "groupingId": {
+        "type": "string"
+      },
+      "sortIndex": {
+        "type": "integer"
+      }
+    },
+    "Image": {
+      "contentDescription": {
+        "$ref": "LocalizedString"
+      },
+      "kind": {
+        "type": "string",
+        "deprecated": true
+      },
+      "privateImageId": {
+        "type": "string"
+      },
+      "sourceUri": {
+        "$ref": "ImageUri"
+      }
+    },
+    "ImageModuleData": {
+      "id": {
+        "type": "string"
+      },
+      "mainImage": {
+        "$ref": "Image"
+      }
+    },
+    "ImageUri": {
+      "description": {
+        "type": "string",
+        "deprecated": true
+      },
+      "localizedDescription": {
+        "$ref": "LocalizedString",
+        "deprecated": true
+      },
+      "uri": {
+        "type": "string"
+      }
+    },
+    "InfoModuleData": {
+      "labelValueRows": {
+        "type": "array",
+        "items": {
+          "$ref": "LabelValueRow"
+        }
+      },
+      "showLastUpdateTime": {
+        "type": "boolean",
+        "deprecated": true
+      }
+    },
+    "LabelValue": {
+      "label": {
+        "type": "string"
+      },
+      "localizedLabel": {
+        "$ref": "LocalizedString"
+      },
+      "localizedValue": {
+        "$ref": "LocalizedString"
+      },
+      "value": {
+        "type": "string"
+      }
+    },
+    "LabelValueRow": {
+      "columns": {
+        "type": "array",
+        "items": {
+          "$ref": "LabelValue"
+        }
+      }
+    },
+    "LatLongPoint": {
+      "kind": {
+        "type": "string",
+        "deprecated": true
+      },
+      "latitude": {
+        "type": "number"
+      },
+      "longitude": {
+        "type": "number"
+      }
+    },
+    "LinksModuleData": {
+      "uris": {
+        "type": "array",
+        "items": {
+          "$ref": "Uri"
+        }
+      }
+    },
+    "ListTemplateOverride": {
+      "firstRowOption": {
+        "$ref": "FirstRowOption"
+      },
+      "secondRowOption": {
+        "$ref": "FieldSelector"
+      },
+      "thirdRowOption": {
+        "$ref": "FieldSelector",
+        "deprecated": true
+      }
+    },
+    "LocalizedString": {
+      "defaultValue": {
+        "$ref": "TranslatedString"
+      },
+      "kind": {
+        "type": "string",
+        "deprecated": true
+      },
+      "translatedValues": {
+        "type": "array",
+        "items": {
+          "$ref": "TranslatedString"
+        }
+      }
+    },
+    "LoyaltyClass": {
+      "accountIdLabel": {
+        "type": "string"
+      },
+      "accountNameLabel": {
+        "type": "string"
+      },
+      "allowMultipleUsersPerObject": {
+        "type": "boolean",
+        "deprecated": true
+      },
+      "appLinkData": {
+        "$ref": "AppLinkData"
+      },
+      "callbackOptions": {
+        "$ref": "CallbackOptions"
+      },
+      "classTemplateInfo": {
+        "$ref": "ClassTemplateInfo"
+      },
+      "countryCode": {
+        "type": "string"
+      },
+      "discoverableProgram": {
+        "$ref": "DiscoverableProgram"
+      },
+      "enableSmartTap": {
+        "type": "boolean"
+      },
+      "heroImage": {
+        "$ref": "Image"
+      },
+      "hexBackgroundColor": {
+        "type": "string"
+      },
+      "homepageUri": {
+        "$ref": "Uri"
+      },
+      "id": {
+        "type": "string"
+      },
+      "imageModulesData": {
+        "type": "array",
+        "items": {
+          "$ref": "ImageModuleData"
+        }
+      },
+      "infoModuleData": {
+        "$ref": "InfoModuleData",
+        "deprecated": true
+      },
+      "issuerName": {
+        "type": "string"
+      },
+      "kind": {
+        "type": "string",
+        "deprecated": true
+      },
+      "linksModuleData": {
+        "$ref": "LinksModuleData"
+      },
+      "localizedAccountIdLabel": {
+        "$ref": "LocalizedString"
+      },
+      "localizedAccountNameLabel": {
+        "$ref": "LocalizedString"
+      },
+      "localizedIssuerName": {
+        "$ref": "LocalizedString"
+      },
+      "localizedProgramName": {
+        "$ref": "LocalizedString"
+      },
+      "localizedRewardsTier": {
+        "$ref": "LocalizedString"
+      },
+      "localizedRewardsTierLabel": {
+        "$ref": "LocalizedString"
+      },
+      "localizedSecondaryRewardsTier": {
+        "$ref": "LocalizedString"
+      },
+      "localizedSecondaryRewardsTierLabel": {
+        "$ref": "LocalizedString"
+      },
+      "locations": {
+        "type": "array",
+        "items": {
+          "$ref": "LatLongPoint"
+        },
+        "deprecated": true
+      },
+      "merchantLocations": {
+        "type": "array",
+        "items": {
+          "$ref": "MerchantLocation"
+        }
+      },
+      "messages": {
+        "type": "array",
+        "items": {
+          "$ref": "Message"
+        }
+      },
+      "multipleDevicesAndHoldersAllowedStatus": {
+        "type": "string",
+        "enum": [
+          "STATUS_UNSPECIFIED",
+          "MULTIPLE_HOLDERS",
+          "ONE_USER_ALL_DEVICES",
+          "ONE_USER_ONE_DEVICE"
+        ]
+      },
+      "notifyPreference": {
+        "type": "string",
+        "enum": [
+          "NOTIFICATION_SETTINGS_FOR_UPDATES_UNSPECIFIED",
+          "NOTIFY_ON_UPDATE"
+        ]
+      },
+      "programLogo": {
+        "$ref": "Image"
+      },
+      "programName": {
+        "type": "string"
+      },
+      "redemptionIssuers": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "review": {
+        "$ref": "Review"
+      },
+      "reviewStatus": {
+        "type": "string",
+        "enum": [
+          "REVIEW_STATUS_UNSPECIFIED",
+          "UNDER_REVIEW",
+          "APPROVED",
+          "REJECTED",
+          "DRAFT"
+        ]
+      },
+      "rewardsTier": {
+        "type": "string"
+      },
+      "rewardsTierLabel": {
+        "type": "string"
+      },
+      "secondaryRewardsTier": {
+        "type": "string"
+      },
+      "secondaryRewardsTierLabel": {
+        "type": "string"
+      },
+      "securityAnimation": {
+        "$ref": "SecurityAnimation"
+      },
+      "textModulesData": {
+        "type": "array",
+        "items": {
+          "$ref": "TextModuleData"
+        }
+      },
+      "valueAddedModuleData": {
+        "type": "array",
+        "items": {
+          "$ref": "ValueAddedModuleData"
+        }
+      },
+      "version": {
+        "type": "string",
+        "deprecated": true
+      },
+      "viewUnlockRequirement": {
+        "type": "string",
+        "enum": [
+          "VIEW_UNLOCK_REQUIREMENT_UNSPECIFIED",
+          "UNLOCK_NOT_REQUIRED",
+          "UNLOCK_REQUIRED_TO_VIEW"
+        ]
+      },
+      "wideProgramLogo": {
+        "$ref": "Image"
+      },
+      "wordMark": {
+        "$ref": "Image",
+        "deprecated": true
+      }
+    },
+    "LoyaltyObject": {
+      "accountId": {
+        "type": "string"
+      },
+      "accountName": {
+        "type": "string"
+      },
+      "appLinkData": {
+        "$ref": "AppLinkData"
+      },
+      "barcode": {
+        "$ref": "Barcode"
+      },
+      "classId": {
+        "type": "string"
+      },
+      "classReference": {
+        "$ref": "LoyaltyClass"
+      },
+      "disableExpirationNotification": {
+        "type": "boolean"
+      },
+      "groupingInfo": {
+        "$ref": "GroupingInfo"
+      },
+      "hasLinkedDevice": {
+        "type": "boolean"
+      },
+      "hasUsers": {
+        "type": "boolean"
+      },
+      "heroImage": {
+        "$ref": "Image"
+      },
+      "id": {
+        "type": "string"
+      },
+      "imageModulesData": {
+        "type": "array",
+        "items": {
+          "$ref": "ImageModuleData"
+        }
+      },
+      "infoModuleData": {
+        "$ref": "InfoModuleData"
+      },
+      "kind": {
+        "type": "string",
+        "deprecated": true
+      },
+      "linkedObjectIds": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "linkedOfferIds": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "linksModuleData": {
+        "$ref": "LinksModuleData"
+      },
+      "locations": {
+        "type": "array",
+        "items": {
+          "$ref": "LatLongPoint"
+        },
+        "deprecated": true
+      },
+      "loyaltyPoints": {
+        "$ref": "LoyaltyPoints"
+      },
+      "merchantLocations": {
+        "type": "array",
+        "items": {
+          "$ref": "MerchantLocation"
+        }
+      },
+      "messages": {
+        "type": "array",
+        "items": {
+          "$ref": "Message"
+        }
+      },
+      "notifyPreference": {
+        "type": "string",
+        "enum": [
+          "NOTIFICATION_SETTINGS_FOR_UPDATES_UNSPECIFIED",
+          "NOTIFY_ON_UPDATE"
+        ]
+      },
+      "passConstraints": {
+        "$ref": "PassConstraints"
+      },
+      "rotatingBarcode": {
+        "$ref": "RotatingBarcode"
+      },
+      "saveRestrictions": {
+        "$ref": "SaveRestrictions"
+      },
+      "secondaryLoyaltyPoints": {
+        "$ref": "LoyaltyPoints"
+      },
+      "smartTapRedemptionValue": {
+        "type": "string"
+      },
+      "state": {
+        "type": "string",
+        "enum": [
+          "STATE_UNSPECIFIED",
+          "ACTIVE",
+          "COMPLETED",
+          "EXPIRED",
+          "INACTIVE"
+        ]
+      },
+      "textModulesData": {
+        "type": "array",
+        "items": {
+          "$ref": "TextModuleData"
+        }
+      },
+      "validTimeInterval": {
+        "$ref": "TimeInterval"
+      },
+      "valueAddedModuleData": {
+        "type": "array",
+        "items": {
+          "$ref": "ValueAddedModuleData"
+        }
+      },
+      "version": {
+        "type": "string",
+        "deprecated": true
+      }
+    },
+    "LoyaltyPoints": {
+      "balance": {
+        "$ref": "LoyaltyPointsBalance"
+      },
+      "label": {
+        "type": "string"
+      },
+      "localizedLabel": {
+        "$ref": "LocalizedString"
+      }
+    },
+    "LoyaltyPointsBalance": {
+      "double": {
+        "type": "number"
+      },
+      "int": {
+        "type": "integer"
+      },
+      "money": {
+        "$ref": "Money"
+      },
+      "string": {
+        "type": "string"
+      }
+    },
+    "MerchantLocation": {
+      "latitude": {
+        "type": "number"
+      },
+      "longitude": {
+        "type": "number"
+      }
+    },
+    "Message": {
+      "body": {
+        "type": "string"
+      },
+      "displayInterval": {
+        "$ref": "TimeInterval"
+      },
+      "header": {
+        "type": "string"
+      },
+      "id": {
+        "type": "string"
+      },
+      "kind": {
+        "type": "string",
+        "deprecated": true
+      },
+      "localizedBody": {
+        "$ref": "LocalizedString"
+      },
+      "localizedHeader": {
+        "$ref": "LocalizedString"
+      },
+      "messageType": {
+        "type": "string",
+        "enum": [
+          "MESSAGE_TYPE_UNSPECIFIED",
+          "TEXT",
+          "EXPIRATION_NOTIFICATION",
+          "TEXT_AND_NOTIFY"
+        ]
+      }
+    },
+    "ModuleViewConstraints": {
+      "displayInterval": {
+        "$ref": "TimeInterval"
+      }
+    },
+    "Money": {
+      "currencyCode": {
+        "type": "string"
+      },
+      "kind": {
+        "type": "string",
+        "deprecated": true
+      },
+      "micros": {
+        "type": "string"
+      }
+    },
+    "Notifications": {
+      "expiryNotification": {
+        "$ref": "ExpiryNotification"
+      },
+      "upcomingNotification": {
+        "$ref": "UpcomingNotification"
+      }
+    },
+    "OfferClass": {
+      "allowMultipleUsersPerObject": {
+        "type": "boolean",
+        "deprecated": true
+      },
+      "appLinkData": {
+        "$ref": "AppLinkData"
+      },
+      "callbackOptions": {
+        "$ref": "CallbackOptions"
+      },
+      "classTemplateInfo": {
+        "$ref": "ClassTemplateInfo"
+      },
+      "countryCode": {
+        "type": "string"
+      },
+      "details": {
+        "type": "string"
+      },
+      "enableSmartTap": {
+        "type": "boolean"
+      },
+      "finePrint": {
+        "type": "string"
+      },
+      "helpUri": {
+        "$ref": "Uri"
+      },
+      "heroImage": {
+        "$ref": "Image"
+      },
+      "hexBackgroundColor": {
+        "type": "string"
+      },
+      "homepageUri": {
+        "$ref": "Uri"
+      },
+      "id": {
+        "type": "string"
+      },
+      "imageModulesData": {
+        "type": "array",
+        "items": {
+          "$ref": "ImageModuleData"
+        }
+      },
+      "infoModuleData": {
+        "$ref": "InfoModuleData",
+        "deprecated": true
+      },
+      "issuerName": {
+        "type": "string"
+      },
+      "kind": {
+        "type": "string",
+        "deprecated": true
+      },
+      "linksModuleData": {
+        "$ref": "LinksModuleData"
+      },
+      "localizedDetails": {
+        "$ref": "LocalizedString"
+      },
+      "localizedFinePrint": {
+        "$ref": "LocalizedString"
+      },
+      "localizedIssuerName": {
+        "$ref": "LocalizedString"
+      },
+      "localizedProvider": {
+        "$ref": "LocalizedString"
+      },
+      "localizedShortTitle": {
+        "$ref": "LocalizedString"
+      },
+      "localizedTitle": {
+        "$ref": "LocalizedString"
+      },
+      "locations": {
+        "type": "array",
+        "items": {
+          "$ref": "LatLongPoint"
+        },
+        "deprecated": true
+      },
+      "merchantLocations": {
+        "type": "array",
+        "items": {
+          "$ref": "MerchantLocation"
+        }
+      },
+      "messages": {
+        "type": "array",
+        "items": {
+          "$ref": "Message"
+        }
+      },
+      "multipleDevicesAndHoldersAllowedStatus": {
+        "type": "string",
+        "enum": [
+          "STATUS_UNSPECIFIED",
+          "MULTIPLE_HOLDERS",
+          "ONE_USER_ALL_DEVICES",
+          "ONE_USER_ONE_DEVICE"
+        ]
+      },
+      "notifyPreference": {
+        "type": "string",
+        "enum": [
+          "NOTIFICATION_SETTINGS_FOR_UPDATES_UNSPECIFIED",
+          "NOTIFY_ON_UPDATE"
+        ]
+      },
+      "provider": {
+        "type": "string"
+      },
+      "redemptionChannel": {
+        "type": "string",
+        "enum": [
+          "REDEMPTION_CHANNEL_UNSPECIFIED",
+          "INSTORE",
+          "ONLINE",
+          "BOTH",
+          "TEMPORARY_PRICE_REDUCTION"
+        ]
+      },
+      "redemptionIssuers": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "review": {
+        "$ref": "Review"
+      },
+      "reviewStatus": {
+        "type": "string",
+        "enum": [
+          "REVIEW_STATUS_UNSPECIFIED",
+          "UNDER_REVIEW",
+          "APPROVED",
+          "REJECTED",
+          "DRAFT"
+        ]
+      },
+      "securityAnimation": {
+        "$ref": "SecurityAnimation"
+      },
+      "shortTitle": {
+        "type": "string"
+      },
+      "textModulesData": {
+        "type": "array",
+        "items": {
+          "$ref": "TextModuleData"
+        }
+      },
+      "title": {
+        "type": "string"
+      },
+      "titleImage": {
+        "$ref": "Image"
+      },
+      "valueAddedModuleData": {
+        "type": "array",
+        "items": {
+          "$ref": "ValueAddedModuleData"
+        }
+      },
+      "version": {
+        "type": "string",
+        "deprecated": true
+      },
+      "viewUnlockRequirement": {
+        "type": "string",
+        "enum": [
+          "VIEW_UNLOCK_REQUIREMENT_UNSPECIFIED",
+          "UNLOCK_NOT_REQUIRED",
+          "UNLOCK_REQUIRED_TO_VIEW"
+        ]
+      },
+      "wideTitleImage": {
+        "$ref": "Image"
+      },
+      "wordMark": {
+        "$ref": "Image",
+        "deprecated": true
+      }
+    },
+    "OfferObject": {
+      "appLinkData": {
+        "$ref": "AppLinkData"
+      },
+      "barcode": {
+        "$ref": "Barcode"
+      },
+      "classId": {
+        "type": "string"
+      },
+      "classReference": {
+        "$ref": "OfferClass"
+      },
+      "disableExpirationNotification": {
+        "type": "boolean"
+      },
+      "groupingInfo": {
+        "$ref": "GroupingInfo"
+      },
+      "hasLinkedDevice": {
+        "type": "boolean"
+      },
+      "hasUsers": {
+        "type": "boolean"
+      },
+      "heroImage": {
+        "$ref": "Image"
+      },
+      "id": {
+        "type": "string"
+      },
+      "imageModulesData": {
+        "type": "array",
+        "items": {
+          "$ref": "ImageModuleData"
+        }
+      },
+      "infoModuleData": {
+        "$ref": "InfoModuleData"
+      },
+      "kind": {
+        "type": "string",
+        "deprecated": true
+      },
+      "linkedObjectIds": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "linksModuleData": {
+        "$ref": "LinksModuleData"
+      },
+      "locations": {
+        "type": "array",
+        "items": {
+          "$ref": "LatLongPoint"
+        }
+      },
+      "merchantLocations": {
+        "type": "array",
+        "items": {
+          "$ref": "MerchantLocation"
+        }
+      },
+      "messages": {
+        "type": "array",
+        "items": {
+          "$ref": "Message"
+        }
+      },
+      "notifyPreference": {
+        "type": "string",
+        "enum": [
+          "NOTIFICATION_SETTINGS_FOR_UPDATES_UNSPECIFIED",
+          "NOTIFY_ON_UPDATE"
+        ]
+      },
+      "passConstraints": {
+        "$ref": "PassConstraints"
+      },
+      "rotatingBarcode": {
+        "$ref": "RotatingBarcode"
+      },
+      "saveRestrictions": {
+        "$ref": "SaveRestrictions"
+      },
+      "smartTapRedemptionValue": {
+        "type": "string"
+      },
+      "state": {
+        "type": "string",
+        "enum": [
+          "STATE_UNSPECIFIED",
+          "ACTIVE",
+          "COMPLETED",
+          "EXPIRED",
+          "INACTIVE"
+        ]
+      },
+      "textModulesData": {
+        "type": "array",
+        "items": {
+          "$ref": "TextModuleData"
+        }
+      },
+      "validTimeInterval": {
+        "$ref": "TimeInterval"
+      },
+      "valueAddedModuleData": {
+        "type": "array",
+        "items": {
+          "$ref": "ValueAddedModuleData"
+        }
+      },
+      "version": {
+        "type": "string",
+        "deprecated": true
+      }
+    },
+    "PassConstraints": {
+      "nfcConstraint": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "NFC_CONSTRAINT_UNSPECIFIED",
+            "BLOCK_PAYMENT",
+            "BLOCK_CLOSED_LOOP_TRANSIT"
+          ]
+        }
+      },
+      "screenshotEligibility": {
+        "type": "string",
+        "enum": ["SCREENSHOT_ELIGIBILITY_UNSPECIFIED", "ELIGIBLE", "INELIGIBLE"]
+      }
+    },
+    "PurchaseDetails": {
+      "accountId": {
+        "type": "string"
+      },
+      "confirmationCode": {
+        "type": "string"
+      },
+      "purchaseDateTime": {
+        "type": "string"
+      },
+      "purchaseReceiptNumber": {
+        "type": "string"
+      },
+      "ticketCost": {
+        "$ref": "TicketCost"
+      }
+    },
+    "ReservationInfo": {
+      "confirmationCode": {
+        "type": "string"
+      },
+      "eticketNumber": {
+        "type": "string"
+      },
+      "frequentFlyerInfo": {
+        "$ref": "FrequentFlyerInfo"
+      },
+      "kind": {
+        "type": "string",
+        "deprecated": true
+      }
+    },
+    "Review": {
+      "comments": {
+        "type": "string"
+      }
+    },
+    "RotatingBarcode": {
+      "alternateText": {
+        "type": "string"
+      },
+      "initialRotatingBarcodeValues": {
+        "$ref": "RotatingBarcodeValues"
+      },
+      "renderEncoding": {
+        "type": "string",
+        "enum": ["RENDER_ENCODING_UNSPECIFIED", "UTF_8"]
+      },
+      "showCodeText": {
+        "$ref": "LocalizedString"
+      },
+      "totpDetails": {
+        "$ref": "RotatingBarcodeTotpDetails"
+      },
+      "type": {
+        "type": "string",
+        "enum": [
+          "BARCODE_TYPE_UNSPECIFIED",
+          "AZTEC",
+          "CODE_39",
+          "CODE_128",
+          "CODABAR",
+          "DATA_MATRIX",
+          "EAN_8",
+          "EAN_13",
+          "ITF_14",
+          "PDF_417",
+          "QR_CODE",
+          "UPC_A",
+          "TEXT_ONLY"
+        ]
+      },
+      "valuePattern": {
+        "type": "string"
+      }
+    },
+    "RotatingBarcodeTotpDetails": {
+      "algorithm": {
+        "type": "string",
+        "enum": ["TOTP_ALGORITHM_UNSPECIFIED", "TOTP_SHA1"]
+      },
+      "parameters": {
+        "type": "array",
+        "items": {
+          "$ref": "RotatingBarcodeTotpDetailsTotpParameters"
+        }
+      },
+      "periodMillis": {
+        "type": "string"
+      }
+    },
+    "RotatingBarcodeTotpDetailsTotpParameters": {
+      "key": {
+        "type": "string"
+      },
+      "valueLength": {
+        "type": "integer"
+      }
+    },
+    "RotatingBarcodeValues": {
+      "periodMillis": {
+        "type": "string"
+      },
+      "startDateTime": {
+        "type": "string"
+      },
+      "values": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "SaveRestrictions": {
+      "restrictToEmailSha256": {
+        "type": "string"
+      }
+    },
+    "SecurityAnimation": {
+      "animationType": {
+        "type": "string",
+        "enum": ["ANIMATION_UNSPECIFIED", "FOIL_SHIMMER"]
+      }
+    },
+    "TemplateItem": {
+      "firstValue": {
+        "$ref": "FieldSelector"
+      },
+      "predefinedItem": {
+        "type": "string",
+        "enum": [
+          "PREDEFINED_ITEM_UNSPECIFIED",
+          "FREQUENT_FLYER_PROGRAM_NAME_AND_NUMBER",
+          "FLIGHT_NUMBER_AND_OPERATING_FLIGHT_NUMBER"
+        ]
+      },
+      "secondValue": {
+        "$ref": "FieldSelector"
+      }
+    },
+    "TextModuleData": {
+      "body": {
+        "type": "string"
+      },
+      "header": {
+        "type": "string"
+      },
+      "id": {
+        "type": "string"
+      },
+      "localizedBody": {
+        "$ref": "LocalizedString"
+      },
+      "localizedHeader": {
+        "$ref": "LocalizedString"
+      }
+    },
+    "TicketCost": {
+      "discountMessage": {
+        "$ref": "LocalizedString"
+      },
+      "faceValue": {
+        "$ref": "Money"
+      },
+      "purchasePrice": {
+        "$ref": "Money"
+      }
+    },
+    "TicketLeg": {
+      "arrivalDateTime": {
+        "type": "string"
+      },
+      "carriage": {
+        "type": "string"
+      },
+      "departureDateTime": {
+        "type": "string"
+      },
+      "destinationName": {
+        "$ref": "LocalizedString"
+      },
+      "destinationStationCode": {
+        "type": "string"
+      },
+      "fareName": {
+        "$ref": "LocalizedString"
+      },
+      "originName": {
+        "$ref": "LocalizedString"
+      },
+      "originStationCode": {
+        "type": "string"
+      },
+      "platform": {
+        "type": "string"
+      },
+      "ticketSeat": {
+        "$ref": "TicketSeat"
+      },
+      "ticketSeats": {
+        "type": "array",
+        "items": {
+          "$ref": "TicketSeat"
+        }
+      },
+      "transitOperatorName": {
+        "$ref": "LocalizedString"
+      },
+      "transitTerminusName": {
+        "$ref": "LocalizedString"
+      },
+      "zone": {
+        "type": "string"
+      }
+    },
+    "TicketRestrictions": {
+      "otherRestrictions": {
+        "$ref": "LocalizedString"
+      },
+      "routeRestrictions": {
+        "$ref": "LocalizedString"
+      },
+      "routeRestrictionsDetails": {
+        "$ref": "LocalizedString"
+      },
+      "timeRestrictions": {
+        "$ref": "LocalizedString"
+      }
+    },
+    "TicketSeat": {
+      "coach": {
+        "type": "string"
+      },
+      "customFareClass": {
+        "$ref": "LocalizedString"
+      },
+      "fareClass": {
+        "type": "string",
+        "enum": ["FARE_CLASS_UNSPECIFIED", "ECONOMY", "FIRST", "BUSINESS"]
+      },
+      "seat": {
+        "type": "string"
+      },
+      "seatAssignment": {
+        "$ref": "LocalizedString"
+      }
+    },
+    "TimeInterval": {
+      "end": {
+        "$ref": "DateTime"
+      },
+      "kind": {
+        "type": "string",
+        "deprecated": true
+      },
+      "start": {
+        "$ref": "DateTime"
+      }
+    },
+    "TransitClass": {
+      "activationOptions": {
+        "$ref": "ActivationOptions"
+      },
+      "allowMultipleUsersPerObject": {
+        "type": "boolean",
+        "deprecated": true
+      },
+      "appLinkData": {
+        "$ref": "AppLinkData"
+      },
+      "callbackOptions": {
+        "$ref": "CallbackOptions"
+      },
+      "classTemplateInfo": {
+        "$ref": "ClassTemplateInfo"
+      },
+      "countryCode": {
+        "type": "string"
+      },
+      "customCarriageLabel": {
+        "$ref": "LocalizedString"
+      },
+      "customCoachLabel": {
+        "$ref": "LocalizedString"
+      },
+      "customConcessionCategoryLabel": {
+        "$ref": "LocalizedString"
+      },
+      "customConfirmationCodeLabel": {
+        "$ref": "LocalizedString"
+      },
+      "customDiscountMessageLabel": {
+        "$ref": "LocalizedString"
+      },
+      "customFareClassLabel": {
+        "$ref": "LocalizedString"
+      },
+      "customFareNameLabel": {
+        "$ref": "LocalizedString"
+      },
+      "customOtherRestrictionsLabel": {
+        "$ref": "LocalizedString"
+      },
+      "customPlatformLabel": {
+        "$ref": "LocalizedString"
+      },
+      "customPurchaseFaceValueLabel": {
+        "$ref": "LocalizedString"
+      },
+      "customPurchasePriceLabel": {
+        "$ref": "LocalizedString"
+      },
+      "customPurchaseReceiptNumberLabel": {
+        "$ref": "LocalizedString"
+      },
+      "customRouteRestrictionsDetailsLabel": {
+        "$ref": "LocalizedString"
+      },
+      "customRouteRestrictionsLabel": {
+        "$ref": "LocalizedString"
+      },
+      "customSeatLabel": {
+        "$ref": "LocalizedString"
+      },
+      "customTicketNumberLabel": {
+        "$ref": "LocalizedString"
+      },
+      "customTimeRestrictionsLabel": {
+        "$ref": "LocalizedString"
+      },
+      "customTransitTerminusNameLabel": {
+        "$ref": "LocalizedString"
+      },
+      "customZoneLabel": {
+        "$ref": "LocalizedString"
+      },
+      "enableSingleLegItinerary": {
+        "type": "boolean"
+      },
+      "enableSmartTap": {
+        "type": "boolean"
+      },
+      "heroImage": {
+        "$ref": "Image"
+      },
+      "hexBackgroundColor": {
+        "type": "string"
+      },
+      "homepageUri": {
+        "$ref": "Uri"
+      },
+      "id": {
+        "type": "string"
+      },
+      "imageModulesData": {
+        "type": "array",
+        "items": {
+          "$ref": "ImageModuleData"
+        }
+      },
+      "infoModuleData": {
+        "$ref": "InfoModuleData",
+        "deprecated": true
+      },
+      "issuerName": {
+        "type": "string"
+      },
+      "languageOverride": {
+        "type": "string"
+      },
+      "linksModuleData": {
+        "$ref": "LinksModuleData"
+      },
+      "localizedIssuerName": {
+        "$ref": "LocalizedString"
+      },
+      "locations": {
+        "type": "array",
+        "items": {
+          "$ref": "LatLongPoint"
+        },
+        "deprecated": true
+      },
+      "logo": {
+        "$ref": "Image"
+      },
+      "merchantLocations": {
+        "type": "array",
+        "items": {
+          "$ref": "MerchantLocation"
+        }
+      },
+      "messages": {
+        "type": "array",
+        "items": {
+          "$ref": "Message"
+        }
+      },
+      "multipleDevicesAndHoldersAllowedStatus": {
+        "type": "string",
+        "enum": [
+          "STATUS_UNSPECIFIED",
+          "MULTIPLE_HOLDERS",
+          "ONE_USER_ALL_DEVICES",
+          "ONE_USER_ONE_DEVICE"
+        ]
+      },
+      "notifyPreference": {
+        "type": "string",
+        "enum": [
+          "NOTIFICATION_SETTINGS_FOR_UPDATES_UNSPECIFIED",
+          "NOTIFY_ON_UPDATE"
+        ]
+      },
+      "redemptionIssuers": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "review": {
+        "$ref": "Review"
+      },
+      "reviewStatus": {
+        "type": "string",
+        "enum": [
+          "REVIEW_STATUS_UNSPECIFIED",
+          "UNDER_REVIEW",
+          "APPROVED",
+          "REJECTED",
+          "DRAFT"
+        ]
+      },
+      "securityAnimation": {
+        "$ref": "SecurityAnimation"
+      },
+      "textModulesData": {
+        "type": "array",
+        "items": {
+          "$ref": "TextModuleData"
+        }
+      },
+      "transitOperatorName": {
+        "$ref": "LocalizedString"
+      },
+      "transitType": {
+        "type": "string",
+        "enum": [
+          "TRANSIT_TYPE_UNSPECIFIED",
+          "BUS",
+          "RAIL",
+          "TRAM",
+          "FERRY",
+          "OTHER"
+        ]
+      },
+      "valueAddedModuleData": {
+        "type": "array",
+        "items": {
+          "$ref": "ValueAddedModuleData"
+        }
+      },
+      "version": {
+        "type": "string",
+        "deprecated": true
+      },
+      "viewUnlockRequirement": {
+        "type": "string",
+        "enum": [
+          "VIEW_UNLOCK_REQUIREMENT_UNSPECIFIED",
+          "UNLOCK_NOT_REQUIRED",
+          "UNLOCK_REQUIRED_TO_VIEW"
+        ]
+      },
+      "watermark": {
+        "$ref": "Image"
+      },
+      "wideLogo": {
+        "$ref": "Image"
+      },
+      "wordMark": {
+        "$ref": "Image",
+        "deprecated": true
+      }
+    },
+    "TransitObject": {
+      "activationStatus": {
+        "$ref": "ActivationStatus"
+      },
+      "appLinkData": {
+        "$ref": "AppLinkData"
+      },
+      "barcode": {
+        "$ref": "Barcode"
+      },
+      "classId": {
+        "type": "string"
+      },
+      "classReference": {
+        "$ref": "TransitClass"
+      },
+      "concessionCategory": {
+        "type": "string",
+        "enum": ["CONCESSION_CATEGORY_UNSPECIFIED", "ADULT", "CHILD", "SENIOR"]
+      },
+      "customConcessionCategory": {
+        "$ref": "LocalizedString"
+      },
+      "customTicketStatus": {
+        "$ref": "LocalizedString"
+      },
+      "deviceContext": {
+        "$ref": "DeviceContext"
+      },
+      "disableExpirationNotification": {
+        "type": "boolean"
+      },
+      "groupingInfo": {
+        "$ref": "GroupingInfo"
+      },
+      "hasLinkedDevice": {
+        "type": "boolean"
+      },
+      "hasUsers": {
+        "type": "boolean"
+      },
+      "heroImage": {
+        "$ref": "Image"
+      },
+      "hexBackgroundColor": {
+        "type": "string"
+      },
+      "id": {
+        "type": "string"
+      },
+      "imageModulesData": {
+        "type": "array",
+        "items": {
+          "$ref": "ImageModuleData"
+        }
+      },
+      "infoModuleData": {
+        "$ref": "InfoModuleData"
+      },
+      "linkedObjectIds": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "linksModuleData": {
+        "$ref": "LinksModuleData"
+      },
+      "locations": {
+        "type": "array",
+        "items": {
+          "$ref": "LatLongPoint"
+        },
+        "deprecated": true
+      },
+      "merchantLocations": {
+        "type": "array",
+        "items": {
+          "$ref": "MerchantLocation"
+        }
+      },
+      "messages": {
+        "type": "array",
+        "items": {
+          "$ref": "Message"
+        }
+      },
+      "notifyPreference": {
+        "type": "string",
+        "enum": [
+          "NOTIFICATION_SETTINGS_FOR_UPDATES_UNSPECIFIED",
+          "NOTIFY_ON_UPDATE"
+        ]
+      },
+      "passConstraints": {
+        "$ref": "PassConstraints"
+      },
+      "passengerNames": {
+        "type": "string"
+      },
+      "passengerType": {
+        "type": "string",
+        "enum": [
+          "PASSENGER_TYPE_UNSPECIFIED",
+          "SINGLE_PASSENGER",
+          "MULTIPLE_PASSENGERS"
+        ]
+      },
+      "purchaseDetails": {
+        "$ref": "PurchaseDetails"
+      },
+      "rotatingBarcode": {
+        "$ref": "RotatingBarcode"
+      },
+      "saveRestrictions": {
+        "$ref": "SaveRestrictions"
+      },
+      "smartTapRedemptionValue": {
+        "type": "string"
+      },
+      "state": {
+        "type": "string",
+        "enum": [
+          "STATE_UNSPECIFIED",
+          "ACTIVE",
+          "COMPLETED",
+          "EXPIRED",
+          "INACTIVE"
+        ]
+      },
+      "textModulesData": {
+        "type": "array",
+        "items": {
+          "$ref": "TextModuleData"
+        }
+      },
+      "ticketLeg": {
+        "$ref": "TicketLeg"
+      },
+      "ticketLegs": {
+        "type": "array",
+        "items": {
+          "$ref": "TicketLeg"
+        }
+      },
+      "ticketNumber": {
+        "type": "string"
+      },
+      "ticketRestrictions": {
+        "$ref": "TicketRestrictions"
+      },
+      "ticketStatus": {
+        "type": "string",
+        "enum": ["TICKET_STATUS_UNSPECIFIED", "USED", "REFUNDED", "EXCHANGED"]
+      },
+      "tripId": {
+        "type": "string"
+      },
+      "tripType": {
+        "type": "string",
+        "enum": ["TRIP_TYPE_UNSPECIFIED", "ROUND_TRIP", "ONE_WAY"]
+      },
+      "validTimeInterval": {
+        "$ref": "TimeInterval"
+      },
+      "valueAddedModuleData": {
+        "type": "array",
+        "items": {
+          "$ref": "ValueAddedModuleData"
+        }
+      },
+      "version": {
+        "type": "string",
+        "deprecated": true
+      }
+    },
+    "TranslatedString": {
+      "kind": {
+        "type": "string",
+        "deprecated": true
+      },
+      "language": {
+        "type": "string"
+      },
+      "value": {
+        "type": "string"
+      }
+    },
+    "UpcomingNotification": {
+      "enableNotification": {
+        "type": "boolean"
+      }
+    },
+    "Uri": {
+      "description": {
+        "type": "string"
+      },
+      "id": {
+        "type": "string"
+      },
+      "kind": {
+        "type": "string",
+        "deprecated": true
+      },
+      "localizedDescription": {
+        "$ref": "LocalizedString"
+      },
+      "uri": {
+        "type": "string"
+      }
+    },
+    "ValueAddedModuleData": {
+      "body": {
+        "$ref": "LocalizedString"
+      },
+      "header": {
+        "$ref": "LocalizedString"
+      },
+      "image": {
+        "$ref": "Image"
+      },
+      "sortIndex": {
+        "type": "integer"
+      },
+      "uri": {
+        "type": "string"
+      },
+      "viewConstraints": {
+        "$ref": "ModuleViewConstraints"
+      }
+    }
+  }
+}

@@ -181,11 +181,8 @@ describe("wallet.update", () => {
 			google: "updated",
 		});
 
+		// An existing object proves its class exists: one PATCH, no class check.
 		expect(stub.requests).toEqual([
-			expect.objectContaining({
-				method: "GET",
-				path: `/loyaltyClass/${ISSUER_ID}.${TEMPLATE.id}`,
-			}),
 			expect.objectContaining({
 				method: "PATCH",
 				path: `/loyaltyObject/${ISSUER_ID}.${SERIAL}`,
@@ -214,9 +211,9 @@ describe("wallet.update", () => {
 			google: "created",
 		});
 		expect(stub.requests.map((r) => [r.method, r.path])).toEqual([
+			["PATCH", `/loyaltyObject/${objectId}`],
 			["GET", `/loyaltyClass/${classId}`],
 			["POST", "/loyaltyClass"],
-			["PATCH", `/loyaltyObject/${objectId}`],
 			["POST", "/loyaltyObject"],
 		]);
 		expect(stub.body("POST", "/loyaltyClass")).toMatchObject({ id: classId });
@@ -324,15 +321,22 @@ describe("wallet.update", () => {
 		expect(writes[2]?.body).not.toHaveProperty("state");
 	});
 
-	it("still updates Google when Apple fails, then reports the Apple failure", async () => {
+	it("still updates Google when Apple's storage fails, and reports both outcomes", async () => {
 		const failure = new Error("registrations unavailable");
 		const registrations = memoryRegistrations();
 		registrations.devices = () => Promise.reject(failure);
 		const stub = stubGoogleFetch(existingClasses);
 		const { wallet } = setup({ google: true, registrations });
 
-		await expect(wallet.update(SERIAL)).rejects.toBe(failure);
-		expect(stub.requests.map((r) => r.method)).toEqual(["GET", "PATCH"]);
+		await expect(wallet.update(SERIAL)).rejects.toMatchObject({
+			code: "APPLE_REGISTRATIONS_FAILED",
+			cause: failure,
+			results: {
+				apple: { status: "rejected" },
+				google: { status: "fulfilled", value: "updated" },
+			},
+		});
+		expect(stub.requests.map((r) => r.method)).toEqual(["PATCH"]);
 	});
 
 	it("reports Google's failure after Apple succeeds, with both outcomes", async () => {

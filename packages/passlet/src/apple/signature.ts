@@ -6,9 +6,11 @@ import {
 	verify,
 	X509Certificate,
 } from "node:crypto";
+import { promisify } from "node:util";
+import type { AppleCredentials, AppleExternalSigner } from "../config";
 import { WalletError } from "../errors";
-import type { AppleCredentials, AppleExternalSigner } from "../schema/settings";
 import {
+	CONTEXT_0,
 	context0,
 	issuerAndSerialNumber,
 	NULL,
@@ -21,28 +23,21 @@ import {
 } from "./der";
 
 /**
- * Apple signing credentials, parsed and cross-checked once: the Pass Type ID
- * certificate, the WWDR intermediate that issued it, and either its private
- * key or an external signer holding that key.
+ * Apple signing credentials, parsed, cross-checked and ready to sign: the Pass
+ * Type ID certificate, plus its private key unless an external signer holds it.
  */
-export type AppleSigningIdentity = {
-	signerCert: X509Certificate;
-	wwdr: X509Certificate;
-} & (
-	| { signer?: undefined; signerKey: KeyObject }
-	| { signer: AppleExternalSigner; signerKey?: undefined }
-);
-
-export type SignManifestOptions = AppleSigningIdentity & {
-	manifest: Uint8Array;
-};
+export interface AppleSigningIdentity {
+	/** The detached PKCS#7 signature over a `.pkpass`'s manifest.json. */
+	sign(manifest: Uint8Array): Promise<Uint8Array>;
+	readonly signerCert: X509Certificate;
+	/** The in-memory key, which APNs can reuse; absent with an external signer. */
+	readonly signerKey: KeyObject | undefined;
+}
 
 type Digest = NonNullable<AppleExternalSigner["digestAlgorithm"]>;
 
 /** Produces the raw RSASSA-PKCS1-v1_5 signature over the DER signed attributes. */
-type SignAttributes = (
-	signedAttributes: Uint8Array
-) => Uint8Array | Promise<Uint8Array>;
+type SignAttributes = (signedAttributes: Uint8Array) => Promise<Uint8Array>;
 
 const DIGEST_ALGORITHMS: Record<Digest, Uint8Array> = {
 	sha1: sequence(oid("1.3.14.3.2.26"), NULL),
@@ -50,11 +45,19 @@ const DIGEST_ALGORITHMS: Record<Digest, Uint8Array> = {
 };
 const RSA_ENCRYPTION = sequence(oid("1.2.840.113549.1.1.1"), NULL);
 const DATA = oid("1.2.840.113549.1.7.1");
+// Detached: the manifest itself lives next to the signature.
+const DETACHED_DATA = sequence(DATA);
 const SIGNED_DATA = oid("1.2.840.113549.1.7.2");
-const CONTENT_TYPE = oid("1.2.840.113549.1.9.3");
+const CONTENT_TYPE_DATA = sequence(oid("1.2.840.113549.1.9.3"), set(DATA));
 const MESSAGE_DIGEST = oid("1.2.840.113549.1.9.4");
 const SIGNING_TIME = oid("1.2.840.113549.1.9.5");
 const VERSION_1 = tlv(0x02, Uint8Array.of(1));
+
+// With a callback, crypto.sign and crypto.verify run on libuv's threadpool
+// instead of blocking the event loop, so the passes of a bundle sign in
+// parallel. https://nodejs.org/api/crypto.html#cryptosignalgorithm-data-key-callback
+const signAsync = promisify(sign);
+const verifyAsync = promisify(verify);
 
 /**
  * PEM copied into an env var often keeps literal "\n" escapes. PEM never
@@ -77,10 +80,15 @@ function parseCertificate(
 
 /**
  * Parse Apple credentials and check they belong together, so a mismatched
- * certificate, key or WWDR fails at setup instead of in a pass Wallet rejects.
- * Wallet validates the signature against the signing certificate and the WWDR
- * intermediate that issued it.
+ * certificate, key, WWDR or signer digest fails at setup instead of in a pass
+ * Wallet rejects. Wallet validates the signature against the signing
+ * certificate and the WWDR intermediate that issued it.
  * https://developer.apple.com/documentation/walletpasses/building-a-pass
+ *
+ * Apple asks for "a PKCS #7 detached signature for the manifest" and names no
+ * digest for it (only the manifest's file hashes are SHA-1), so both the
+ * in-memory PEM `signerKey` and an {@link AppleExternalSigner} default to
+ * SHA-256; an external signer may opt into SHA-1.
  *
  * @throws {WalletError} `APPLE_INVALID_SIGNER_CERT`, `APPLE_INVALID_WWDR` or
  * `APPLE_INVALID_SIGNER_KEY`.
@@ -99,14 +107,31 @@ export function parseSigningIdentity(
 			"Invalid Apple WWDR certificate: wwdr did not issue signerCert"
 		);
 	}
-	if (credentials.signer) {
-		return { signerCert, wwdr, signer: credentials.signer };
+	const { signer } = credentials;
+	if (!signer) {
+		const signerKey = parseSignerKey(credentials, signerCert);
+		return prepareIdentity(
+			signerCert,
+			wwdr,
+			signerKey,
+			"sha256",
+			(attributes) =>
+				signAsync("sha256", attributes, signerKey).catch((cause: unknown) => {
+					throw new WalletError("APPLE_SIGNING_FAILED", undefined, { cause });
+				})
+		);
 	}
-	return {
-		signerCert,
-		wwdr,
-		signerKey: parseSignerKey(credentials, signerCert),
-	};
+	const digest = signer.digestAlgorithm ?? "sha256";
+	// Typed, but JavaScript callers can pass anything.
+	if (!Object.hasOwn(DIGEST_ALGORITHMS, digest)) {
+		throw new WalletError(
+			"APPLE_INVALID_SIGNER_KEY",
+			`Invalid Apple signing key: unsupported signer.digestAlgorithm "${digest}" (expected "sha1" or "sha256")`
+		);
+	}
+	return prepareIdentity(signerCert, wwdr, undefined, digest, (attributes) =>
+		signExternally(signer, signerCert, digest, attributes)
+	);
 }
 
 function parseSignerKey(
@@ -143,101 +168,82 @@ function parseSignerKey(
 }
 
 /**
- * Signs manifest.json with a PKCS#7 detached signature — required by Apple to
- * validate the integrity of a `.pkpass` file.
- *
- * Apple asks for "a PKCS #7 detached signature for the manifest" and names no
- * digest for it (only the manifest's file hashes are SHA-1), so both the
- * in-memory PEM `signerKey` and an {@link AppleExternalSigner} default to
- * SHA-256; an external signer may opt into SHA-1.
- * https://developer.apple.com/documentation/walletpasses/building-a-pass
+ * The identity's signer: every SignedData part the identity fixes is encoded
+ * here once, so each signature only adds its signed attributes.
  */
-export async function signManifest(
-	options: SignManifestOptions
-): Promise<Uint8Array> {
-	const { manifest, signer, signerCert: cert, signerKey, wwdr } = options;
-
-	const digest: Digest = signer?.digestAlgorithm ?? "sha256";
+function prepareIdentity(
+	signerCert: X509Certificate,
+	wwdr: X509Certificate,
+	signerKey: KeyObject | undefined,
+	digest: Digest,
+	signAttributes: SignAttributes
+): AppleSigningIdentity {
 	const digestAlgorithm = DIGEST_ALGORITHMS[digest];
-	if (!digestAlgorithm) {
-		throw new WalletError(
-			"APPLE_SIGNING_FAILED",
-			`Apple signing failed: unsupported signer.digestAlgorithm "${digest}" (expected "sha1" or "sha256")`
-		);
-	}
-
-	const signAttributes = signer
-		? externalSigner(signer, cert, digest)
-		: keySigner(signerKey, digest);
-
-	// Attribute order matches what Apple has always accepted from us.
-	const attributes = [
-		sequence(CONTENT_TYPE, set(DATA)),
-		sequence(
-			MESSAGE_DIGEST,
-			set(tlv(OCTET_STRING, createHash(digest).update(manifest).digest()))
-		),
-		sequence(SIGNING_TIME, set(time(new Date()))),
-	];
-	// Signed as a SET (RFC 2315 §9.3) but embedded as `[0] IMPLICIT`.
-	const signature = await signAttributes(set(...attributes));
-
-	const signerInfo = sequence(
-		VERSION_1,
-		issuerAndSerialNumber(cert.raw),
-		digestAlgorithm,
-		context0(...attributes),
-		RSA_ENCRYPTION,
-		tlv(OCTET_STRING, signature)
-	);
-	return sequence(
-		SIGNED_DATA,
-		context0(
-			sequence(
-				VERSION_1,
-				set(digestAlgorithm),
-				// Detached: the manifest itself lives next to the signature.
-				sequence(DATA),
-				context0(cert.raw, wwdr.raw),
-				set(signerInfo)
-			)
-		)
-	);
-}
-
-function keySigner(key: KeyObject, digest: Digest): SignAttributes {
-	return (signedAttributes) => {
-		try {
-			return sign(digest, signedAttributes, key);
-		} catch (cause) {
-			throw new WalletError("APPLE_SIGNING_FAILED", undefined, { cause });
-		}
+	const digestAlgorithms = set(digestAlgorithm);
+	const signerId = issuerAndSerialNumber(signerCert.raw);
+	const certificates = context0(signerCert.raw, wwdr.raw);
+	return {
+		signerCert,
+		signerKey,
+		async sign(manifest) {
+			// RFC 5652 §5.4 signs the DER encoding of the attributes, and DER
+			// orders a SET OF by its elements' encodings (X.690 §11.6).
+			const attributes = set(
+				...[
+					CONTENT_TYPE_DATA,
+					sequence(
+						MESSAGE_DIGEST,
+						set(tlv(OCTET_STRING, createHash(digest).update(manifest).digest()))
+					),
+					sequence(SIGNING_TIME, set(time(new Date()))),
+				].sort(Buffer.compare)
+			);
+			const signature = await signAttributes(attributes);
+			// Signed as a SET but embedded as `[0] IMPLICIT`: the same bytes
+			// under the other tag.
+			const embedded = Uint8Array.from(attributes);
+			embedded[0] = CONTEXT_0;
+			return sequence(
+				SIGNED_DATA,
+				context0(
+					sequence(
+						VERSION_1,
+						digestAlgorithms,
+						DETACHED_DATA,
+						certificates,
+						set(
+							sequence(
+								VERSION_1,
+								signerId,
+								digestAlgorithm,
+								embedded,
+								RSA_ENCRYPTION,
+								tlv(OCTET_STRING, signature)
+							)
+						)
+					)
+				)
+			);
+		},
 	};
 }
 
-function externalSigner(
+async function signExternally(
 	signer: AppleExternalSigner,
 	cert: X509Certificate,
-	digest: Digest
-): SignAttributes {
-	return async (signedAttributes) => {
-		let signature: unknown;
-		try {
-			signature = await signer.sign(signedAttributes);
-		} catch (cause) {
-			throw new WalletError(
-				"APPLE_SIGNING_FAILED",
-				"Apple signing failed: signer.sign() threw",
-				{ cause }
-			);
-		}
-		const raw = assertSignatureBytes(signature);
-		verifySignature({ cert, digest, raw, signedAttributes });
-		return raw;
-	};
-}
-
-function assertSignatureBytes(signature: unknown): Uint8Array {
+	digest: Digest,
+	signedAttributes: Uint8Array
+): Promise<Uint8Array> {
+	let signature: unknown;
+	try {
+		signature = await signer.sign(signedAttributes);
+	} catch (cause) {
+		throw new WalletError(
+			"APPLE_SIGNING_FAILED",
+			"Apple signing failed: signer.sign() threw",
+			{ cause }
+		);
+	}
 	if (!(signature instanceof Uint8Array)) {
 		throw new WalletError(
 			"APPLE_SIGNING_FAILED",
@@ -250,31 +256,20 @@ function assertSignatureBytes(signature: unknown): Uint8Array {
 			"Apple signing failed: signer.sign() returned an empty signature"
 		);
 	}
-	return signature;
-}
-
-// Certificates are public, so we can catch a malformed external signature
-// (wrong key, wrong digest, PSS padding, truncated bytes) before it ends up in
-// a `.pkpass` that only fails on the user's device.
-function verifySignature(options: {
-	cert: X509Certificate;
-	digest: Digest;
-	raw: Uint8Array;
-	signedAttributes: Uint8Array;
-}): void {
-	const { cert, digest, raw, signedAttributes } = options;
-
-	let valid = false;
-	try {
-		valid = verify(digest, signedAttributes, cert.publicKey, raw);
-	} catch {
-		valid = false;
-	}
-
+	// Certificates are public, so we can catch a malformed external signature
+	// (wrong key, wrong digest, PSS padding, truncated bytes) before it ends up
+	// in a `.pkpass` that only fails on the user's device.
+	const valid = await verifyAsync(
+		digest,
+		signedAttributes,
+		cert.publicKey,
+		signature
+	).catch(() => false);
 	if (!valid) {
 		throw new WalletError(
 			"APPLE_SIGNING_FAILED",
 			`Apple signing failed: the signature returned by signer.sign() does not verify against signerCert — expected RSASSA-PKCS1-v1_5 over ${digest}`
 		);
 	}
+	return signature;
 }

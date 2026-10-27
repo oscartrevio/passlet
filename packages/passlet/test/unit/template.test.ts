@@ -61,15 +61,24 @@ describe("PassTemplate", () => {
 			})
 		).rejects.toMatchObject({
 			code: "CREATE_CONFIG_INVALID",
-			message: expect.stringContaining(
-				'barcode.format: Invalid option: expected one of "QR"|"PDF417"|'
-			),
+			message: expect.stringContaining("barcode.format: "),
 			issues: [
 				{
 					path: ["barcode", "format"],
 					message: expect.stringContaining('"Aztec"'),
 				},
 			],
+		});
+	});
+
+	it("labels an issue with the content as a whole as content", async () => {
+		const pass = new Wallet({}).loyalty(BASE_LOYALTY);
+		await expect(
+			// @ts-expect-error -- not recipient content
+			pass.create("serial-001")
+		).rejects.toMatchObject({
+			message: "content: must be an object",
+			issues: [{ path: [], message: "must be an object" }],
 		});
 	});
 
@@ -97,11 +106,10 @@ describe("PassTemplate", () => {
 		});
 	});
 
-	it("returns null outputs when neither provider is configured", async () => {
+	it("rejects expiry when Google is not configured", async () => {
 		const pass = new Wallet({}).loyalty(BASE_LOYALTY);
-		await expect(pass.create({ serialNumber: "serial-001" })).resolves.toEqual({
-			apple: null,
-			google: null,
+		await expect(pass.expire("serial-001")).rejects.toMatchObject({
+			code: "GOOGLE_NOT_CONFIGURED",
 		});
 	});
 

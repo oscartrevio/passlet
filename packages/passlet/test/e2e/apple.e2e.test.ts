@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import JSZip from "jszip";
 import { beforeAll, describe, expect, it, onTestFinished } from "vitest";
 import { Wallet, type WalletConfig } from "../../src/index";
-import { parseSignature, readPkpass } from "../support/apple";
+import { expectSignedBy, parseSignature, readPkpass } from "../support/apple";
 import {
 	FIXTURES,
 	type FixtureName,
@@ -97,9 +97,10 @@ describe.skipIf(!process.env.APPLE_SIGNER_CERT)(
 			writeFileSync(`${OUT_DIR}${name}.pkpass`, bytes);
 
 			const { passJson, signature } = await readPkpass(bytes);
-			const parsed = parseSignature(signature);
-			expect(parsed.certificateCount).toBe(2);
-			expect(parsed.verifies(signerCertPem)).toBe(true);
+			expectSignedBy(parseSignature(signature), {
+				signerCert: signerCertPem,
+				wwdr: requireEnv("APPLE_WWDR"),
+			});
 			expect(passJson).toMatchObject({
 				passTypeIdentifier: subjectField(signerCert, "UID"),
 				teamIdentifier: subjectField(signerCert, "OU"),

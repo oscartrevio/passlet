@@ -3,12 +3,12 @@
 import {
 	type ParsedContent,
 	type PassContent,
-	passContentSchema,
+	parseContent,
 } from "../../src/schema/content";
 import {
 	type ParsedTemplate,
+	parseTemplate,
 	type TemplateConfig,
-	templateConfigSchema,
 } from "../../src/schema/template";
 import type { PassTemplate } from "../../src/template";
 import type { Wallet } from "../../src/wallet";
@@ -27,8 +27,8 @@ function parsed(fixture: {
 	pass: TemplateConfig;
 }): Fixture {
 	return {
-		create: passContentSchema.parse(fixture.create),
-		pass: templateConfigSchema.parse(fixture.pass),
+		create: parseContent(fixture.create),
+		pass: parseTemplate(fixture.pass),
 	};
 }
 
@@ -283,7 +283,11 @@ export function walletTemplate(
 			return wallet.coupon(config);
 		case "giftCard":
 			return wallet.giftCard(config);
-		default:
+		case "generic":
 			return wallet.generic(config);
+		default: {
+			const unhandled: never = config;
+			throw new Error(`No wallet factory for ${JSON.stringify(unhandled)}`);
+		}
 	}
 }
